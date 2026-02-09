@@ -1,0 +1,149 @@
+{
+  "version": 2,
+  "updated": "2026-02-08",
+  "stages": {
+    "Define": ["workflow", "plan", "spec", "architecture", "design"],
+    "Standardize": ["typescript", "platform"],
+    "Harden": ["resilience", "security", "observability", "debug"],
+    "Verify": ["testing", "review", "finish"],
+    "Mechanics": ["patterns-creational", "patterns-structural", "patterns-behavioral"]
+  },
+  "skills": {
+    "architecture": {
+      "path": "skills/architecture/SKILL.md",
+      "stage": "Define",
+      "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga"],
+      "trigger": "Work spans multiple services/processes or needs eventual consistency or clearer integration seams.",
+      "related": ["design", "resilience", "platform", "spec"],
+      "overhead": "significant"
+    },
+    "debug": {
+      "path": "skills/debug/SKILL.md",
+      "stage": "Harden",
+      "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression"],
+      "trigger": "Investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app.",
+      "related": ["observability", "resilience"],
+      "overhead": "minimal"
+    },
+    "design": {
+      "path": "skills/design/SKILL.md",
+      "stage": "Define",
+      "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process"],
+      "trigger": "Need to choose an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
+      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript"],
+      "overhead": "minimal"
+    },
+    "finish": {
+      "path": "skills/finish/SKILL.md",
+      "stage": "Verify",
+      "tags": ["definition-of-done", "verification", "release-readiness", "change-summary", "ship", "merge-readiness", "checklist"],
+      "trigger": "End of non-trivial work — run verification, spot-check boundaries, produce change summary before merge/release.",
+      "related": ["testing", "review", "spec"],
+      "overhead": "minimal"
+    },
+    "observability": {
+      "path": "skills/observability/SKILL.md",
+      "stage": "Harden",
+      "tags": ["logging", "monitoring", "tracing", "metrics", "telemetry", "opentelemetry", "dashboards", "alerts"],
+      "trigger": "Adding or changing logs/metrics/traces in code, defining telemetry field contracts, or building monitoring runbooks.",
+      "related": ["debug", "resilience", "security", "typescript"],
+      "overhead": "moderate"
+    },
+    "patterns-behavioral": {
+      "path": "skills/patterns-behavioral/SKILL.md",
+      "stage": "Mechanics",
+      "tags": ["behavioral-patterns", "strategy", "state-machine", "eventing", "pipelines", "middleware", "pub-sub", "observer", "command", "undo-redo"],
+      "trigger": "Need pluggable algorithms, event/listener systems, state machines, middleware pipelines, undo/redo, or request chains.",
+      "related": ["design", "patterns-creational", "patterns-structural"],
+      "overhead": "moderate"
+    },
+    "patterns-creational": {
+      "path": "skills/patterns-creational/SKILL.md",
+      "stage": "Mechanics",
+      "tags": ["creational-patterns", "factory", "builder", "object-creation", "dependency-injection", "abstract-factory", "prototype", "singleton"],
+      "trigger": "Object construction is complex, varies by type/environment, needs decoupling, or introducing DI for testability.",
+      "related": ["design", "patterns-structural", "patterns-behavioral"],
+      "overhead": "moderate"
+    },
+    "patterns-structural": {
+      "path": "skills/patterns-structural/SKILL.md",
+      "stage": "Mechanics",
+      "tags": ["structural-patterns", "adapter", "facade", "decorator", "proxy", "composite", "bridge", "flyweight", "wrapper"],
+      "trigger": "Wrapping/composing objects, translating interfaces, simplifying a subsystem, or adding caching/auth/lazy-loading via indirection.",
+      "related": ["design", "patterns-creational", "patterns-behavioral"],
+      "overhead": "moderate"
+    },
+    "plan": {
+      "path": "skills/plan/SKILL.md",
+      "stage": "Define",
+      "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table"],
+      "trigger": "Non-trivial, cross-cutting, or ambiguous work that needs a scoped task breakdown before starting.",
+      "related": ["spec", "workflow", "architecture"],
+      "overhead": "moderate"
+    },
+    "platform": {
+      "path": "skills/platform/SKILL.md",
+      "stage": "Standardize",
+      "tags": ["shared-library", "golden-path", "cross-cutting", "standardization", "boundary-wrappers", "packages-shared", "extraction"],
+      "trigger": "Multiple services duplicate boundary logic (auth, config, HTTP helpers, errors, retries, lifecycle) and need a golden-path primitive.",
+      "related": ["resilience", "observability", "typescript", "security"],
+      "overhead": "significant"
+    },
+    "resilience": {
+      "path": "skills/resilience/SKILL.md",
+      "stage": "Harden",
+      "tags": ["fault-tolerance", "timeouts", "retries", "idempotency", "circuit-breaker", "backoff", "jitter", "graceful-degradation", "load-shedding"],
+      "trigger": "Service calls external dependencies, processes queues/events, or needs hardening against partial failures.",
+      "related": ["observability", "security", "platform", "architecture"],
+      "overhead": "moderate"
+    },
+    "review": {
+      "path": "skills/review/SKILL.md",
+      "stage": "Verify",
+      "tags": ["code-review", "adversarial-review", "findings", "moderation", "risk-analysis", "pr-review", "pull-request", "debate"],
+      "trigger": "Want a thorough, multi-perspective adversarial review of code changes, a PR, or a design.",
+      "related": ["testing", "security", "finish"],
+      "overhead": "significant"
+    },
+    "security": {
+      "path": "skills/security/SKILL.md",
+      "stage": "Harden",
+      "tags": ["authn", "authz", "input-validation", "injection-prevention", "ssrf", "csrf", "cors", "secrets-management", "dependency-audit"],
+      "trigger": "Adding/changing endpoints, auth flows, data access, file/network I/O, or handling user input and sensitive data.",
+      "related": ["resilience", "observability", "platform", "testing"],
+      "overhead": "moderate"
+    },
+    "spec": {
+      "path": "skills/spec/SKILL.md",
+      "stage": "Define",
+      "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr"],
+      "trigger": "Creating or updating specs, API contracts, ADRs, or task lists — especially before major behavior changes.",
+      "related": ["plan", "architecture", "testing"],
+      "overhead": "significant"
+    },
+    "testing": {
+      "path": "skills/testing/SKILL.md",
+      "stage": "Verify",
+      "tags": ["test-coverage", "consumer-tests", "characterization", "regression-prevention", "unit-test", "integration-test", "mocking", "vitest"],
+      "trigger": "Adding tests, raising coverage, writing regression tests, or pinning consumer-visible behavior.",
+      "related": ["spec", "review", "finish"],
+      "overhead": "moderate"
+    },
+    "typescript": {
+      "path": "skills/typescript/SKILL.md",
+      "stage": "Standardize",
+      "tags": ["typescript", "runtime-safety", "module-structure", "error-handling", "type-modeling", "zod", "result-type", "throwless"],
+      "trigger": "Creating TS modules, modeling domain types, handling errors, validating external inputs, or organizing module structure.",
+      "related": ["platform", "resilience", "observability"],
+      "overhead": "minimal"
+    },
+    "workflow": {
+      "path": "skills/workflow/SKILL.md",
+      "stage": "Define",
+      "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router"],
+      "trigger": "General request without a named skill — auto-select and sequence the right skills for the work.",
+      "related": ["plan", "spec", "finish"],
+      "overhead": "minimal"
+    }
+  }
+}

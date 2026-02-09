@@ -36,8 +36,12 @@ for skill_dir in tools/enterprise-software-playbook/skills/*; do
   ln -s "$skill_dir" "$dest"
 done
 
+# Also link the machine-readable skill index (used for routing).
+ln -sf tools/enterprise-software-playbook/specs/skills-manifest.json .agent/skills/skills-manifest.json
+
 # If you can't use symlinks, copy instead:
 # cp -R tools/enterprise-software-playbook/skills/* .agent/skills/
+# cp tools/enterprise-software-playbook/specs/skills-manifest.json .agent/skills/
 ```
 
 ## Verify

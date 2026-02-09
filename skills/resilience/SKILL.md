@@ -1,6 +1,7 @@
 ---
 name: resilience
-description: Apply resilience patterns for enterprise services (timeouts, retries with backoff+jitter, idempotency, circuit breakers, bulkheads/concurrency limits, safe fallbacks). Use when adding/refactoring outbound calls, consumers/jobs, retry behavior, or hardening a service against partial failures and flaky dependencies.
+description: "Apply fault-tolerance patterns to outbound calls and async consumers (timeouts, retries with backoff+jitter, circuit breakers, bulkheads, idempotency keys, graceful degradation). Use when a service calls external dependencies, processes queues/events, or needs hardening against partial failures and flaky upstreams. NOT for diagnosing existing failures (use debug); NOT for multi-service architecture decisions (use architecture)."
+metadata: {"stage":"Harden","tags":["fault-tolerance","timeouts","retries","idempotency","circuit-breaker","backoff","jitter","graceful-degradation","load-shedding"],"aliases":["fault-tolerance","retry","timeout","circuit-breaker","bulkhead","backoff","idempotent"]}
 ---
 
 # Resilience
@@ -32,6 +33,15 @@ Enterprise systems fail partially (timeouts, 5xx, queue lag). Resilience pattern
 - **Outbound HTTP/gRPC clients**: timeouts + bounded retries + (optional) circuit breaker + concurrency limit.
 - **DB/Redis**: short timeouts; limited retries (often none); concurrency limits/pools; backpressure.
 - **Message consumers**: idempotency + dedupe; retry with backoff; dead-letter strategy; track lag.
+
+## Clarifying Questions
+
+- What I/O boundary is involved (HTTP client, gRPC client, DB, cache, queue/stream, third-party API)?
+- What failures are expected/transient vs permanent for this dependency?
+- Is the operation idempotent? If not, can you add an idempotency key?
+- What is the time budget for this operation (how long can the caller wait)?
+- What should happen under degradation (fail fast, return stale/cached data, partial results, fallback)?
+- Are there existing resilience patterns in the codebase (retry helpers, circuit breaker, timeout wrappers)?
 
 ## Core Patterns (Opinionated Defaults)
 
@@ -89,6 +99,7 @@ export function backoffDelayMs(
 ## References
 
 - Deeper checklists: [`references/checklists.md`](references/checklists.md)
+- TypeScript snippets: [`references/snippets/typescript.md`](references/snippets/typescript.md)
 - Related patterns: [`Circuit Breaker`](../architecture/references/circuit-breaker.md), [`Idempotent Consumer`](../architecture/references/idempotent-consumer.md), [`Transactional outbox`](../architecture/references/transactional-outbox.md)
 - Instrumentation guidance: [`observability`](../observability/SKILL.md)
 - Typed error semantics and explicit lifetimes: [`typescript`](../typescript/SKILL.md)

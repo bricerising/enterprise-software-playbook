@@ -1,6 +1,7 @@
 ---
 name: platform
-description: Design and maintain a shared platform library (e.g. `packages/shared`) that standardizes cross-cutting concerns across services (auth, config, gRPC/HTTP helpers, lifecycle, typed errors/results, observability, retries/timeouts). Use when multiple services duplicate boundary logic or when introducing shared primitives without creating a “utils junk drawer”.
+description: "Design and maintain shared platform libraries (e.g. packages/shared) that standardize cross-cutting concerns (auth wrappers, config, HTTP/gRPC helpers, typed errors, retry policies, lifecycle hooks). Use when multiple services duplicate boundary logic or need a golden-path primitive; prevents \"utils junk drawer\" anti-pattern. NOT for single-service code structure (use typescript); NOT for choosing resilience patterns for one call (use resilience)."
+metadata: {"stage":"Standardize","tags":["shared-library","golden-path","cross-cutting","standardization","boundary-wrappers","packages-shared","extraction"],"aliases":["shared-kernel","shared-library","packages-shared","golden-path","platform-library","common-lib"]}
 ---
 
 # Platform (Shared Platform Library)
@@ -31,6 +32,15 @@ The goal is not reuse-for-reuse’s-sake; it’s consistent behavior and lower c
 7. Implement minimal primitives + one “golden path” usage in at least two services.
 8. Add tests at the seam (unit tests for primitives + characterization tests for adopters if needed).
 9. Document usage, deprecation/migration guidance, and reversal triggers.
+
+## Clarifying Questions
+
+- How many services currently duplicate this boundary logic (need 2+ to justify extraction)?
+- What is the adoption timeline (immediate extraction vs planned migration)?
+- Who owns the shared package (one team, platform team, shared ownership)?
+- What is the release/versioning strategy (monorepo linked, published package, vendored copy)?
+- Are there existing shared packages or "utils" files that this should consolidate or replace?
+- What maturity level are adopters at (can they handle V0 minimal, or do they need V1 contracts)?
 
 ## What Belongs In The Shared Platform Library
 

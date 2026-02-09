@@ -3,11 +3,14 @@
 Quick validation script for skills - minimal version
 """
 
+import json
 import re
 import sys
 from pathlib import Path
 
 MAX_SKILL_NAME_LENGTH = 64
+ALLOWED_STAGES = {"Define", "Standardize", "Harden", "Verify", "Mechanics"}
+TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 REQUIRED_SECTION_PATTERNS = {
     "workflow": re.compile(r"^##\s+.*workflow\b", re.IGNORECASE | re.MULTILINE),
     "output template": re.compile(r"^##\s+.*output template\b", re.IGNORECASE | re.MULTILINE),
@@ -135,6 +138,8 @@ def validate_skill(skill_path):
         return False, "Missing 'name' in frontmatter"
     if "description" not in frontmatter:
         return False, "Missing 'description' in frontmatter"
+    if "metadata" not in frontmatter:
+        return False, "Missing 'metadata' in frontmatter"
 
     name = frontmatter.get("name", "")
     if not isinstance(name, str):
@@ -174,6 +179,67 @@ def validate_skill(skill_path):
             False,
             f"Description is too long ({len(description)} characters). Maximum is 1024 characters.",
         )
+
+    metadata_raw = frontmatter.get("metadata", "")
+    if not isinstance(metadata_raw, str):
+        return False, f"Metadata must be a string, got {type(metadata_raw).__name__}"
+    metadata_raw = metadata_raw.strip()
+    if not metadata_raw:
+        return False, "Frontmatter 'metadata' must be non-empty"
+
+    try:
+        metadata = json.loads(metadata_raw)
+    except json.JSONDecodeError as error:
+        return (
+            False,
+            "Frontmatter 'metadata' must be a valid JSON object string "
+            f"(parse error: {error})",
+        )
+
+    if not isinstance(metadata, dict):
+        return False, "Frontmatter 'metadata' must decode to a JSON object"
+
+    allowed_metadata_keys = {"stage", "tags", "aliases"}
+    unexpected_metadata_keys = set(metadata.keys()) - allowed_metadata_keys
+    if unexpected_metadata_keys:
+        unexpected = ", ".join(sorted(unexpected_metadata_keys))
+        allowed = ", ".join(sorted(allowed_metadata_keys))
+        return (
+            False,
+            "Frontmatter metadata contains unexpected key(s): "
+            f"{unexpected}. Allowed keys are: {allowed}",
+        )
+
+    stage = metadata.get("stage")
+    if not isinstance(stage, str) or stage not in ALLOWED_STAGES:
+        allowed_stages = ", ".join(sorted(ALLOWED_STAGES))
+        return (
+            False,
+            "Frontmatter metadata 'stage' must be one of: "
+            f"{allowed_stages}",
+        )
+
+    tags = metadata.get("tags")
+    if not isinstance(tags, list) or not tags:
+        return False, "Frontmatter metadata 'tags' must be a non-empty array"
+    for tag in tags:
+        if not isinstance(tag, str):
+            return False, "Frontmatter metadata 'tags' values must be strings"
+        tag = tag.strip()
+        if not TAG_PATTERN.match(tag):
+            return (
+                False,
+                "Frontmatter metadata tag "
+                f"'{tag}' must be lower-kebab-case and <=64 chars",
+            )
+
+    aliases = metadata.get("aliases")
+    if aliases is not None:
+        if not isinstance(aliases, list):
+            return False, "Frontmatter metadata 'aliases' must be an array when present"
+        for alias in aliases:
+            if not isinstance(alias, str) or not alias.strip():
+                return False, "Frontmatter metadata 'aliases' values must be non-empty strings"
 
     for section_name, pattern in REQUIRED_SECTION_PATTERNS.items():
         if not pattern.search(content):

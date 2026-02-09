@@ -1,6 +1,7 @@
 ---
 name: security
-description: Apply security guardrails for enterprise web apps (authn/authz, input validation, injection prevention, secrets, secure logging, SSRF, dependency hygiene). Use when adding or changing endpoints, auth flows, data access, file/network I/O, or handling sensitive data.
+description: "Apply security guardrails (authentication, authorization, input validation, SQL/XSS/command injection prevention, secrets management, SSRF protection, secure logging, dependency auditing). Use when adding/changing endpoints, auth flows, data access, file/network I/O, or handling user input and sensitive data. NOT for resilience/fault-tolerance patterns (use resilience); NOT for observability instrumentation (use observability)."
+metadata: {"stage":"Harden","tags":["authn","authz","input-validation","injection-prevention","ssrf","csrf","cors","secrets-management","dependency-audit"],"aliases":["auth","authentication","authorization","injection","xss","sql-injection","secrets","hardening"]}
 ---
 
 # Security
@@ -36,6 +37,24 @@ This is not a full security audit. If the change is high-risk (auth overhaul, mu
    - run any available dependency scanning / linters in the target repo
    - sanity-check logs/metrics do not include sensitive fields (`observability`)
 
+## Chooser (What To Apply Where)
+
+- **New/changed HTTP endpoint**: authn + authz + input validation + safe error responses + rate limiting (if public).
+- **Auth flow change**: token validation, session settings, CSRF, re-auth for sensitive actions, scope/tenant checks.
+- **Database / data access change**: parameterized queries, least-privilege DB user, tenant scoping, existence-leak prevention.
+- **File upload / user-provided URLs**: size/type limits, SSRF controls (allowlist hosts, block metadata IPs), path traversal prevention.
+- **Outbound fetch / proxy**: SSRF controls, TLS verification, redirect policy, timeout/cancellation.
+- **Secrets / config change**: no secrets in source, rotation plan, no secrets in logs/errors, short-lived credentials.
+- **Dependency update / addition**: lockfile integrity, unused dep removal, license/policy check.
+
+## Clarifying Questions
+
+- What boundaries changed (inbound handlers, outbound calls, data access, config/secrets)?
+- What data sensitivity is involved (credentials, PII, regulated data, multi-tenant identifiers)?
+- Is this a multi-tenant system? How is tenant isolation enforced?
+- Is this a public-facing endpoint or internal-only?
+- Are there existing auth/authz patterns in the codebase to follow?
+
 ## Checklist (High-Signal)
 
 - Authn: token validation, session/cookie settings, CSRF (if cookie-based), re-auth for sensitive actions.
@@ -56,6 +75,7 @@ This is not a full security audit. If the change is high-risk (auth overhaul, mu
 ## References
 
 - Deeper checklist: [`references/checklists.md`](references/checklists.md)
+- TypeScript boundary snippets: [`references/snippets/typescript.md`](references/snippets/typescript.md)
 - Related patterns: [`Access token`](../architecture/references/access-token.md)
 - Boundary resiliency: [`resilience`](../resilience/SKILL.md)
 - Telemetry privacy: [`observability`](../observability/SKILL.md)

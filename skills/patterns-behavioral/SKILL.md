@@ -1,6 +1,7 @@
 ---
 name: patterns-behavioral
-description: "Apply behavioral code patterns (classic GoF: Chain of Responsibility, Command, Iterator, Mediator, Memento, Observer, State, Strategy, Template Method, Visitor). Use when you need pluggable algorithms, event-driven updates, request pipelines, undo/redo, decoupled collaboration, state-dependent behavior, or stable iteration over collections."
+description: "Implement behavioral design patterns (Strategy, Observer, State, Command, Chain of Responsibility, Mediator, Template Method, Iterator, Memento, Visitor). Use when you need pluggable algorithms, event/listener systems, state machines, middleware pipelines, undo/redo, or request chains. NOT for object creation (use patterns-creational); NOT for wrapping/composing objects (use patterns-structural)."
+metadata: {"stage":"Mechanics","tags":["behavioral-patterns","strategy","state-machine","eventing","pipelines","middleware","pub-sub","observer","command","undo-redo"],"aliases":["strategy","observer","state-machine","command","middleware","pub-sub","event-system","pipeline","undo-redo"]}
 ---
 
 # Patterns (Behavioral)

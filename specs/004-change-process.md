@@ -29,6 +29,7 @@ Update `specs/` (and usually add a decision record) when you:
    - Run `python3 .system/skill-creator/scripts/check_repo_consistency.py` for README/PROMPTS taxonomy and prompt drift.
 4. **Update navigation**
    - Update `README.md` and `PROMPTS.md` so users can find the new/changed skill.
+   - Update `specs/skills-manifest.json` to match the skill's frontmatter metadata (stage, tags, trigger, related, overhead).
 5. **Add verification guidance**
    - Ensure the changed skill contains an output template and verification steps.
 6. **Package (optional)**

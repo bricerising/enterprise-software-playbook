@@ -50,6 +50,16 @@ Apply classic in-process patterns when implementation needs structure:
 - Wrapping/indirection (`patterns-structural`)
 - Pipelines/eventing/state machines (`patterns-behavioral`)
 
+## Canonical Stage Values (Metadata + Index)
+
+Use these exact stage values in skill metadata and `specs/skills-manifest.json`:
+
+- `Define`
+- `Standardize`
+- `Harden`
+- `Verify`
+- `Mechanics`
+
 ## Terminology (Scope Words, Not Navigation)
 
 - **Code patterns**: in-process patterns (classic GoF + adjacent).
@@ -82,3 +92,4 @@ This taxonomy is applied when:
 - `README.md` and `PROMPTS.md` list skills under Define/Standardize/Harden/Verify/Mechanics.
 - Prompt recipes use the default sequence for enterprise web apps.
 - New skills are assigned a workflow stage and documented accordingly.
+- `specs/skills-manifest.json` stage mapping and each skill’s frontmatter `metadata.stage` stay aligned.

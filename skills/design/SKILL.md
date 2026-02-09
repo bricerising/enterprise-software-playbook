@@ -1,6 +1,7 @@
 ---
 name: design
-description: "Choose an appropriate code pattern (in-process: classic creational/structural/behavioral patterns, mostly GoF). Use when you need a quick decision workflow to refactor for extensibility, decoupling, composability, or testability."
+description: "Pick the right in-process code pattern for a refactoring or extensibility need (GoF creational/structural/behavioral). Use as a decision workflow when unsure which pattern family fits — routes to patterns-creational, patterns-structural, or patterns-behavioral for implementation. NOT for multi-service/distributed architecture (use architecture); NOT for applying a known specific pattern (use patterns-creational, patterns-structural, or patterns-behavioral directly)."
+metadata: {"stage":"Define","tags":["code-patterns","refactoring","extensibility","decoupling","testability","gof","in-process"],"aliases":["design-patterns","GoF","refactor","pattern-chooser","code-structure"]}
 ---
 
 # Design (Choose Code Pattern)

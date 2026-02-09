@@ -25,7 +25,12 @@ Skill folders SHOULD NOT include extra docs like `README.md`, changelogs, or lon
 `SKILL.md` MUST start with YAML frontmatter containing:
 
 - `name`: MUST match the folder name.
-- `description`: MUST be specific about when to use the skill (trigger precision matters).
+- `description`: MUST be specific about when to use the skill (trigger precision matters). SHOULD include "NOT for X (use Y)" clauses for confusable skill pairs.
+- `metadata`: MUST be a JSON object string with:
+  - `stage`: one of `Define`, `Standardize`, `Harden`, `Verify`, `Mechanics`
+  - `tags`: non-empty list of lower-kebab-case retrieval keywords (include common query terms users actually type)
+  - `aliases`: list of alternate query terms for synonym-based routing
+  - Example: `metadata: {"stage":"Harden","tags":["security","authz","csrf"],"aliases":["auth","hardening"]}`
 
 ## `SKILL.md` Body Contract (Minimum Shape)
 
@@ -37,6 +42,8 @@ Each skill MUST contain:
 
 Each skill SHOULD contain:
 
+- **Chooser**: decision aid for picking sub-approach within the skill (e.g., "what test type where").
+- **Clarifying Questions**: what to ask the user before applying the workflow.
 - **Guardrails**: what not to do / common pitfalls.
 - **References**: pointers to `references/` files (progressive disclosure).
 
@@ -45,6 +52,19 @@ Each skill SHOULD contain:
 - `SKILL.md` SHOULD be under ~500 lines; move depth to `references/`.
 - Avoid deep reference chains (keep references one level deep from `SKILL.md`).
 - Prefer reusable templates/checklists over prose.
+
+## Machine-readable Index Contract
+
+For fast retrieval/routing, this repo includes:
+
+- `specs/skills-manifest.json`: canonical machine-readable index
+  - `stages`: explicit stage-to-skill mapping
+  - `skills`: per-skill entry with:
+    - `path`, `stage`, `tags`: MUST match frontmatter metadata
+    - `trigger`: 1-line routing hint (when to use this skill)
+    - `related`: list of related skill names for cross-reference routing
+    - `overhead`: `"minimal"` | `"moderate"` | `"significant"` (helps proportionality decisions)
+- The manifest MUST stay aligned with each `skills/<name>/SKILL.md` frontmatter metadata.
 
 ## Compatibility Rules (Skill Names Are API)
 
@@ -67,6 +87,7 @@ Each skill SHOULD contain:
 This contract is satisfied when:
 
 - Every skill folder matches the folder/frontmatter contract.
+- Every skill has valid `metadata` (`stage` + `tags`) and matches the manifest.
 - Validation passes for every skill in the repo.
 - Significant behavior changes come with spec updates under `specs/` and a migration story if skill APIs change.
   - For breaking renames, the migration story may be “no shims” as long as the decision record includes the mapping.

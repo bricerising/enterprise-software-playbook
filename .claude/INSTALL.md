@@ -35,6 +35,9 @@ for skill_dir in ~/.claude/enterprise-software-playbook/skills/*; do
 
   ln -s "$skill_dir" "$dest"
 done
+
+# Also link the machine-readable skill index (used for routing).
+ln -sf ~/.claude/enterprise-software-playbook/specs/skills-manifest.json ~/.claude/skills/skills-manifest.json
 ```
 
 ## Verify

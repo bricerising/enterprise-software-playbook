@@ -1,6 +1,7 @@
 ---
 name: patterns-structural
-description: "Apply structural code patterns (classic GoF: Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy). Use when you need to wrap/compose objects, translate interfaces, split abstraction from implementation, simplify a subsystem, share memory, or add indirection (caching, access control, lazy loading)."
+description: "Implement structural design patterns (Adapter, Decorator, Facade, Proxy, Composite, Bridge, Flyweight). Use when wrapping/composing objects, translating between interfaces, simplifying a complex subsystem, adding caching/auth/lazy-loading via indirection, or building recursive tree structures. NOT for object creation (use patterns-creational); NOT for algorithms/eventing/state machines (use patterns-behavioral)."
+metadata: {"stage":"Mechanics","tags":["structural-patterns","adapter","facade","decorator","proxy","composite","bridge","flyweight","wrapper"],"aliases":["adapter","decorator","facade","proxy","wrapper","composite","bridge","flyweight"]}
 ---
 
 # Patterns (Structural)

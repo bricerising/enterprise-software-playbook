@@ -94,3 +94,12 @@ Keep tasks small, orderable, and testable. Prefer “acceptance” that is obser
   - Packaging command in specs/quickstart is executable (`package_skill.py` exists).
   - Skill validation enforces folder-name/frontmatter-name consistency.
   - CI runs skill validation + repo consistency checks on PRs.
+
+## T013: Add machine-readable skill metadata/index and execution templates
+
+- **Status**: Done (2026-02-08)
+- **Acceptance**:
+  - Every `skills/*/SKILL.md` includes machine-readable metadata (`stage`, `tags`).
+  - `specs/skills-manifest.json` exists and maps stage/tag/path for every skill.
+  - Repo consistency checks fail on manifest/frontmatter drift.
+  - Concrete copy-first templates exist for CI quality gates and service spec bundles.

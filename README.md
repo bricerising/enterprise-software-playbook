@@ -96,6 +96,8 @@ These skills bias toward practices that make codebases easier for humans to oper
 - Glossary (for less familiar terms): [`GLOSSARY.md`](GLOSSARY.md)
 - Example walkthrough: [`TUTORIAL.md`](TUTORIAL.md)
 - Repo-level specs (source of truth): [`specs/000-index.md`](specs/000-index.md)
+- Machine-readable skill index: [`specs/skills-manifest.json`](specs/skills-manifest.json)
+- Copy-first templates: [`specs/templates/service-spec-bundle/`](specs/templates/service-spec-bundle/README.md), [`specs/templates/ci/github-actions-quality.yml`](specs/templates/ci/github-actions-quality.yml)
 - App-repo integration: [`specs/005-application-integration.md`](specs/005-application-integration.md)
 - App-repo agent instructions template: [`specs/templates/app-repo/AGENTS.md`](specs/templates/app-repo/AGENTS.md)
 
@@ -128,6 +130,7 @@ mkdir -p ~/.codex/skills
 for f in ~/.codex/enterprise-software-playbook/skills/*/SKILL.md; do
   ln -s "${f%/SKILL.md}" ~/.codex/skills/
 done
+ln -sf ~/.codex/enterprise-software-playbook/specs/skills-manifest.json ~/.codex/skills/skills-manifest.json
 ```
 
 ### Claude Code
@@ -153,6 +156,7 @@ mkdir -p ~/.claude/skills
 for f in ~/.claude/enterprise-software-playbook/skills/*/SKILL.md; do
   ln -s "${f%/SKILL.md}" ~/.claude/skills/
 done
+ln -sf ~/.claude/enterprise-software-playbook/specs/skills-manifest.json ~/.claude/skills/skills-manifest.json
 ```
 
 ### Antigravity
@@ -169,6 +173,7 @@ Manual install (shell):
 
 1. Vendor this repo into your project (submodule or clone).
 2. Symlink `tools/enterprise-software-playbook/skills/*` into `.agent/skills/*`.
+3. Symlink `tools/enterprise-software-playbook/specs/skills-manifest.json` to `.agent/skills/skills-manifest.json`.
 
 ### Tool-agnostic: vendor it into your project
 

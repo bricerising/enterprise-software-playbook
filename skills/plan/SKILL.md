@@ -1,6 +1,7 @@
 ---
 name: plan
-description: Turn a request into an executable implementation plan (scoped tasks + verification). Use for non-trivial, risky, cross-service, or ambiguous work before starting large edits.
+description: "Break a request into a scoped implementation plan with ordered tasks, risk flags, and verification steps. Use before starting non-trivial, cross-cutting, or ambiguous work to align on approach and prevent rework. NOT for writing spec artifacts or contracts (use spec); NOT for auto-routing across multiple skills (use workflow)."
+metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk-assessment","verification-plan","scope","trade-offs","decision-table"],"aliases":["planning","task-list","breakdown","scope","work-breakdown"]}
 ---
 
 # Plan

@@ -1,6 +1,7 @@
 ---
 name: spec
-description: Write and maintain spec-first artifacts for enterprise web apps (service specs, API contracts, plans, task lists, quickstarts). Use when creating/updating `specs/*.md`, `apps/*/spec/` bundles, or `contracts/` docs (OpenAPI/proto/WS), especially before major behavior changes or multi-agent iteration.
+description: "Write and maintain spec-first artifacts (service specs, API contracts via OpenAPI/protobuf/WebSocket schemas, ADRs, task lists, quickstarts). Use when creating specs/*.md, apps/*/spec/ bundles, or contracts/ docs, especially before major behavior changes or multi-agent collaboration. NOT for implementation task breakdown without spec artifacts (use plan); NOT for choosing system or code patterns (use architecture or design)."
+metadata: {"stage":"Define","tags":["spec-first","contracts","acceptance-criteria","decision-records","nfrs","openapi","protobuf","adr"],"aliases":["specification","contract","api-contract","schema","acceptance","requirements"]}
 ---
 
 # Spec (Spec-Driven Development)
@@ -30,6 +31,23 @@ Use one (or both) of these:
   - `plan.md`: phases and wiring/structure
   - `tasks.md`: checklist-style backlog with acceptance criteria
   - `quickstart.md`: how to run/verify the service in dev
+
+## Chooser (What Spec Artifact To Write)
+
+- **Cross-service rule or shared constraint** (auth, observability, eventing, product scope): write/update a system spec (`specs/NNN-<topic>.md`).
+- **Significant trade-off or migration decision**: write a decision record (`specs/decisions/NNN-<topic>.md`).
+- **New or changed service behavior**: write/update the service spec bundle (`apps/<service>/spec/`).
+- **API/contract change** (new endpoint, changed schema, new event): update contracts (`contracts/`: OpenAPI/proto/WS docs) in the spec bundle.
+- **Task breakdown for implementation**: update `tasks.md` in the spec bundle (or `specs/tasks.md` for repo-level backlog).
+- **Minor behavior tweak within existing contracts**: update acceptance scenarios in the existing spec; no new artifacts needed.
+
+## Clarifying Questions
+
+- Is this change scoped to one service or does it cross service boundaries?
+- Does it change externally visible behavior (API shapes, error codes, event schemas, auth rules)?
+- Are there existing specs/contracts that should be updated vs creating new ones?
+- Who are the consumers of this contract (other services, clients, external partners)?
+- Is backward compatibility required, or can we make breaking changes?
 
 ## Workflow
 

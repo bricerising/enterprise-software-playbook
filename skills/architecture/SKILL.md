@@ -1,6 +1,7 @@
 ---
 name: architecture
-description: Choose system patterns (architecture/distributed-systems/ops) for enterprise web apps. Use when designing or refactoring systems that span processes/services, need reliability under partial failure, require eventual consistency, or need clearer domain boundaries and integration seams.
+description: "Design or refactor multi-service system architecture (domain boundaries, service decomposition, event-driven vs request/response, CQRS, sagas, API gateways, data ownership). Use when work spans multiple processes/services, needs eventual consistency, or requires clearer integration seams. NOT for in-process code structure like GoF patterns (use design); NOT for applying timeouts/retries/breakers to a single call (use resilience)."
+metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context"]}
 ---
 
 # Architecture (System Pattern Chooser)

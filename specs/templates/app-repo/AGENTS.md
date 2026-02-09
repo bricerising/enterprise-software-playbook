@@ -15,6 +15,15 @@ If skills are vendored, read the relevant `SKILL.md` files from:
 
 - `tools/enterprise-software-playbook/skills/<skill>/SKILL.md`
 
+## Skill Routing
+
+For fast skill selection, read the machine-readable index first:
+
+- Vendored: `tools/enterprise-software-playbook/specs/skills-manifest.json`
+- Installed: `skills-manifest.json` in your skills directory
+
+The manifest contains per-skill `trigger` hints, `related` skill cross-references, `overhead` ratings, and `tags` — use these to pick the right skill(s) without reading every SKILL.md.
+
 ## Default Workflow (Auto)
 
 Follow this loop for all non-trivial work:

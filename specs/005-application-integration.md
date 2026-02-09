@@ -24,10 +24,11 @@ This spec describes how to integrate **enterprise-software-playbook** into a tar
 
 Use when the assistant supports external skill libraries:
 
-1. Install/link the skill folders into the assistant’s skill directory (varies by tool).
-2. Add an `AGENTS.md` file to the **application repo** that instructs agents to auto-select skills.
+1. Install/link the skill folders into the assistant's skill directory (varies by tool).
+2. Also install `specs/skills-manifest.json` alongside the skills (the install scripts do this automatically). Agents use it for fast routing (trigger hints, related skills, overhead ratings).
+3. Add an `AGENTS.md` file to the **application repo** that instructs agents to auto-select skills.
    - Use `specs/templates/app-repo/AGENTS.md` as a starting point (copy/paste and edit paths).
-3. Start the project with the “Conversational bootstrap” prompt (`PROMPTS.md`).
+4. Start the project with the "Conversational bootstrap" prompt (`PROMPTS.md`).
 
 ### Option B: Vendor into the app repo (tool-agnostic)
 

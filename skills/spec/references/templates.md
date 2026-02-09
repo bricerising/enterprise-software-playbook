@@ -4,6 +4,11 @@ These templates are designed to be copied into a repo and then edited until they
 
 Keep the language concrete and testable. Prefer “MUST/SHOULD/MAY” and explicit acceptance criteria.
 
+## Concrete starter files (copy-first)
+
+- Service spec bundle directory: [`specs/templates/service-spec-bundle/`](../../../specs/templates/service-spec-bundle/README.md)
+- CI quality pipeline template: [`specs/templates/ci/github-actions-quality.yml`](../../../specs/templates/ci/github-actions-quality.yml)
+
 ## System Spec Template (`specs/NNN-<topic>.md`)
 
 ```md

@@ -35,6 +35,9 @@ for skill_dir in ~/.codex/enterprise-software-playbook/skills/*; do
 
   ln -s "$skill_dir" "$dest"
 done
+
+# Also link the machine-readable skill index (used for routing).
+ln -sf ~/.codex/enterprise-software-playbook/specs/skills-manifest.json ~/.codex/skills/skills-manifest.json
 ```
 
 ## Verify

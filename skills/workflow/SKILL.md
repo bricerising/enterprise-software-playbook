@@ -1,6 +1,7 @@
 ---
 name: workflow
-description: Orchestrate enterprise-software-playbook skills end-to-end for enterprise web app work (features/bugs/refactors) in conversational mode. Use when the user wants you to choose and apply the appropriate skills automatically (even if they don’t name them), keeping overhead proportional to the change.
+description: "Auto-select and orchestrate playbook skills end-to-end for feature, bug-fix, or refactor work. Use when the user gives a general request without naming a specific skill — workflow picks the right skills, sequences them, and keeps overhead proportional to the change size. NOT for creating a standalone task breakdown (use plan) or writing spec artifacts (use spec)."
+metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end"]}
 ---
 
 # Workflow (Auto Router)
@@ -22,6 +23,14 @@ Classify the request:
 - **Big change**: cross-service work, migrations, or changes that affect multiple boundaries/teams.
 
 Rule: only create/expand specs and platform primitives when they reduce future drift for the expected scope.
+
+**Proportionality guide** (what to skip per scope):
+
+| Scope | Skip | Always apply | Use if relevant |
+| --- | --- | --- | --- |
+| **Tiny** | `plan`, `spec`, `architecture`, `design`, `platform`, `review`, `finish` | `typescript` (if TS) | `testing` (if behavior changed) |
+| **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
+| **Big** | nothing | `plan`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
 
 ### 0.5) Externalize the system model (for normal/big changes)
 
@@ -72,6 +81,28 @@ Only when implementation needs it:
 - Apply a specific in-process pattern via `patterns-creational`, `patterns-structural`, or `patterns-behavioral`.
 - Prefer wrappers/facades at boundaries; keep pattern seams small.
 
+## Common Compositions (Recipes)
+
+These are typical skill sequences for common work types. Adapt based on scope.
+
+**New endpoint / handler**:
+`spec` → `typescript` → `security` → `resilience` → `observability` → `testing` → `finish`
+
+**Bug fix (production issue)**:
+`debug` → *(fix)* → `testing` → `finish`
+
+**Refactor (in-process)**:
+`design` → `patterns-*` → `testing` → `review` → `finish`
+
+**New service**:
+`spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `finish`
+
+**Cross-service feature**:
+`plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+
+**Security hardening pass**:
+`security` → `testing` → `review` (type: security) → `finish`
+
 ## Guardrails
 
 - Don’t create “spec theater”: if the change is tiny, keep docs minimal and move on.
@@ -96,5 +127,6 @@ When you finish work, report:
 
 ## References
 
+- Machine-readable skill index (triggers, tags, related, overhead): [`specs/skills-manifest.json`](../../specs/skills-manifest.json)
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)

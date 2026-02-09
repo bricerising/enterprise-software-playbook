@@ -1,6 +1,7 @@
 ---
 name: testing
-description: Create or expand consumer-centric test suites and coverage for microservices (gRPC/HTTP handlers, service flows, event consumers, caches, jobs, observability) while preserving behavior. Use when asked to add tests, raise coverage, or validate consumer-facing behavior across services.
+description: "Create or expand test suites for microservices (unit, integration, consumer-contract tests for HTTP/gRPC handlers, service flows, event consumers, caches, jobs). Use when adding tests, raising coverage, writing regression tests, or validating consumer-facing behavior. NOT for adversarial code review (use review); NOT for final ship-readiness checks (use finish)."
+metadata: {"stage":"Verify","tags":["test-coverage","consumer-tests","characterization","regression-prevention","unit-test","integration-test","mocking","vitest"],"aliases":["tests","unit-test","integration-test","coverage","test-suite","vitest","jest","consumer-contract"]}
 ---
 
 # Testing (Consumer Test Coverage)
@@ -16,6 +17,23 @@ Improve coverage by exercising consumer-visible behavior with infra mocked and b
 3. Add tests for success and failure paths that a consumer can observe (invalid input, downstream failures, permissions, timeouts where applicable).
 4. Mock infra boundaries (DB, Redis, network listeners, clocks/timers). Prefer calling handlers/functions directly instead of running real servers.
 5. Run focused coverage and iterate until the target is met (default 80% unless the spec says otherwise).
+
+## Chooser (What Test Type Where)
+
+- **New endpoint / handler change**: consumer-visible tests — call handler with mocked dependencies, assert response shape + status codes + error handling.
+- **Refactor (no behavior change)**: characterization tests first — pin existing behavior before changing implementation.
+- **New event consumer / job**: feed mixed payloads (valid, invalid, missing fields, duplicates); assert side effects and idempotency.
+- **Boundary change (DB/cache/client)**: adapter tests — cover happy path, empty/null results, connection failures, timeouts.
+- **Cross-service contract change**: consumer-contract tests — verify your consumer expectations match the provider's contract.
+- **Coverage gap (existing code)**: start with the riskiest paths — auth/permissions, error handling, input validation, state transitions.
+
+## Clarifying Questions
+
+- What entrypoints are affected (HTTP handler, gRPC method, consumer, job, adapter)?
+- Are there existing specs/contracts that define expected behavior?
+- Is this new behavior (need new tests) or existing behavior (need characterization tests before refactoring)?
+- What is the target coverage level (default: 80%)?
+- What test runner and mocking setup does the project use?
 
 ## Testing Patterns
 
@@ -40,6 +58,7 @@ Improve coverage by exercising consumer-visible behavior with infra mocked and b
 ## References
 
 - Specs and contracts as test sources: [`spec`](../spec/SKILL.md)
+- TypeScript test skeletons: [`references/snippets/typescript.md`](references/snippets/typescript.md)
 - Related patterns: [`Consumer-side contract test`](../architecture/references/consumer-side-contract-test.md), [`Service integration contract test`](../architecture/references/service-integration-contract-test.md), [`Service component test`](../architecture/references/service-component-test.md)
 - Telemetry verification (when tests cover boundary logging/metrics): [`observability`](../observability/SKILL.md)
 

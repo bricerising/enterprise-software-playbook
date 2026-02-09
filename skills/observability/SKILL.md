@@ -1,6 +1,7 @@
 ---
 name: observability
-description: Apply modern observability patterns (structured logs with trace correlation, RED metrics, OpenTelemetry spans, dashboards/alerts). Use when adding or changing logs/metrics/traces instrumentation, defining telemetry field contracts, or creating verification steps/runbooks for production debugging in enterprise web apps.
+description: "Add or change observability instrumentation (structured logging, OpenTelemetry traces/spans, RED metrics, dashboards, alerts). Use when adding logs/metrics/traces to code, defining telemetry field contracts, or building monitoring runbooks. NOT for diagnosing existing issues with existing telemetry (use debug); NOT for security-specific logging concerns (use security)."
+metadata: {"stage":"Harden","tags":["logging","monitoring","tracing","metrics","telemetry","opentelemetry","dashboards","alerts"],"aliases":["logs","traces","metrics","monitoring","instrumentation","otel","opentelemetry","RED-metrics"]}
 ---
 
 # Observability (Instrumentation + Verification)
@@ -30,6 +31,15 @@ This is intentionally opinionated: you should be able to answer “what happened
    - where metrics/logs/traces are reviewed
    - who decides and who executes follow-up
    - what threshold triggers rollback/escalation
+
+## Clarifying Questions
+
+- What decision does this telemetry inform (keep current architecture, tune a timeout, roll out a migration, etc.)?
+- What boundaries need instrumentation (HTTP handlers, gRPC methods, DB clients, consumers, jobs, WebSockets)?
+- Is there existing telemetry infrastructure (OpenTelemetry, Prometheus, Grafana, Datadog, etc.)?
+- What correlation IDs already exist in the system (traceId, requestId, sessionId)?
+- Are there PII/privacy constraints on what can be logged or labeled?
+- Who will review these metrics, and how often (owner + cadence)?
 
 ## Chooser (What To Instrument)
 
@@ -104,6 +114,7 @@ export function getTraceLogFields(): { traceId?: string; spanId?: string } {
 ## References
 
 - Deeper checklists: [`references/checklists.md`](references/checklists.md)
+- TypeScript instrumentation snippets: [`references/snippets/typescript.md`](references/snippets/typescript.md)
 - Related patterns: [`Application metrics`](../architecture/references/application-metrics.md), [`Log aggregation`](../architecture/references/log-aggregation.md), [`Distributed tracing`](../architecture/references/distributed-tracing.md), [`Health Check API`](../architecture/references/health-check-api.md), [`Audit logging`](../architecture/references/audit-logging.md), [`Exception tracking`](../architecture/references/exception-tracking.md), [`Log deployments and changes`](../architecture/references/log-deployments-and-changes.md)
 - Boundary tests: [`testing`](../testing/SKILL.md)
 - Typed errors + explicit lifetimes: [`typescript`](../typescript/SKILL.md)

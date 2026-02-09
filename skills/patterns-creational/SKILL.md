@@ -1,6 +1,7 @@
 ---
 name: patterns-creational
-description: "Apply creational code patterns (classic GoF: Factory Method, Abstract Factory, Builder, Prototype, Singleton). Use when object construction is complex, varies by type/environment, must be decoupled from callers, needs consistent lifecycle, or you’re refactoring creation logic for testability."
+description: "Implement creational design patterns (Factory Method, Abstract Factory, Builder, Prototype, Singleton). Use when object construction is complex, varies by type/environment, needs decoupling from callers, or you're introducing dependency injection for testability. NOT for wrapping/composing objects (use patterns-structural); NOT for algorithms/eventing/state machines (use patterns-behavioral); NOT for choosing which pattern family (use design)."
+metadata: {"stage":"Mechanics","tags":["creational-patterns","factory","builder","object-creation","dependency-injection","abstract-factory","prototype","singleton"],"aliases":["factory","builder","singleton","prototype","abstract-factory","object-creation","DI","dependency-injection"]}
 ---
 
 # Patterns (Creational)
