@@ -1,7 +1,7 @@
 ---
 name: workflow
 description: "Auto-select and orchestrate playbook skills end-to-end for feature, bug-fix, or refactor work. Use when the user gives a general request without naming a specific skill — workflow picks the right skills, sequences them, and keeps overhead proportional to the change size. NOT for creating a standalone task breakdown (use plan) or writing spec artifacts (use spec)."
-metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router","first-principles","second-order-effects","feedback-loops","opportunity-cost"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end","systems-thinking","mental-models"]}
+metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end"]}
 ---
 
 # Workflow (Auto Router)

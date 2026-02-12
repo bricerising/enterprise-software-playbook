@@ -1,7 +1,7 @@
 ---
 name: finish
 description: 'Run a final "definition of done" check before shipping: verify correctness, tighten contracts/docs, and produce a change summary. Use at the end of non-trivial work to confirm nothing was missed before merge/release. NOT for writing tests (use testing); NOT for adversarial code review (use review); NOT for initial planning (use plan).'
-metadata: {"stage":"Verify","tags":["definition-of-done","verification","release-readiness","change-summary","ship","merge-readiness","checklist","learning-loop","retrospective","owner-backed-actions"],"aliases":["done","ship","merge","release","pre-merge","definition-of-done","postmortem"]}
+metadata: {"stage":"Verify","tags":["definition-of-done","verification","release-readiness","change-summary","ship","merge-readiness","checklist","learning-loop","retrospective","owner-backed-actions"],"aliases":["done","ship","merge","release","pre-merge","definition-of-done"]}
 ---
 
 # Finish

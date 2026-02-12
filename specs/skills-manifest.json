@@ -12,7 +12,7 @@
     "architecture": {
       "path": "skills/architecture/SKILL.md",
       "stage": "Define",
-      "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga", "first-principles", "second-order-effects", "feedback-loops", "opportunity-cost"],
+      "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga"],
       "trigger": "Work spans multiple services/processes or needs eventual consistency or clearer integration seams.",
       "related": ["design", "resilience", "platform", "spec"],
       "overhead": "significant"
@@ -20,7 +20,7 @@
     "debug": {
       "path": "skills/debug/SKILL.md",
       "stage": "Harden",
-      "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression", "postmortem", "retrospective"],
+      "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression", "postmortem"],
       "trigger": "Investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app.",
       "related": ["observability", "resilience"],
       "overhead": "minimal"
@@ -76,7 +76,7 @@
     "plan": {
       "path": "skills/plan/SKILL.md",
       "stage": "Define",
-      "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table", "first-principles", "second-order-effects", "opportunity-cost"],
+      "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table"],
       "trigger": "Non-trivial, cross-cutting, or ambiguous work that needs a scoped task breakdown before starting.",
       "related": ["spec", "workflow", "architecture"],
       "overhead": "moderate"
@@ -100,7 +100,7 @@
     "review": {
       "path": "skills/review/SKILL.md",
       "stage": "Verify",
-      "tags": ["code-review", "adversarial-review", "findings", "moderation", "risk-analysis", "pr-review", "pull-request", "debate", "second-order-effects", "feedback-loops", "opportunity-cost"],
+      "tags": ["code-review", "adversarial-review", "findings", "moderation", "risk-analysis", "pr-review", "pull-request", "debate"],
       "trigger": "Want a thorough, multi-perspective adversarial review of code changes, a PR, or a design.",
       "related": ["testing", "security", "finish"],
       "overhead": "significant"
@@ -116,7 +116,7 @@
     "spec": {
       "path": "skills/spec/SKILL.md",
       "stage": "Define",
-      "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr", "first-principles", "second-order-effects", "opportunity-cost"],
+      "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr"],
       "trigger": "Creating or updating specs, API contracts, ADRs, or task lists — especially before major behavior changes.",
       "related": ["plan", "architecture", "testing"],
       "overhead": "significant"
@@ -140,7 +140,7 @@
     "workflow": {
       "path": "skills/workflow/SKILL.md",
       "stage": "Define",
-      "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router", "first-principles", "second-order-effects", "feedback-loops", "opportunity-cost"],
+      "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router"],
       "trigger": "General request without a named skill — auto-select and sequence the right skills for the work.",
       "related": ["plan", "spec", "finish"],
       "overhead": "minimal"

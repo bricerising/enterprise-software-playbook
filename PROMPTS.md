@@ -191,6 +191,70 @@ Before calling the work done:
 - include a short learning loop (outcome vs expectation, assumption update, one owner-backed improvement)
 ```
 
+## Structured Thinking (decision-quality prompts)
+
+### Run a technical design review
+
+```text
+Use architecture (read skills/architecture/SKILL.md).
+Template: skills/workflow/references/structured-thinking-templates.md → Technical Design Review
+
+Stress-test the design for: <system/boundary being designed>
+Confirm fundamentals (facts vs assumptions), map feedback loops, scan second-order effects,
+compare alternatives with explicit opportunity cost, and identify risks + mitigations.
+```
+
+### Run a trade-off / project decision analysis
+
+```text
+Use plan (read skills/plan/SKILL.md).
+Template: skills/workflow/references/structured-thinking-templates.md → Trade-Off / Project Decision
+
+Decision: <what are we choosing between?>
+Options: <list options, including status quo>
+
+Evaluate first-order and second-order effects per option, check system/stakeholder impact,
+make opportunity cost explicit, run a bias check, and recommend with rationale.
+```
+
+### Run a retrospective / postmortem
+
+```text
+Use finish (read skills/finish/SKILL.md) for delivery learning,
+ or debug (read skills/debug/SKILL.md) for incident triage.
+Template: skills/workflow/references/structured-thinking-templates.md → Retrospective / Postmortem
+
+Context: <what happened — delivery, incident, or rollback>
+
+Capture facts vs expectation, cause chain, root causes, second-order effects,
+missed opportunities, and one owner-backed action with a follow-up date.
+```
+
+### Run a strategic planning / roadmap review
+
+```text
+Use plan (read skills/plan/SKILL.md).
+Template: skills/workflow/references/structured-thinking-templates.md → Strategic Planning / Roadmap
+
+Context: <initiative, portfolio, or multi-quarter direction>
+
+Anchor on first principles, validate assumptions, run scenario scans (6/12/36 months),
+map system dynamics, prioritize with explicit de-priorities, run a pre-mortem,
+and define execution checkpoints.
+```
+
+### Frame a recommendation for stakeholders
+
+```text
+Use finish (read skills/finish/SKILL.md).
+Template: skills/workflow/references/structured-thinking-templates.md → Communication & Influence
+
+Recommendation: <what action/decision you are requesting>
+Audience: <who decides, who executes, who is impacted>
+
+Frame with evidence, counterpoints + mitigation, feedback request, and explicit owner + date + next step.
+```
+
 ## Mechanics (in-process building blocks)
 
 ### Apply a concrete GoF pattern

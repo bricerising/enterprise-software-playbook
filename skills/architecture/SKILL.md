@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: "Design or refactor multi-service system architecture (domain boundaries, service decomposition, event-driven vs request/response, CQRS, sagas, API gateways, data ownership). Use when work spans multiple processes/services, needs eventual consistency, or requires clearer integration seams. NOT for in-process code structure like GoF patterns (use design); NOT for applying timeouts/retries/breakers to a single call (use resilience)."
-metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga","first-principles","second-order-effects","feedback-loops","opportunity-cost"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review"]}
+metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review"]}
 ---
 
 # Architecture (System Pattern Chooser)
@@ -145,5 +145,7 @@ When recommending a pattern:
 
 - 1–2 sentences: pattern + why it fits (pressure, assumptions).
 - Decision table summary: options considered, explicit trade-offs, and kill criteria.
+- Mental-model probe (non-trivial): facts vs assumptions, second-order effects, feedback-loop/delay notes, opportunity costs.
+- Pre-mortem notes: likely failure narrative if this fails in 6–12 months, top preventable cause, safeguard.
 - Blast-radius + dynamics notes: failure propagation, silent failures, delays, accumulations, balancing loop.
 - A minimal implementation plan (boundaries, contracts, data ownership, tests/metrics, and review ritual owner/cadence).

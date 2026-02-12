@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Run a structured adversarial code review (critique → defense → rebuttal → verdict) with evidence-backed findings and stable IDs. Use when you want a thorough, multi-perspective review of code changes, a PR, or a design — produces actionable findings ranked by severity. NOT for writing or expanding tests (use testing); NOT for final ship-readiness (use finish)."
-metadata: {"stage":"Verify","tags":["code-review","adversarial-review","findings","moderation","risk-analysis","pr-review","pull-request","debate","second-order-effects","feedback-loops","opportunity-cost"],"aliases":["code-review","pr-review","pull-request-review","critique","audit","technical-design-review"]}
+metadata: {"stage":"Verify","tags":["code-review","adversarial-review","findings","moderation","risk-analysis","pr-review","pull-request","debate"],"aliases":["code-review","pr-review","pull-request-review","critique","audit"]}
 ---
 
 # Review (Protocol)
