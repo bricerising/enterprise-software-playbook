@@ -49,7 +49,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - if expectations diverged (rollback, incident, surprise scope, or assumption failure):
      - which assumption failed, and what is now updated?
      - what one process/control change would reduce repeat risk? (flag for human to assign owner)
-     - use **Retrospective / Postmortem** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) to capture cause chain and follow-up controls
+     - if divergence is significant, flag a follow-up using the **Retrospective / Postmortem** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) — do not run it inline during the finish pass
 
 ## Guardrails
 

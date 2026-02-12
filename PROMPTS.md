@@ -193,6 +193,8 @@ Before calling the work done:
 
 ## Structured Thinking (decision-quality prompts)
 
+These prompts activate the same skills as above but with an explicit decision-quality focus. Use them when the primary goal is evaluating a decision or stress-testing a design rather than producing an implementation plan or spec artifact.
+
 ### Run a technical design review
 
 ```text

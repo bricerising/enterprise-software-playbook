@@ -236,6 +236,23 @@ def _check_manifest(repo_root: Path, skill_names: list[str], errors: list[str]) 
             )
 
 
+def _check_markdown_links(skills_root: Path, errors: list[str]) -> None:
+    """Verify that relative markdown links in skill .md files resolve to existing files."""
+    link_pattern = re.compile(r"\[.*?\]\((\.\./[^)]+|[^)]+\.md)\)")
+    for md_file in sorted(skills_root.rglob("*.md")):
+        content = md_file.read_text()
+        for match in link_pattern.finditer(content):
+            target = match.group(1)
+            if target.startswith("http://") or target.startswith("https://"):
+                continue
+            resolved = (md_file.parent / target).resolve()
+            if not resolved.exists():
+                rel_source = md_file.relative_to(skills_root.parent)
+                errors.append(
+                    f"Broken link in {rel_source}: '{target}' does not resolve to a file"
+                )
+
+
 def run_checks(repo_root: Path) -> list[str]:
     errors: list[str] = []
 
@@ -259,6 +276,7 @@ def run_checks(repo_root: Path) -> list[str]:
     _check_prompt_skills(skill_names, prompts_text, errors)
     _check_finish_order(prompts_text, errors)
     _check_manifest(repo_root, skill_names, errors)
+    _check_markdown_links(skills_root, errors)
     return errors
 
 

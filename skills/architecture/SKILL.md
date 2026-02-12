@@ -32,17 +32,16 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens (degrades an existing quality)
    - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
-6. For non-trivial work (normal or big scope — see `workflow`), run inline probes and attach outputs to existing artifacts:
-   - **Assumptions probe**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly. Attach to decision table.
-   - **Second-order effects probe**: what likely happens next week / next quarter / next year? Who absorbs deferred cost? Attach to system sketch.
-   - Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to **Technical Design Review** template when escalation criteria are met.
+6. For non-trivial work (normal or big scope — see `workflow`), run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md):
+   - Prioritize **Assumptions** (attach to decision table) and **Second-Order Effects** (attach to system sketch).
+   - Escalate to **Technical Design Review** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
    - pre-mortem: if this fails in 6-12 months, what likely caused failure?
-9. Run a dynamics check (satisfies probe #3 — feedback loops):
+9. Run a dynamics check (satisfies the Feedback Loop probe — do not run both):
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
    - what balancing loop prevents runaway growth?

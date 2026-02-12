@@ -42,19 +42,11 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-### 0.6) Run structured-thinking probes (for non-trivial changes)
+Then stress-test the model with probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). The first Define-stage skill that runs probes owns the output; later skills refine it.
 
-Before locking a direction, run probes and attach outputs to existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
-
-**Normal scope** — answer 1-2 of the most relevant probes inline:
-- **Assumptions**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly.
-- **Second-order effects**: what likely happens next week / next quarter / next year? Who absorbs deferred cost?
-
-**Big scope or high ambiguity** — also run:
-- **Feedback loops**: what reinforces (good or bad)? What balancing loop prevents runaway? Where are delays?
-- **Opportunity cost / bias**: what are we saying "no" to? Sunk cost / familiarity / novelty bias?
-
-Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met (see checklists file).
+- **Normal scope**: prioritize **Assumptions** and **Second-Order Effects** (1-2 probes inline).
+- **Big scope or high ambiguity**: also run **Feedback Loops** and **Opportunity Cost / Bias**.
+- Escalate to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met (see checklists file).
 
 ### 1) Define (what are we building?)
 

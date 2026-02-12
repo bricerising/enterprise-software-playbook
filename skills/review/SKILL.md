@@ -54,8 +54,7 @@ Success looks like: findings that a developer can act on immediately (location +
 7. **Moderator post-pass**
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
-   - Add systemic notes for high-priority items: second-order effects, feedback-loop risk, and opportunity cost if deferred.
-   - For reviews with P0/P1 findings, frame the recommendation for async review using **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
+   - For confirmed P0/P1 findings: add systemic notes (second-order effects, feedback-loop risk, opportunity cost if deferred) and frame the recommendation using **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md).
 
 ## Guardrails
 
@@ -97,10 +96,6 @@ When you finish, return:
    - Suggested fix order and verification steps (tests, reproduction, rollout checks)
 5. **Contested items**
    - What would settle each (specific check)
-6. **Systemic risks** (non-trivial reviews only — normal or big scope; see `workflow`)
+6. **Systemic risks + recommendation** (only for confirmed P0/P1 findings)
    - Second-order effects, feedback loops, and opportunity cost if unresolved
-7. **Recommendation framing** (non-trivial reviews only)
-   - Core recommendation/action request
-   - Evidence (2–3 facts)
-   - Counterpoints + mitigation
-   - Owner + date for next action
+   - Core recommendation, evidence (2-3 facts), counterpoints + mitigation, owner + date for next action
