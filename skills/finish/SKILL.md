@@ -42,7 +42,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - write an executive packet (decision bandwidth)
    - write an engineer packet (implementation bandwidth)
    - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action
-   - for non-trivial hand-offs, use **Communication & Influence** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+   - for non-trivial hand-offs (PR descriptions, ADR recommendations), use **Communication & Influence** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
    - if expectations were met: one sentence on what you would keep or change. Done.

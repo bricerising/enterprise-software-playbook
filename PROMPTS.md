@@ -197,24 +197,23 @@ Before calling the work done:
 
 ```text
 Use architecture (read skills/architecture/SKILL.md).
-Template: skills/references/structured-thinking-templates.md, template: Technical Design Review
 
 Stress-test the design for: <system/boundary being designed>
-Confirm fundamentals (facts vs assumptions), map feedback loops, scan second-order effects,
-compare alternatives with explicit opportunity cost, and identify risks + mitigations.
+
+Include structured-thinking probes. Confirm fundamentals (facts vs assumptions), map feedback loops,
+scan second-order effects, compare alternatives with explicit opportunity cost, and identify risks + mitigations.
 ```
 
 ### Run a trade-off / project decision analysis
 
 ```text
 Use plan (read skills/plan/SKILL.md).
-Template: skills/references/structured-thinking-templates.md, template: Trade-Off / Project Decision
 
 Decision: <what are we choosing between?>
 Options: <list options, including status quo>
 
-Evaluate first-order and second-order effects per option, check system/stakeholder impact,
-make opportunity cost explicit, run a bias check, and recommend with rationale.
+Include structured-thinking probes. Evaluate first-order and second-order effects per option,
+check system/stakeholder impact, make opportunity cost explicit, run a bias check, and recommend with rationale.
 ```
 
 ### Run a retrospective / postmortem
@@ -222,11 +221,10 @@ make opportunity cost explicit, run a bias check, and recommend with rationale.
 ```text
 Use finish (read skills/finish/SKILL.md) for delivery learning,
  or debug (read skills/debug/SKILL.md) for incident triage.
-Template: skills/references/structured-thinking-templates.md, template: Retrospective / Postmortem
 
 Context: <what happened — delivery, incident, or rollback>
 
-Capture facts vs expectation, cause chain, root causes, second-order effects,
+Include the learning loop. Capture facts vs expectation, cause chain, root causes, second-order effects,
 missed opportunities, and one owner-backed action with a follow-up date.
 ```
 
@@ -234,25 +232,23 @@ missed opportunities, and one owner-backed action with a follow-up date.
 
 ```text
 Use plan (read skills/plan/SKILL.md).
-Template: skills/references/structured-thinking-templates.md, template: Strategic Planning / Roadmap
 
 Context: <initiative, portfolio, or multi-quarter direction>
 
-Anchor on first principles, validate assumptions, run scenario scans (6/12/36 months),
-map system dynamics, prioritize with explicit de-priorities, run a pre-mortem,
-and define execution checkpoints.
+Include structured-thinking probes. Anchor on first principles, validate assumptions,
+run scenario scans (6/12/36 months), map system dynamics, prioritize with explicit de-priorities,
+run a pre-mortem, and define execution checkpoints.
 ```
 
-### Frame a recommendation for stakeholders
+### Frame a technical recommendation for async review
 
 ```text
 Use finish (read skills/finish/SKILL.md).
-Template: skills/references/structured-thinking-templates.md, template: Communication & Influence
 
-Recommendation: <what action/decision you are requesting>
-Audience: <who decides, who executes, who is impacted>
+Recommendation: <what action/decision this PR/ADR is requesting>
+Reviewers: <who will review and approve>
 
-Frame with evidence, counterpoints + mitigation, feedback request, and explicit owner + date + next step.
+Frame with evidence, counterpoints + mitigation, open questions for reviewers, and explicit owner + date + next step.
 ```
 
 ## Mechanics (in-process building blocks)

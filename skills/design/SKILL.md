@@ -25,7 +25,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - **Structure** pressure: wrapping/combining objects, incompatible interfaces, indirection, memory sharing.
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
 4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
-5. For non-trivial pattern decisions, run probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to trade-offs (step 6).
+5. For non-trivial work, run probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to trade-offs (step 6).
 6. Validate with 2 examples: a "happy path" and a likely future change.
 7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
 

@@ -44,7 +44,7 @@ Before pattern/tool selection, write a compact model:
 
 ### 0.6) Run structured-thinking probes (for non-trivial changes)
 
-Before locking a direction, run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md) and attach outputs to your existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
+Before locking a direction, run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
 
 **Normal scope** — answer 1-2 of the most relevant probes inline (usually #1 assumptions and #2 second-order effects).
 

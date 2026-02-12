@@ -32,14 +32,18 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens
    - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
-6. Run structured-thinking probes (non-trivial bets) — prioritize probes #1 (assumptions), #2 (second-order effects), and #3 (feedback loops/dynamics) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts. Escalate to **Technical Design Review** template when escalation criteria are met.
+6. For non-trivial work, run probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, system sketch). Escalate to **Technical Design Review** template when escalation criteria are met.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
    - pre-mortem: if this fails in 6-12 months, what likely caused failure?
-9. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
+9. Run a dynamics check (satisfies probe #3 — feedback loops):
+   - where are delays (feedback, approvals, recovery)?
+   - what accumulates (toil, backlog, queue lag, exceptions)?
+   - what balancing loop prevents runaway growth?
+10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
 
 ## Clarifying Questions
 

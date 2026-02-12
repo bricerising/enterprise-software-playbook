@@ -14,7 +14,7 @@ Use template packs only for non-trivial work unless a tiny change has unusually 
 | Trade-Off / Project Decision | Multiple viable options must be compared with explicit opportunity cost | `plan`, `spec`, `workflow` |
 | Retrospective / Postmortem | A delivery, incident, or rollout needs learning capture | `finish`, `debug` |
 | Strategic Planning / Roadmap | Multi-quarter direction or initiative portfolio is being set | `plan`, `spec`, `architecture` |
-| Communication & Influence | You must align stakeholders on a recommendation and next action | `finish`, `review`, `workflow` |
+| Communication & Influence | You must frame a PR/ADR/technical recommendation for async review | `finish`, `review`, `workflow` |
 
 ## 1) Technical Design Review
 
@@ -110,25 +110,24 @@ Output:
 
 ## 5) Communication & Influence
 
-Use to hand off a recommendation clearly and drive decision/action.
+Use to frame a PR description, ADR recommendation, or technical proposal for async review. Keeps the recommendation grounded in evidence and actionable for reviewers.
 
 Prompts:
 
-- Core message: what action/decision is requested now?
-- Audience map: who decides, who executes, who is impacted?
-- Framing: gain/loss framing that best matches audience incentives.
-- Evidence: what 2-3 facts best support this recommendation?
-- Counterpoints: what risks remain and how are they mitigated?
-- Feedback loop: what input is requested and by when?
-- Call to action: owner + date + explicit next step.
+- Core message: what action/decision is this PR/ADR requesting?
+- Reviewer context: what do reviewers need to know to evaluate this (constraints, prior decisions, scope)?
+- Evidence: what 2-3 facts or test results best support the recommendation?
+- Counterpoints: what risks or alternatives remain and how are they mitigated?
+- Open questions: what specific feedback is requested from reviewers?
+- Next step: owner + date + what happens after approval.
 
 Output:
 
 - `core recommendation`
-- `audience-aligned framing`
+- `reviewer context`
 - `evidence`
 - `counterpoints + mitigation`
-- `feedback request`
+- `open questions for reviewers`
 - `owner + date + next step`
 
 ## Guardrails

@@ -36,7 +36,7 @@ Not every skill needs every probe. Prioritize by fit:
 | --- | --- | --- |
 | #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review` |
 | #2 Second-Order Effects | `plan`, `architecture`, `spec` | `review`, `design` |
-| #3 Feedback Loops | `architecture` (subsumes its dynamics check) | `plan`, `spec` |
+| #3 Feedback Loops | `architecture` (covered natively by its inline dynamics check — do not run separately) | `plan`, `spec` |
 | #4 Opportunity Cost | `plan`, `spec`, `architecture` | `review`, `design` |
 | #5 Learning Loop | `finish`, `debug` | — |
 
@@ -72,7 +72,7 @@ Output (attach to decision table):
 
 ### 3) Feedback Loop and Dynamics Check
 
-Use for system and operations changes. In `architecture`, this subsumes the existing dynamics check step — do not run both.
+Use for system and operations changes. In `architecture`, the inline dynamics check (step 9) already covers this probe — do not run both.
 
 - Reinforcing loop: what could amplify in a good or bad direction?
 - Balancing loop: what mechanism keeps runaway behavior in check?
