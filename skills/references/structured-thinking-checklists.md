@@ -1,7 +1,5 @@
 # Structured Thinking Checklists
 
-> **Maintenance note:** Skills inline condensed versions of these probes for standalone execution. If you update a probe here, also update the inline version in the corresponding skills (see skill affinity table below).
-
 Use these probes to strengthen non-trivial decisions without adding heavy process.
 
 In this repo, **non-trivial = normal or big scope** (see `workflow`); tiny changes always skip these probes.
@@ -32,6 +30,18 @@ Use compact probes by default. Escalate to one targeted template from [`structur
 
 If none of these apply, compact probes are sufficient — do not run a template pack.
 
+## Probe Index
+
+The canonical probe definitions live inline in the skills that execute them. This table maps each probe to its canonical location and field outputs.
+
+| # | Probe | Canonical location | Output fields | Attach to |
+| --- | --- | --- | --- | --- |
+| 1 | Assumptions | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `facts`, `assumptions`, `assumption-to-test-first` | decision table |
+| 2 | Second-Order Effects (+ pre-mortem) | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `near-term effects`, `long-term effects`, `deferred cost owner`, `pre-mortem cause` | decision table |
+| 3 | Feedback Loops | `architecture` step 9 (dynamics check — covers this natively) | `reinforcing loop`, `balancing loop`, `delay + accumulation risk` | system sketch |
+| 4 | Opportunity Cost / Bias | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `opportunity cost`, `bias risks`, `external challenge` | decision table |
+| 5 | Learning Loop | `finish` step 6 | `outcome delta`, `assumption confirmed or updated`, `next control + owner` | finish packet |
+
 ## Skill affinity
 
 Not every skill needs every probe. Prioritize by fit:
@@ -40,79 +50,14 @@ Not every skill needs every probe. Prioritize by fit:
 | --- | --- | --- |
 | #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review` |
 | #2 Second-Order Effects (+ pre-mortem) | `plan`, `architecture`, `spec`, `design` | `review` |
-| #3 Feedback Loops | `architecture` (covered natively by its inline dynamics check — do not run separately) | `plan`, `spec` |
+| #3 Feedback Loops | `architecture` (covered natively by its dynamics check — do not run separately) | `plan`, `spec` |
 | #4 Opportunity Cost | `plan`, `spec`, `architecture`, `design` | `review` |
 | #5 Learning Loop | `finish`, `debug` | — |
 
 Skills not listed above (`testing`, `security`, `resilience`, `observability`, `typescript`, `platform`, `patterns-*`) consume probe output from the Define-stage skill that produced it. They do not run their own probes.
 
----
-
-## Core Probes (run inline for non-trivial work)
-
-### 1) First-Principles Assumption Audit
-
-Use when starting plans/specs/architecture/design decisions.
-
-- What is true regardless of tooling preference or team habit?
-- What are assumptions (not facts), and why do we believe each one?
-- Which assumption is least certain and how will we validate it quickly?
-
-Output (attach to decision table):
-- `facts`
-- `assumptions`
-- `assumption-to-test-first`
-
-### 2) Second-Order Effects Scan (includes pre-mortem)
-
-Use before locking a decision.
-
-- If we choose this option, what likely happens next week, next quarter, next year?
-- What new load, toil, coupling, or failure mode might this create?
-- Which stakeholder/team absorbs the downside later?
-- Pre-mortem: if this fails in 6-12 months, what likely caused failure?
-
-Output (attach to decision table):
-- `near-term effects`
-- `long-term effects`
-- `deferred cost owner`
-- `pre-mortem cause`
-
-### 3) Feedback Loop and Dynamics Check
-
-Use for system and operations changes. In `architecture`, the inline dynamics check (step 9) already covers this probe — do not run both.
-
-- Reinforcing loop: what could amplify in a good or bad direction?
-- Balancing loop: what mechanism keeps runaway behavior in check?
-- Where are delays between signal and action, and what accumulates during the delay?
-
-Output (attach to system sketch):
-- `reinforcing loop`
-- `balancing loop`
-- `delay + accumulation risk`
-
-### 4) Opportunity Cost and Bias Check
-
-Use when options are close or politically loaded.
-
-- What are we explicitly saying "no" to with this choice?
-- Are we favoring this because of sunk cost, familiarity, or novelty bias?
-- What would a neutral reviewer challenge first?
-
-Output (attach to decision table):
-- `opportunity cost`
-- `bias risks`
-- `external challenge`
-
-### 5) Learning Loop
-
-Use in `finish` (after delivery) or `debug` (after incident/rollback). For the full cause-chain flow, escalate to **Retrospective / Postmortem** from [`structured-thinking-templates.md`](structured-thinking-templates.md).
-
-- What happened vs what was expected?
-- Which assumption was confirmed or updated, and why? (always answer — even when expectations were met)
-- What one process/control change would reduce repeat risk? (only when expectations diverged; flag for human to assign owner)
-
-Output (attach to finish packet):
-- `outcome delta`
-- `assumption confirmed or updated`
-- `next control + owner` (only when expectations diverged)
+**Skill-specific tailoring notes:**
+- `design` omits "load" and "toil" from Second-Order Effects because in-process pattern decisions don't create operational load or toil — coupling and failure modes are the relevant concerns.
+- `architecture` omits the pre-mortem question from its probe block because it's already covered in its blast-radius step (step 8). `plan`, `spec`, and `design` include pre-mortem inline since they lack a separate blast-radius step.
+- `architecture` attaches Second-Order Effects to the system sketch (not decision table) since the effects are structural.
+- `debug` is listed as primary for Learning Loop (#5) because incident resolution produces learning output, but debug's capture-learnings step (step 6) addresses systemic gaps discovered during triage (missing telemetry, retries without idempotency) rather than probe #5's outcome-vs-expectation format. For formal learning capture after incident resolution, debug flags a follow-up using the Retrospective template.

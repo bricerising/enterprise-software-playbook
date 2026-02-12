@@ -42,19 +42,11 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-Then, if the work involves choosing between 2+ viable approaches, stress-test the model with probes. The first Define-stage skill that runs probes owns the output; later skills refine it (never re-run from scratch). If the path is obvious (single viable approach), note `probes: skipped — single viable approach` and move on.
+Then, if the work involves choosing between 2+ viable approaches, the first Define-stage skill stress-tests the model with probes (later skills refine, never re-run). If the path is obvious, note `probes: skipped — single viable approach` and move on.
 
-**Normal scope** — run 1-2 probes inline:
-
-- **Assumptions**: What are facts vs assumptions? Which assumption is least certain and how will we validate it quickly? *(attach to decision table)*
-- **Second-Order Effects**: If we choose this, what happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
-
-**Big scope or high ambiguity** — also run:
-
-- **Feedback Loops**: What reinforcing/balancing loops exist? Where are delays between signal and action, and what accumulates? *(attach to system sketch)*
-- **Opportunity Cost / Bias**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
-
-**Escalate** to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when: decision table has 3+ options with no clear winner, multiple stakeholders must align, a rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
+- **Normal scope**: run Assumptions (facts vs assumptions, which to validate first) and Second-Order Effects (what changes next week/quarter/year, new load/toil/coupling/failure modes, pre-mortem). Attach to decision table.
+- **Big scope or high ambiguity**: also run Feedback Loops (reinforcing/balancing loops, delays, accumulations — attach to system sketch) and Opportunity Cost / Bias (what we're saying "no" to, sunk cost/familiarity/novelty check — attach to decision table).
+- **Escalate** to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when: 3+ options with no clear winner, multiple stakeholders must align, rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
 
 ### 1) Define (what are we building?)
 

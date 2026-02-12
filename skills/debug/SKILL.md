@@ -89,7 +89,6 @@ If you found a systemic gap, capture it:
 - retries without idempotency / missing time budgets → [`resilience`](../resilience/SKILL.md)
 - repeated boundary logic across services → [`platform`](../platform/SKILL.md)
 - cross-service pattern confusion → [`architecture`](../architecture/SKILL.md)
-- for incident/post-rollback learning capture, run **Retrospective / Postmortem** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 
 ## Guardrails
 
@@ -118,3 +117,4 @@ When using this skill, return:
 - **Mitigation**: what you did / recommend doing now (rollback/flag/scale).
 - **Fix plan**: code/config changes to make it correct and durable.
 - **Follow-ups**: telemetry gaps, runbook updates, tests, new invariants.
+  - If root cause is systemic, flag for a follow-up retrospective ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) — Retrospective / Postmortem).

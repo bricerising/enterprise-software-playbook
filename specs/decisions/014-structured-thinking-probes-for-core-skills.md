@@ -35,8 +35,8 @@ Choose **Option C**, implemented in two phases:
 
 ### Phase 1: Compact probes
 
-- Add one shared reference (`skills/references/structured-thinking-checklists.md`) with 5 compact probes: first-principles assumptions, second-order effects (including pre-mortem), feedback loops/dynamics, opportunity cost/bias, and learning loop.
-- **Inline condensed probe questions** directly into each skill's workflow steps so skills are self-contained for execution. `workflow` contains the full probe content as orchestrator; individual Define-stage skills (`plan`, `architecture`, `spec`, `design`) inline their relevant probes and note "if running inside `workflow`, consume existing probe output instead of re-running." The shared checklists file serves as canonical documentation and expanded reference, not as required reading during execution.
+- Add one shared reference (`skills/references/structured-thinking-checklists.md`) as a probe index and cross-cutting metadata hub (ownership rules, escalation criteria, skill affinity, and tailoring notes).
+- **Inline condensed probe questions** directly into each skill's workflow steps so skills are self-contained for execution. `workflow` contains the full probe content as orchestrator; individual Define-stage skills (`plan`, `architecture`, `spec`, `design`) inline their relevant probes and note "if running inside `workflow`, consume existing probe output instead of re-running." Skills are the canonical source of probe content; the checklists file is a lookup index pointing to those canonical locations, not a parallel copy.
 - Each skill specifies which probes are most relevant (via a skill-affinity table in the checklists file). Skills without workflow steps for probes (e.g., `testing`) consume the Define-stage output instead.
 - **Decision-presence gate**: probes run only when the work involves choosing between 2+ viable approaches. If the path is obvious, note `probes: skipped — single viable approach` rather than filling fields with "n/a".
 - The first Define-stage skill in a flow owns the probe output; subsequent skills refine it.
@@ -105,8 +105,8 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
   - Better fit between problem type and reasoning structure (via template packs).
 - Trade-offs / what gets harder:
   - Slightly more structure in planning/review/finish outputs.
-  - Two shared reference files to maintain.
-  - Cross-links across several skills to keep current.
+  - Two shared reference files to maintain (checklists is a lightweight index; templates has more content).
+  - Cross-links across several skills to keep current (mitigated by `_check_markdown_links` in consistency checker).
 - Compatibility/migration impact:
   - Additive only; no skill rename or taxonomy change.
   - Existing prompts continue to work and gain extra guidance when updated.

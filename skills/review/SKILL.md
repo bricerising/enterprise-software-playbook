@@ -54,8 +54,7 @@ Success looks like: findings that a developer can act on immediately (location +
 7. **Moderator post-pass**
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
-   - For confirmed P0–P2 findings with systemic implications: add systemic notes (second-order effects, feedback-loop risk, opportunity cost if deferred).
-   - For confirmed P0/P1 findings: also frame the recommendation using **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md).
+   - For confirmed P0–P2 findings with systemic implications: add a 1-2 bullet systemic note (second-order effects, feedback-loop risk, opportunity cost if deferred).
 
 ## Guardrails
 
@@ -70,7 +69,7 @@ Success looks like: findings that a developer can act on immediately (location +
 ## References
 
 - `references/protocol.md`: format contract + prompt templates (base + per-type add-ons)
-- Recommendation Brief template (for P0/P1 recommendation framing): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Recommendation Brief template (for critical findings needing stakeholder alignment): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - Deeper checklists by review type (optional, this repo):
   - `security`: [`security`](../security/SKILL.md)
   - `resilience`: [`resilience`](../resilience/SKILL.md)
@@ -98,5 +97,4 @@ When you finish, return:
    - What would settle each (specific check)
 6. **Systemic risks** (for confirmed P0–P2 findings with systemic implications)
    - Second-order effects, feedback loops, and opportunity cost if unresolved
-7. **Recommendation brief** (only for confirmed P0/P1 findings)
-   - Core recommendation, evidence (2-3 facts), counterpoints + mitigation, owner + date for next action
+   - For critical findings needing stakeholder alignment, suggest running the **Recommendation Brief** template separately ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md))

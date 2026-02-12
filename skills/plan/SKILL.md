@@ -32,7 +32,7 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - kill criteria / reversal trigger
 6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
    - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new toil, coupling, or failure mode? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If running inside `workflow`, consume existing probe output instead of re-running.
 7. Choose the minimum up-front artifacts:

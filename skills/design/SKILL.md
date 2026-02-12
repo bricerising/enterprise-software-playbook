@@ -26,9 +26,9 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
 4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
 5. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to trade-offs in step 6)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? *(attach to trade-offs in step 6)*
-   - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to trade-offs in step 6)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(include in output trade-offs)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? *(include in output trade-offs)*
+   - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(include in output trade-offs)*
    - If running inside `workflow`, consume existing probe output instead of re-running.
 6. Validate with 2 examples: a "happy path" and a likely future change.
 7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
@@ -108,6 +108,6 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 When recommending a pattern, return:
 
 - 1–2 sentences: pattern + why it fits this problem (what changes, what stays stable).
-- Trade-offs and 1 alternative (“no pattern” option included).
+- Trade-offs and 1 alternative ("no pattern" option included), with assumptions (facts vs assumptions) and opportunity costs if probes were run.
 - A minimal implementation plan (roles/interfaces, wiring point, tests).
 - If implementing: small skeleton + one example call site.

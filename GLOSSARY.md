@@ -43,8 +43,8 @@ This is intentionally lightweight. When in doubt, follow the workflow and treat 
 
 ## Decision Quality
 
-- **Structured-thinking probe**: A compact checklist (1-3 bullets) for stress-testing non-trivial decisions — covers assumptions, second-order effects, feedback loops, opportunity cost, and learning loops. See `skills/references/structured-thinking-checklists.md`.
-- **Structured-thinking template pack**: A multi-prompt flow for a specific decision shape (design review, trade-off, retrospective, recommendation brief). Escalate from probes when compact checklists aren't enough. See `skills/references/structured-thinking-templates.md`.
+- **Structured-thinking probe**: A compact checklist (1-3 bullets per probe) for stress-testing non-trivial decisions. Five probes: (1) Assumptions — facts vs assumptions, (2) Second-Order Effects — near/long-term impacts + pre-mortem, (3) Feedback Loops — reinforcing/balancing loops + delays, (4) Opportunity Cost — what we're saying "no" to + bias check, (5) Learning Loop — outcome vs expectation + owner-backed action. Probes run inline in Define-stage skills; index and affinity in `skills/references/structured-thinking-checklists.md`.
+- **Structured-thinking template pack**: A multi-prompt flow for a specific decision shape. Four packs: Technical Design Review, Trade-Off / Project Decision, Retrospective / Postmortem, Recommendation Brief. Escalate from probes when compact checklists aren't enough (3+ options with no clear winner, multiple stakeholders, rollback/incident). See `skills/references/structured-thinking-templates.md`.
 
 ## Codebase Structure
 

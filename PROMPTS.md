@@ -191,21 +191,22 @@ Before calling the work done:
 - include a short learning loop (outcome vs expectation, assumption confirmed or updated, one owner-backed improvement if expectations diverged)
 ```
 
-## Structured Thinking (decision-quality prompts)
+## Structured Thinking (decision-quality add-ons)
 
-These prompts go directly to template packs (the full multi-prompt flows). For the lighter-weight probe-first approach integrated into normal skill workflows, use the standard skill prompts above — probes run automatically for non-trivial work with 2+ viable approaches.
+These prompts **augment** the normal skill workflows above with deeper decision stress-testing via template packs. They do not replace the skill's own workflow — the skill still runs its full playbook (pattern chooser, clarifying questions, implementation tactics, etc.).
 
-Use these when the primary goal is evaluating a decision or stress-testing a design rather than producing an implementation plan or spec artifact.
+For most non-trivial work, the compact probes built into each skill are sufficient. Use these add-on prompts when escalation criteria are met: 3+ options with no clear winner, multiple stakeholders must align, rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
 
-Full template details live in `skills/references/structured-thinking-templates.md`. Compact probe details live in `skills/references/structured-thinking-checklists.md`.
+Full template details live in `skills/references/structured-thinking-templates.md`. Compact probe index lives in `skills/references/structured-thinking-checklists.md`.
 
 ### Run a technical design review
 
 ```text
 Use architecture (read skills/architecture/SKILL.md).
-Stress-test the design for: <system/boundary being designed>
+Design for: <system/boundary being designed>
+Additionally, run the Technical Design Review template for deeper decision stress-testing
+(see skills/references/structured-thinking-templates.md — Technical Design Review).
 Prioritize: assumptions, feedback loops, second-order effects.
-Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Technical Design Review).
 ```
 
 ### Run a trade-off / project decision analysis
@@ -214,8 +215,9 @@ Include structured-thinking probes (see skills/references/structured-thinking-te
 Use plan (read skills/plan/SKILL.md).
 Decision: <what are we choosing between?>
 Options: <list options, including status quo>
+Additionally, run the Trade-Off / Project Decision template for deeper analysis
+(see skills/references/structured-thinking-templates.md — Trade-Off / Project Decision).
 Prioritize: assumptions, opportunity cost, second-order effects.
-Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Trade-Off / Project Decision).
 ```
 
 ### Run a retrospective / postmortem
@@ -224,8 +226,9 @@ Include structured-thinking probes (see skills/references/structured-thinking-te
 Use finish (read skills/finish/SKILL.md) for delivery learning,
  or debug (read skills/debug/SKILL.md) for incident triage.
 Context: <what happened — delivery, incident, or rollback>
+Additionally, run the Retrospective / Postmortem template for formal learning capture
+(see skills/references/structured-thinking-templates.md — Retrospective / Postmortem).
 Prioritize: learning loop (outcome vs expectation, assumption update, owner-backed action).
-Include the learning loop (see skills/references/structured-thinking-templates.md — Retrospective / Postmortem).
 ```
 
 ### Frame a technical recommendation for async review
@@ -234,8 +237,9 @@ Include the learning loop (see skills/references/structured-thinking-templates.m
 Use finish (read skills/finish/SKILL.md).
 Recommendation: <what action/decision this PR/ADR is requesting>
 Reviewers: <who will review and approve>
+Additionally, run the Recommendation Brief template for structured async review framing
+(see skills/references/structured-thinking-templates.md — Recommendation Brief).
 Prioritize: evidence, counterpoints, explicit owner + next step.
-Include recommendation framing (see skills/references/structured-thinking-templates.md — Recommendation Brief).
 ```
 
 ## Mechanics (in-process building blocks)

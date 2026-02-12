@@ -23,7 +23,8 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 1. Re-check intent artifacts:
    - if contracts/semantics changed: specs/contracts are updated (`spec`)
    - if shared primitives were added/changed: API surface + adoption notes are clear (`platform`)
-   - for non-trivial work with 2+ viable approaches (otherwise skip): objective function, decision table, measurement ladder, and kill criteria are documented
+   - for non-trivial work: objective function, measurement ladder, and kill criteria are documented
+   - if 2+ viable approaches existed: decision table includes assumptions (facts vs assumptions) and opportunity costs
 2. Run verification (prefer narrow → broad):
    - unit tests / focused tests
    - typecheck
