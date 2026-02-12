@@ -36,8 +36,8 @@ Choose **Option C**, implemented in two phases:
 ### Phase 1: Compact probes
 
 - Add one shared reference (`skills/references/structured-thinking-checklists.md`) with 5 compact probes: first-principles assumptions, second-order effects (including pre-mortem), feedback loops/dynamics, opportunity cost/bias, and learning loop.
-- Integrate lightweight probe pointers into skills with strong affinity: `workflow`, `plan`, `architecture`, `spec`, `design` (assumptions + second-order), `finish`/`debug` (learning loop + retrospective), `review` (recommendation brief for P0/P1s). Skills without workflow steps for probes (e.g., `testing`) reference the Define-stage output instead.
-- Each skill points to the canonical probes file and specifies which probes are most relevant (via a skill-affinity table in the checklists file).
+- **Inline condensed probe questions** directly into each skill's workflow steps so skills are self-contained for execution. `workflow` contains the full probe content as orchestrator; individual Define-stage skills (`plan`, `architecture`, `spec`, `design`) inline their relevant probes and note "if running inside `workflow`, consume existing probe output instead of re-running." The shared checklists file serves as canonical documentation and expanded reference, not as required reading during execution.
+- Each skill specifies which probes are most relevant (via a skill-affinity table in the checklists file). Skills without workflow steps for probes (e.g., `testing`) consume the Define-stage output instead.
 - **Decision-presence gate**: probes run only when the work involves choosing between 2+ viable approaches. If the path is obvious, note `probes: skipped — single viable approach` rather than filling fields with "n/a".
 - The first Define-stage skill in a flow owns the probe output; subsequent skills refine it.
 
@@ -56,7 +56,7 @@ This keeps the existing taxonomy intact while improving reasoning quality where 
 
 ## Kill criteria / reversal trigger
 
-Reverse or narrow this change if either condition is observed for two consecutive review cycles:
+Reverse or narrow this change if any of the following conditions are observed for two consecutive review cycles:
 
 - Probe sections are empty or marked "n/a" in >50% of sampled non-trivial outputs — indicating probes are too abstract or too verbose for practical use.
 - Template packs are used in <10% of big-scope outputs, indicating the escalation criteria are unclear or too restrictive.

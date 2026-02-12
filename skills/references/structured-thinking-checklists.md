@@ -1,5 +1,7 @@
 # Structured Thinking Checklists
 
+> **Maintenance note:** Skills inline condensed versions of these probes for standalone execution. If you update a probe here, also update the inline version in the corresponding skills (see skill affinity table below).
+
 Use these probes to strengthen non-trivial decisions without adding heavy process.
 
 In this repo, **non-trivial = normal or big scope** (see `workflow`); tiny changes always skip these probes.
@@ -37,10 +39,12 @@ Not every skill needs every probe. Prioritize by fit:
 | Probe | Primary skills | Secondary |
 | --- | --- | --- |
 | #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review` |
-| #2 Second-Order Effects (+ pre-mortem) | `plan`, `architecture`, `spec` | `review`, `design` |
+| #2 Second-Order Effects (+ pre-mortem) | `plan`, `architecture`, `spec`, `design` | `review` |
 | #3 Feedback Loops | `architecture` (covered natively by its inline dynamics check — do not run separately) | `plan`, `spec` |
-| #4 Opportunity Cost | `plan`, `spec`, `architecture` | `review`, `design` |
+| #4 Opportunity Cost | `plan`, `spec`, `architecture`, `design` | `review` |
 | #5 Learning Loop | `finish`, `debug` | — |
+
+Skills not listed above (`testing`, `security`, `resilience`, `observability`, `typescript`, `platform`, `patterns-*`) consume probe output from the Define-stage skill that produced it. They do not run their own probes.
 
 ---
 

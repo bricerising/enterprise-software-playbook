@@ -193,7 +193,9 @@ Before calling the work done:
 
 ## Structured Thinking (decision-quality prompts)
 
-These prompts activate the same skills as above but with an explicit decision-quality focus. Use them when the primary goal is evaluating a decision or stress-testing a design rather than producing an implementation plan or spec artifact.
+These prompts go directly to template packs (the full multi-prompt flows). For the lighter-weight probe-first approach integrated into normal skill workflows, use the standard skill prompts above — probes run automatically for non-trivial work with 2+ viable approaches.
+
+Use these when the primary goal is evaluating a decision or stress-testing a design rather than producing an implementation plan or spec artifact.
 
 Full template details live in `skills/references/structured-thinking-templates.md`. Compact probe details live in `skills/references/structured-thinking-checklists.md`.
 
@@ -202,6 +204,7 @@ Full template details live in `skills/references/structured-thinking-templates.m
 ```text
 Use architecture (read skills/architecture/SKILL.md).
 Stress-test the design for: <system/boundary being designed>
+Prioritize: assumptions, feedback loops, second-order effects.
 Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Technical Design Review).
 ```
 
@@ -211,6 +214,7 @@ Include structured-thinking probes (see skills/references/structured-thinking-te
 Use plan (read skills/plan/SKILL.md).
 Decision: <what are we choosing between?>
 Options: <list options, including status quo>
+Prioritize: assumptions, opportunity cost, second-order effects.
 Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Trade-Off / Project Decision).
 ```
 
@@ -220,6 +224,7 @@ Include structured-thinking probes (see skills/references/structured-thinking-te
 Use finish (read skills/finish/SKILL.md) for delivery learning,
  or debug (read skills/debug/SKILL.md) for incident triage.
 Context: <what happened — delivery, incident, or rollback>
+Prioritize: learning loop (outcome vs expectation, assumption update, owner-backed action).
 Include the learning loop (see skills/references/structured-thinking-templates.md — Retrospective / Postmortem).
 ```
 
@@ -229,6 +234,7 @@ Include the learning loop (see skills/references/structured-thinking-templates.m
 Use finish (read skills/finish/SKILL.md).
 Recommendation: <what action/decision this PR/ADR is requesting>
 Reviewers: <who will review and approve>
+Prioritize: evidence, counterpoints, explicit owner + next step.
 Include recommendation framing (see skills/references/structured-thinking-templates.md — Recommendation Brief).
 ```
 

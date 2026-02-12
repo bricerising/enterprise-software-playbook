@@ -32,17 +32,19 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens (degrades an existing quality)
    - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
-6. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
-   - Prioritize **Assumptions** (attach to decision table) and **Second-Order Effects** (attach to system sketch).
-   - Escalate to **Technical Design Review** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
-   - If the path is obvious, note `probes: skipped — single viable approach`.
+6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode? Which team absorbs the downside? *(attach to system sketch)*
+   - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
+   - If running inside `workflow`, consume existing probe output instead of re-running.
+   - Note: Feedback Loops are covered natively by step 9 (dynamics check); Second-Order Effects includes pre-mortem, which is also covered in step 8. Do not duplicate.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
-   - pre-mortem (covered by probe #2 — Second-Order Effects): if this fails in 6-12 months, what likely caused failure?
-9. Run a dynamics check (satisfies the Feedback Loop probe — do not run both):
+   - pre-mortem: if this fails in 6-12 months, what likely caused failure?
+9. Run a dynamics check:
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
    - what balancing loop prevents runaway growth?
@@ -141,6 +143,6 @@ Use code patterns for in-process structure; use system patterns when the problem
 When recommending a pattern:
 
 - 1–2 sentences: pattern + why it fits (pressure, assumptions).
-- Decision table summary: options considered, explicit trade-offs, kill criteria, and assumptions (facts vs assumptions from probes).
-- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem cause (from probe #2).
+- Decision table summary: options considered, explicit trade-offs, kill criteria, and assumptions (facts vs assumptions).
+- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem cause.
 - A minimal implementation plan (boundaries, contracts, data ownership, tests/metrics, and review ritual owner/cadence).

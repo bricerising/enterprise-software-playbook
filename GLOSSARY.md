@@ -43,8 +43,8 @@ This is intentionally lightweight. When in doubt, follow the workflow and treat 
 
 ## Decision Quality
 
-- **Structured-thinking probe**: A compact checklist (1-3 bullets per prompt) used to stress-test non-trivial decisions. Covers first-principles assumptions, second-order effects (including pre-mortem), feedback loops, opportunity cost/bias, and learning loops. Probes attach to existing artifacts (objective function, system sketch, decision table, measurement ladder). **Use by default** for non-trivial work when the decision has 2+ viable approaches. See `skills/references/structured-thinking-checklists.md`.
-- **Structured-thinking template pack**: A multi-prompt flow for a specific decision shape (design review, trade-off, retrospective, PR/ADR recommendation framing). **Escalate from probes** when: the decision table has 3+ options with no clear winner, multiple stakeholders must align, a rollback/incident requires formal learning capture, or big-scope probes surface unresolved ambiguity. See `skills/references/structured-thinking-templates.md`.
+- **Structured-thinking probe**: A compact checklist (1-3 bullets) for stress-testing non-trivial decisions — covers assumptions, second-order effects, feedback loops, opportunity cost, and learning loops. See `skills/references/structured-thinking-checklists.md`.
+- **Structured-thinking template pack**: A multi-prompt flow for a specific decision shape (design review, trade-off, retrospective, recommendation brief). Escalate from probes when compact checklists aren't enough. See `skills/references/structured-thinking-templates.md`.
 
 ## Codebase Structure
 

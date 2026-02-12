@@ -75,10 +75,11 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
-   - Prioritize **Assumptions** (attach to decision table) and **Opportunity Cost** (attach to objective function).
-   - Escalate to a template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met.
-   - If the path is obvious, note `probes: skipped — single viable approach`.
+8. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new toil, coupling, or failure mode? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
+   - If running inside `workflow`, consume existing probe output instead of re-running.
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)

@@ -1,4 +1,4 @@
-# Structured Thinking Templates (Selector Packs)
+# Structured Thinking Template Packs
 
 Use these packs when compact probes are not enough and you need a repeatable flow for a specific decision shape. See escalation criteria in [`structured-thinking-checklists.md`](structured-thinking-checklists.md).
 
@@ -29,12 +29,12 @@ Prompts:
 - Compare alternatives: what does each option optimize and what does it force us not to do?
 - Risk + mitigation: what can fail, how will we detect/correct quickly?
 
-Output:
+Output (probe field mappings in parentheses):
 
-- `fundamentals`
-- `interaction + loops`
-- `second-order effects`
-- `alternatives + opportunity cost`
+- `fundamentals` (→ probe #1: `facts` + `assumptions` + `assumption-to-test-first`)
+- `interaction + loops` (→ probe #3: `reinforcing loop` + `balancing loop` + `delay + accumulation risk`)
+- `second-order effects` (→ probe #2: `near-term effects` + `long-term effects` + `pre-mortem cause`)
+- `alternatives + opportunity cost` (→ probe #4: `opportunity cost` + `bias risks`)
 - `risks + mitigations`
 - `recommendation`
 
@@ -52,14 +52,14 @@ Prompts:
 - Make opportunity cost explicit: what are we saying "no" to?
 - Run a bias check (sunk cost/familiarity/novelty/confirmation).
 
-Output:
+Output (probe field mappings in parentheses):
 
-- `decision context`
+- `decision context` (→ probe #1: `facts` + `assumptions`)
 - `option table`
-- `short-term effects`
-- `long-term effects`
-- `system + stakeholder impact`
-- `opportunity cost + bias risks`
+- `short-term effects` (→ probe #2: `near-term effects`)
+- `long-term effects` (→ probe #2: `long-term effects` + `deferred cost owner` + `pre-mortem cause`)
+- `system + stakeholder impact` (→ probe #3: `reinforcing loop` + `balancing loop`)
+- `opportunity cost + bias risks` (→ probe #4: `opportunity cost` + `bias risks` + `external challenge`)
 - `selected option + rationale`
 
 ## 3) Retrospective / Postmortem
@@ -111,7 +111,7 @@ Output:
 
 - Prefer one template per decision checkpoint; do not run all packs.
 - Keep outputs attached to existing artifacts, not separate long-form essays.
-- If the work is tiny, skip template packs and use only compact probes.
+- If the work is tiny, skip both template packs and probes (see checklists).
 
 ---
 

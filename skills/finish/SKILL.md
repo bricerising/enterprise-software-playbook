@@ -23,7 +23,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 1. Re-check intent artifacts:
    - if contracts/semantics changed: specs/contracts are updated (`spec`)
    - if shared primitives were added/changed: API surface + adoption notes are clear (`platform`)
-   - for non-trivial work with meaningful alternatives (see decision-presence gate in checklists): objective function, decision table, measurement ladder, and kill criteria are documented
+   - for non-trivial work with 2+ viable approaches (otherwise skip): objective function, decision table, measurement ladder, and kill criteria are documented
 2. Run verification (prefer narrow → broad):
    - unit tests / focused tests
    - typecheck
@@ -41,8 +41,8 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 5. Translation check:
    - write an executive packet (decision bandwidth)
    - write an engineer packet (implementation bandwidth)
-   - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action
-   - for non-trivial hand-offs (PR descriptions, ADR recommendations), use **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+   - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action (this is sufficient for most cases)
+   - for formal hand-offs needing extra rigor (multi-stakeholder PRs, ADR recommendations), optionally use **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
    - key assumption confirmed or updated (one sentence — always include this, even when expectations were met)
@@ -82,3 +82,7 @@ Return:
   - outcome vs expectation
   - key assumption confirmed or updated (always — even when expectations were met)
   - one process/control change to reduce repeat risk (only when expectations diverged; flag for human to assign owner)
+  - Examples:
+    - Good: "Assumption: Redis cache would reduce p99 by 40%. Confirmed: p99 dropped 38%. No action needed."
+    - Good: "Assumption: existing auth middleware handles multi-tenant isolation. Updated: it doesn't check tenant on write paths. Action: add tenant-scoped write guard (owner: @backend-team, by 03-01)."
+    - Bad: "Things went as expected. No changes."
