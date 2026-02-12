@@ -17,6 +17,7 @@ Use code patterns for in-process structure; use system patterns when the problem
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)
    - boundary (in/out), time horizon, actors/incentives, and key flows
+   - first-principles assumption audit (facts vs assumptions, plus the least-certain assumption to test first)
 2. Classify the problem: single-process design vs multi-process/distributed.
 3. Identify the main pressure (pick 1):
    - Reliability under partial failure (timeouts/retries/circuit breaker/bulkheads)
@@ -30,12 +31,14 @@ Use code patterns for in-process structure; use system patterns when the problem
 5. Build a compact decision table (2–3 options including no-pattern baseline):
    - what each option optimizes
    - what each option knowingly worsens
+   - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
 6. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
 7. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
+   - run a quick pre-mortem: if this fails in 6-12 months, what likely caused failure?
 8. Run a dynamics check:
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
@@ -128,6 +131,7 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 - Decision tree (pressure → patterns → risks): [`references/decision-tree.md`](references/decision-tree.md)
 - Pattern index (one file per pattern): [`references/patterns.md`](references/patterns.md)
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
 
 ## Output Template
 

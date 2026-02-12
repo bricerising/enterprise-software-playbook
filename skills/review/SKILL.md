@@ -30,6 +30,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Review artifact (preferred): PR link / diff / commit range / file list (vs “entire repo”)
    - Scope boundaries: default to **changed code + immediate call-chain context** unless user requests a full audit
    - Which “workers” you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
+   - For non-trivial reviews, prime the debate with first-principles assumptions and top second-order risks to test.
 2. **Create a temporary run directory (scratch)**
    - Create a temporary run directory (outside the repo, e.g. `mktemp -d`).
    - If you run multiple debates in one session, create one subfolder per debate (e.g. `debate-01/`, `debate-02/`).
@@ -54,6 +55,7 @@ Success looks like: findings that a developer can act on immediately (location +
 7. **Moderator post-pass**
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
+   - Add systemic notes for high-priority items: second-order effects, feedback-loop risk, and opportunity cost if deferred.
 
 ## Guardrails
 
@@ -68,6 +70,7 @@ Success looks like: findings that a developer can act on immediately (location +
 ## References
 
 - `references/protocol.md`: format contract + prompt templates (base + per-type add-ons)
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
 - Deeper checklists by review type (optional, this repo):
   - `security`: [`security`](../security/SKILL.md)
   - `resilience`: [`resilience`](../resilience/SKILL.md)
@@ -93,3 +96,5 @@ When you finish, return:
    - Suggested fix order and verification steps (tests, reproduction, rollout checks)
 5. **Contested items**
    - What would settle each (specific check)
+6. **Systemic risks** (for non-trivial reviews)
+   - Second-order effects, feedback loops, and opportunity cost if unresolved

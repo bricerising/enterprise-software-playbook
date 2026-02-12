@@ -40,6 +40,15 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
+### 0.6) Run a mental-model probe (for normal/big changes)
+
+Before locking a direction, run a short probe using [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md):
+
+- First-principles assumption audit (facts vs assumptions).
+- Second-order effects scan ("and then what?" now vs later).
+- Feedback-loop/dynamics check (reinforcing, balancing, delay, accumulation).
+- Opportunity-cost + bias check (what we are saying no to, and where judgment can drift).
+
 ### 1) Define (what are we building?)
 
 Pick the minimal “definition artifacts” needed:
@@ -120,6 +129,7 @@ When you finish work, report:
 - For non-trivial changes, run `finish` before reporting.
 - **Skills applied**: which ones you used and why (1 line each).
 - **System model** (non-trivial only): objective function + system sketch + reversal signal.
+- **Mental-model probe** (non-trivial only): first-principles assumptions, second-order effects, feedback-loop notes, and opportunity costs.
 - **What changed**: behavior + contract impacts + key files touched.
 - **Decision + measurement** (non-trivial only): chosen option, trade-offs, kill criteria, leading/lagging indicators, and review cadence/owner.
 - **Verification**: commands run and results (or why they couldn’t be run).
@@ -130,3 +140,4 @@ When you finish work, report:
 - Machine-readable skill index (triggers, tags, related, overhead): [`specs/skills-manifest.json`](../../specs/skills-manifest.json)
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md)

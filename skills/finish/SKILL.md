@@ -41,17 +41,24 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 5. Translation check:
    - write an executive packet (decision bandwidth)
    - write an engineer packet (implementation bandwidth)
+   - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action
+6. Micro-retrospective (non-trivial work):
+   - what happened vs what was expected?
+   - which assumption failed (or held), and what is now updated?
+   - what one process/control change gets an owner?
 
 ## Guardrails
 
 - Don’t claim verification you didn’t run; report “not run” and why.
 - Prefer explicit commands and outputs over vague statements (“tests passed”).
 - Don’t expand scope; if you find unrelated issues, list as follow-ups.
+- Close the loop for non-trivial work: include at least one explicit learning update and owner.
 
 ## References
 
 - CI quality workflow template: [`../../specs/templates/ci/github-actions-quality.yml`](../../specs/templates/ci/github-actions-quality.yml)
 - Change workflow: [`../../specs/004-change-process.md`](../../specs/004-change-process.md)
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
 
 ## Output Template
 
@@ -68,3 +75,7 @@ Return:
   - files touched (key paths only)
   - verification (commands run + results, or why not run)
   - risks/follow-ups (including rollout watchpoints)
+- **Learning loop** (non-trivial changes):
+  - outcome vs expectation
+  - assumption update
+  - one owner-backed process/control change

@@ -19,6 +19,7 @@ For non-trivial work, externalize first:
 - one-page system sketch (boundary/time horizon, actors/incentives, key flows, bottlenecks)
 - compact decision table (options, trade-offs, kill criteria)
 - measurement ladder (leading/lagging indicators, owner/cadence, action trigger)
+- mental-model probe (assumptions, second-order effects, feedback loops, opportunity cost/bias)
 
 If you change a boundary contract/semantics (HTTP/gRPC/events/WS), update specs/contracts first and pin behavior with tests.
 
@@ -42,7 +43,7 @@ Before implementing, write or update the relevant spec bundle:
 - Service-level: apps/<service>/spec/ (spec.md, contracts/, plan.md, tasks.md, quickstart.md)
 
 Include: acceptance scenarios, edge cases, failure-mode expectations, and a verification plan.
-Also include: objective function, system sketch, decision table, measurement ladder, and kill criteria.
+Also include: objective function, system sketch, decision table, mental-model probe, measurement ladder, and kill criteria.
 ```
 
 ### Create an implementation plan (tasks + verification)
@@ -54,7 +55,7 @@ Task: <what do you want to build/fix?>
 
 Produce an ordered checklist of tasks with acceptance checks and exact verification commands (or ask once if unknown).
 Keep it short and reversible.
-Include: system sketch, decision table, blast-radius check, and measurement ladder.
+Include: system sketch, decision table, mental-model probe, blast-radius check, and measurement ladder.
 ```
 
 ### Choose a system/architecture pattern
@@ -66,7 +67,7 @@ Context: <system pressure(s): partial failures, consistency, cross-service workf
 Constraints: <latency/SLOs, scalability, team boundaries, compliance>
 
 Recommend the smallest viable pattern(s), risks/anti-patterns, and a validation plan.
-Include: options table, what each option worsens, kill criteria, and a failure-propagation map.
+Include: options table, what each option worsens, opportunity cost, kill criteria, pre-mortem risks, and a failure-propagation map.
 ```
 
 ### Choose an in-process/design pattern
@@ -187,6 +188,7 @@ Before calling the work done:
 - report two packets:
   - executive packet (goal, decision/bet, risks, signals/ritual, next step)
   - engineer packet (what changed, verification, risks/follow-ups)
+- include a short learning loop (outcome vs expectation, assumption update, one owner-backed improvement)
 ```
 
 ## Mechanics (in-process building blocks)

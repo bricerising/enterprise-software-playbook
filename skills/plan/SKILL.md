@@ -30,16 +30,21 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. Choose the minimum up-front artifacts:
+6. Stress-test the options with a short mental-model probe:
+   - first-principles assumption audit (facts vs assumptions)
+   - second-order effects scan ("and then what?" now/later)
+   - feedback-loop and delay check (reinforcing/balancing + accumulations)
+   - opportunity-cost and bias check (what this says "no" to; where judgment may drift)
+7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
    - if in-process structure pressure exists → use `design`
    - if repeated boundary logic is likely → use `platform`
-7. Produce an ordered task list:
+8. Produce an ordered task list:
    - tasks should be small, reversible, and verifiable
    - include “stop points” where you can re-check assumptions and kill criteria
    - include one quick blast-radius check (“if X degrades, what breaks next/silently?”)
-8. Define measurement + verification:
+9. Define measurement + verification:
    - measurement ladder: decision, 3 leading indicators, 3 lagging outcomes, instrumentation source, review ritual (owner + cadence + trigger)
    - exact commands (tests/lint/typecheck/build) if known
    - if unknown, list what you will run and ask once for preferred commands
@@ -50,6 +55,7 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
 - Every task needs an observable acceptance check (test, command output, file diff, or demo step).
 - Call out unknowns early; don’t pretend certainty.
 - No metric without a named decision it informs.
+- For non-trivial work, include explicit opportunity costs; avoid decision-by-default.
 - If you propose retries, also propose idempotency/dedupe and time budgets (`resilience`).
 
 ## Output Template
@@ -61,8 +67,13 @@ Return:
 - **System sketch**: boundary/time horizon, actors/incentives, key flows, bottlenecks.
 - **Scope**: in/out.
 - **Decision table**: options, optimizations, known downsides, kill criteria.
+- **Mental-model probe** (non-trivial): first-principles assumptions, second-order effects, feedback loops, opportunity costs, bias risks.
 - **Risks/assumptions**: 3–6 bullets.
 - **Plan**: ordered checklist with acceptance per task.
 - **Measurement ladder**: leading/lagging indicators, instrumentation, owner/cadence/trigger.
 - **Verification**: commands to run + what “good” looks like.
 - **Open questions**: only if blocking.
+
+## References
+
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)

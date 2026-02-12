@@ -75,15 +75,20 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. Add a measurement ladder:
+8. Run a structured-thinking probe (non-trivial work):
+   - first-principles assumptions that still need validation
+   - second-order effects across time horizons (now, next quarter, next year)
+   - feedback loops and delayed side effects (what can amplify or silently drift)
+   - opportunity costs and likely decision biases
+9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)
    - lagging outcomes (business/ops)
    - instrumentation sources + review ritual (owner/cadence/action trigger)
-9. Break it into tasks with acceptance:
+10. Break it into tasks with acceptance:
    - keep tasks small and orderable
    - each task has an observable acceptance check
-10. Implement and keep docs honest:
+11. Implement and keep docs honest:
    - if implementation forces a change in behavior, update specs first
    - keep quickstarts and contracts current
 
@@ -93,6 +98,7 @@ Use one (or both) of these:
 - Don’t hide requirements in code; put them in `spec.md` where agents can find them.
 - Keep contracts stable; prefer additive changes and version explicitly when you can’t.
 - Write down **non-goals** to stop scope creep.
+- For non-trivial decisions, record opportunity cost explicitly to avoid accidental scope drift.
 - No metric without a named decision and review ritual.
 - If a design cannot be measured cheaply enough to guide weekly decisions, treat that as a constraint and simplify.
 
@@ -100,6 +106,7 @@ Use one (or both) of these:
 
 - Templates: [`references/templates.md`](references/templates.md)
 - Spec quality checklist: [`references/checklists.md`](references/checklists.md)
+- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
 - Architecture choices: [`architecture`](../architecture/SKILL.md)
 - In-process pattern choices: [`design`](../design/SKILL.md)
 - Typed boundaries/errors/lifetimes: [`typescript`](../typescript/SKILL.md)
@@ -112,6 +119,7 @@ When using this skill, return:
 - **Scope + objective**: boundary, constraints, anti-goals.
 - **Artifacts created/updated**: exact spec files (and contracts/ADRs when relevant).
 - **Decision summary**: options considered, selected option, trade-offs, and kill criteria.
+- **Mental-model probe** (non-trivial): assumptions to validate, second-order effects, feedback-loop notes, opportunity costs/bias risks.
 - **Measurement ladder**: leading + lagging indicators, owner/cadence/action trigger.
 - **Verification plan**: concrete checks/commands that prove acceptance scenarios and failure expectations.
 - **Next implementation tasks**: ordered checklist with observable acceptance per task.
