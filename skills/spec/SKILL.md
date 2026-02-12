@@ -75,9 +75,10 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. For non-trivial work (normal or big scope — see `workflow`), run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md):
+8. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
    - Prioritize **Assumptions** (attach to decision table) and **Opportunity Cost** (attach to objective function).
-   - Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
+   - Escalate to a template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met.
+   - If the path is obvious, note `probes: skipped — single viable approach`.
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)
@@ -104,8 +105,7 @@ Use one (or both) of these:
 
 - Templates: [`references/templates.md`](references/templates.md)
 - Spec quality checklist: [`references/checklists.md`](references/checklists.md)
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 - Architecture choices: [`architecture`](../architecture/SKILL.md)
 - In-process pattern choices: [`design`](../design/SKILL.md)
 - Typed boundaries/errors/lifetimes: [`typescript`](../typescript/SKILL.md)

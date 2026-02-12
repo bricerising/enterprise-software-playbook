@@ -25,9 +25,10 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - **Structure** pressure: wrapping/combining objects, incompatible interfaces, indirection, memory sharing.
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
 4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
-5. For non-trivial work (normal or big scope — see `workflow`), run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md):
+5. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
    - Prioritize **Assumptions** and **Second-Order Effects** (attach both to trade-offs in step 6).
    - Escalate to **Technical Design Review** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
+   - If the path is obvious, note `probes: skipped — single viable approach`.
 6. Validate with 2 examples: a "happy path" and a likely future change.
 7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
 
@@ -99,8 +100,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 - If you need a concrete implementation guide: [`patterns-creational`](../patterns-creational/SKILL.md), [`patterns-structural`](../patterns-structural/SKILL.md), [`patterns-behavioral`](../patterns-behavioral/SKILL.md)
 - If the seam should be shared across services: [`platform`](../platform/SKILL.md)
 - If you're in TypeScript and hitting systemic constraints (boundaries/lifetimes/errors): [`typescript`](../typescript/SKILL.md)
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 
 ## Output Template
 

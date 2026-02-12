@@ -188,34 +188,30 @@ Before calling the work done:
 - report two packets:
   - executive packet (goal, decision/bet, risks, signals/ritual, next step)
   - engineer packet (what changed, verification, risks/follow-ups)
-- include a short learning loop (outcome vs expectation, assumption update, one owner-backed improvement)
+- include a short learning loop (outcome vs expectation, assumption confirmed or updated, one owner-backed improvement if expectations diverged)
 ```
 
 ## Structured Thinking (decision-quality prompts)
 
 These prompts activate the same skills as above but with an explicit decision-quality focus. Use them when the primary goal is evaluating a decision or stress-testing a design rather than producing an implementation plan or spec artifact.
 
+Full template details live in `skills/references/structured-thinking-templates.md`. Compact probe details live in `skills/references/structured-thinking-checklists.md`.
+
 ### Run a technical design review
 
 ```text
 Use architecture (read skills/architecture/SKILL.md).
-
 Stress-test the design for: <system/boundary being designed>
-
-Include structured-thinking probes. Confirm fundamentals (facts vs assumptions), map feedback loops,
-scan second-order effects, compare alternatives with explicit opportunity cost, and identify risks + mitigations.
+Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Technical Design Review).
 ```
 
 ### Run a trade-off / project decision analysis
 
 ```text
 Use plan (read skills/plan/SKILL.md).
-
 Decision: <what are we choosing between?>
 Options: <list options, including status quo>
-
-Include structured-thinking probes. Evaluate first-order and second-order effects per option,
-check system/stakeholder impact, make opportunity cost explicit, run a bias check, and recommend with rationale.
+Include structured-thinking probes (see skills/references/structured-thinking-templates.md — Trade-Off / Project Decision).
 ```
 
 ### Run a retrospective / postmortem
@@ -223,36 +219,17 @@ check system/stakeholder impact, make opportunity cost explicit, run a bias chec
 ```text
 Use finish (read skills/finish/SKILL.md) for delivery learning,
  or debug (read skills/debug/SKILL.md) for incident triage.
-
 Context: <what happened — delivery, incident, or rollback>
-
-Include the learning loop. Capture facts vs expectation, cause chain, root causes, second-order effects,
-missed opportunities, and one owner-backed action with a follow-up date.
-```
-
-### Run a strategic planning / roadmap review (edge case)
-
-```text
-Use spec (read skills/spec/SKILL.md) for system-level specs,
- or plan (read skills/plan/SKILL.md) for implementation-focused breakdowns.
-
-Context: <initiative, portfolio, or multi-quarter direction>
-Note: Most agent work fits plan's normal implementation focus. Use this only when the decision scope genuinely spans multiple teams or quarters.
-
-Include structured-thinking probes. Anchor on first principles, validate assumptions,
-run scenario scans (6/12/36 months), map system dynamics, prioritize with explicit de-priorities,
-run a pre-mortem, and define execution checkpoints.
+Include the learning loop (see skills/references/structured-thinking-templates.md — Retrospective / Postmortem).
 ```
 
 ### Frame a technical recommendation for async review
 
 ```text
 Use finish (read skills/finish/SKILL.md).
-
 Recommendation: <what action/decision this PR/ADR is requesting>
 Reviewers: <who will review and approve>
-
-Frame with evidence, counterpoints + mitigation, open questions for reviewers, and explicit owner + date + next step.
+Include recommendation framing (see skills/references/structured-thinking-templates.md — Recommendation Brief).
 ```
 
 ## Mechanics (in-process building blocks)

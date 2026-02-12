@@ -42,7 +42,7 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-Then stress-test the model with probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). The first Define-stage skill that runs probes owns the output; later skills refine it.
+Then, if the work involves choosing between 2+ viable approaches, stress-test the model with probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). The first Define-stage skill that runs probes owns the output; later skills refine it. If the path is obvious (single viable approach), note `probes: skipped — single viable approach` and move on.
 
 - **Normal scope**: prioritize **Assumptions** and **Second-Order Effects** (1-2 probes inline).
 - **Big scope or high ambiguity**: also run **Feedback Loops** and **Opportunity Cost / Bias**.
@@ -138,5 +138,4 @@ When you finish work, report:
 - Machine-readable skill index (triggers, tags, related, overhead): [`specs/skills-manifest.json`](../../specs/skills-manifest.json)
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)

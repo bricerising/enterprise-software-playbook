@@ -61,7 +61,6 @@ Improve coverage by exercising consumer-visible behavior with infra mocked and b
 - TypeScript test skeletons: [`references/snippets/typescript.md`](references/snippets/typescript.md)
 - Related patterns: [`Consumer-side contract test`](../architecture/references/consumer-side-contract-test.md), [`Service integration contract test`](../architecture/references/service-integration-contract-test.md), [`Service component test`](../architecture/references/service-component-test.md)
 - Telemetry verification (when tests cover boundary logging/metrics): [`observability`](../observability/SKILL.md)
-- Structured-thinking probes (secondary — Assumptions and Second-Order Effects when testing non-trivial changes): [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
 
 ## Output Template
 

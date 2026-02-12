@@ -23,7 +23,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 1. Re-check intent artifacts:
    - if contracts/semantics changed: specs/contracts are updated (`spec`)
    - if shared primitives were added/changed: API surface + adoption notes are clear (`platform`)
-   - for non-trivial work (normal or big scope — see `workflow`): objective function, decision table, measurement ladder, and kill criteria are documented
+   - for non-trivial work with meaningful alternatives (see decision-presence gate in checklists): objective function, decision table, measurement ladder, and kill criteria are documented
 2. Run verification (prefer narrow → broad):
    - unit tests / focused tests
    - typecheck
@@ -45,9 +45,8 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - for non-trivial hand-offs (PR descriptions, ADR recommendations), use **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
-   - if expectations were met: one sentence on what you would keep or change. Done.
+   - key assumption confirmed or updated (one sentence — always include this, even when expectations were met)
    - if expectations diverged (rollback, incident, surprise scope, or assumption failure):
-     - which assumption failed, and what is now updated?
      - what one process/control change would reduce repeat risk? (flag for human to assign owner)
      - if divergence is significant, flag a follow-up using the **Retrospective / Postmortem** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) — do not run it inline during the finish pass
 
@@ -62,8 +61,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 
 - CI quality workflow template: [`../../specs/templates/ci/github-actions-quality.yml`](../../specs/templates/ci/github-actions-quality.yml)
 - Change workflow: [`../../specs/004-change-process.md`](../../specs/004-change-process.md)
-- Structured-thinking probes (learning loop): [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs (retrospective + communication): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking references (learning loop, retrospective, recommendation brief): [`../references/`](../references/)
 
 ## Output Template
 
@@ -82,5 +80,5 @@ Return:
   - risks/follow-ups (including rollout watchpoints)
 - **Learning loop** (non-trivial changes):
   - outcome vs expectation
-  - assumption update
-  - one process/control change to reduce repeat risk (flag for human to assign owner)
+  - key assumption confirmed or updated (always — even when expectations were met)
+  - one process/control change to reduce repeat risk (only when expectations diverged; flag for human to assign owner)

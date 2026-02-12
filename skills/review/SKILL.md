@@ -69,8 +69,7 @@ Success looks like: findings that a developer can act on immediately (location +
 ## References
 
 - `references/protocol.md`: format contract + prompt templates (base + per-type add-ons)
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Recommendation Brief template (for P0/P1 findings): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - Deeper checklists by review type (optional, this repo):
   - `security`: [`security`](../security/SKILL.md)
   - `resilience`: [`resilience`](../resilience/SKILL.md)

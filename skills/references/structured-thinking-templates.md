@@ -13,8 +13,9 @@ Use template packs only for non-trivial work unless a tiny change has unusually 
 | Technical Design Review | Architecture or boundary design choices need stress-testing | `architecture`, `spec`, `review` |
 | Trade-Off / Project Decision | Multiple viable options must be compared with explicit opportunity cost | `plan`, `spec`, `workflow` |
 | Retrospective / Postmortem | A delivery, incident, or rollout needs learning capture | `finish`, `debug` |
-| Strategic Planning / Roadmap | Multi-quarter direction or initiative portfolio is being set (edge case — most work uses `plan` directly) | `plan`, `spec`, `architecture` |
 | Recommendation Brief | You must frame a PR/ADR/technical recommendation for async review | `finish`, `review`, `workflow` |
+
+See also: [Appendix — Strategic Planning / Roadmap](#appendix--strategic-planning--roadmap) (edge case for multi-quarter work).
 
 ## 1) Technical Design Review
 
@@ -84,31 +85,7 @@ Output:
 - `owner-backed actions`
 - `follow-up review date`
 
-## 4) Strategic Planning / Roadmap
-
-Edge case — use only for longer-horizon work (multi-quarter direction, initiative portfolio). Most agent-driven work fits the `plan` skill's normal implementation-planning focus; use this template only when the decision scope genuinely spans multiple teams or quarters.
-
-Prompts:
-
-- Vision + first principles: what core truths anchor this strategy?
-- Current state + assumptions: which assumptions need validation or hedges?
-- Scenario scan: if we do this, then what at 6/12/36 months?
-- System map: what loops, delays, bottlenecks, and dependencies matter?
-- Prioritization + opportunity cost: which initiatives make the cut and why?
-- Pre-mortem: assume failure in 1-2 years; what likely caused it?
-- Execution + feedback loops: what metrics/checkpoints trigger adaptation?
-
-Output:
-
-- `vision + principles`
-- `assumptions + validation plan`
-- `scenario outcomes`
-- `system dynamics notes`
-- `priorities + explicit de-priorities`
-- `pre-mortem risks + safeguards`
-- `execution rhythm + checkpoints`
-
-## 5) Recommendation Brief
+## 4) Recommendation Brief
 
 Use to frame a PR description, ADR recommendation, or technical proposal for async review. Keeps the recommendation grounded in evidence and actionable for reviewers.
 
@@ -135,3 +112,29 @@ Output:
 - Prefer one template per decision checkpoint; do not run all packs.
 - Keep outputs attached to existing artifacts, not separate long-form essays.
 - If the work is tiny, skip template packs and use only compact probes.
+
+---
+
+## Appendix — Strategic Planning / Roadmap
+
+Edge case — use only for longer-horizon work (multi-quarter direction, initiative portfolio). Most agent-driven work fits the `plan` skill's normal implementation-planning focus; use this template only when the decision scope genuinely spans multiple teams or quarters.
+
+Prompts:
+
+- Vision + first principles: what core truths anchor this strategy?
+- Current state + assumptions: which assumptions need validation or hedges?
+- Scenario scan: if we do this, then what at 6/12/36 months?
+- System map: what loops, delays, bottlenecks, and dependencies matter?
+- Prioritization + opportunity cost: which initiatives make the cut and why?
+- Pre-mortem: assume failure in 1-2 years; what likely caused it?
+- Execution + feedback loops: what metrics/checkpoints trigger adaptation?
+
+Output:
+
+- `vision + principles`
+- `assumptions + validation plan`
+- `scenario outcomes`
+- `system dynamics notes`
+- `priorities + explicit de-priorities`
+- `pre-mortem risks + safeguards`
+- `execution rhythm + checkpoints`

@@ -102,7 +102,7 @@ If you found a systemic gap, capture it:
 
 - Copy/paste commands: [`references/commands.md`](references/commands.md)
 - Scenario checklists (HTTP/gRPC/consumers): [`references/scenarios.md`](references/scenarios.md)
-- Structured-thinking template packs (retrospective): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Retrospective / Postmortem template: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - If telemetry is missing: [`observability`](../observability/SKILL.md)
 
 ## Output Template

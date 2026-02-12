@@ -35,19 +35,20 @@ Choose **Option C**, implemented in two phases:
 
 ### Phase 1: Compact probes
 
-- Add one shared reference (`skills/references/structured-thinking-checklists.md`) with 5 compact probes: first-principles assumptions, second-order effects, feedback loops/dynamics, opportunity cost/bias, and learning loop.
-- Integrate lightweight probe pointers into `workflow`, `plan`, `architecture`, `spec`, `review`, `finish`, `debug`, and `design`.
+- Add one shared reference (`skills/references/structured-thinking-checklists.md`) with 5 compact probes: first-principles assumptions, second-order effects (including pre-mortem), feedback loops/dynamics, opportunity cost/bias, and learning loop.
+- Integrate lightweight probe pointers into skills with strong affinity: `workflow`, `plan`, `architecture`, `spec`, `design` (assumptions + second-order), `finish`/`debug` (learning loop + retrospective), `review` (recommendation brief for P0/P1s). Skills without workflow steps for probes (e.g., `testing`) reference the Define-stage output instead.
 - Each skill points to the canonical probes file and specifies which probes are most relevant (via a skill-affinity table in the checklists file).
+- **Decision-presence gate**: probes run only when the work involves choosing between 2+ viable approaches. If the path is obvious, note `probes: skipped — single viable approach` rather than filling fields with "n/a".
 - The first Define-stage skill in a flow owns the probe output; subsequent skills refine it.
 
 ### Phase 2: Template packs
 
-- Add `skills/references/structured-thinking-templates.md` with five selector packs for recurring decision shapes:
+- Add `skills/references/structured-thinking-templates.md` with four core selector packs for recurring decision shapes:
   - Technical Design Review
   - Trade-Off / Project Decision
   - Retrospective / Postmortem
-  - Strategic Planning / Roadmap
   - Recommendation Brief
+- Strategic Planning / Roadmap is included as an appendix (edge case for multi-quarter work that rarely fires in agent-driven sessions).
 - Keep compact probes as the default baseline; template packs are used only when escalation criteria are met.
 - Add lightweight, optional hooks in relevant skills pointing to the matching pack.
 

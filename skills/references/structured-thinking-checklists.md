@@ -2,7 +2,9 @@
 
 Use these probes to strengthen non-trivial decisions without adding heavy process.
 
-In this repo, **non-trivial = normal or big scope** (see `workflow`); tiny changes usually skip these probes.
+In this repo, **non-trivial = normal or big scope** (see `workflow`); tiny changes always skip these probes.
+
+**Decision-presence gate**: run probes only when the work involves choosing between 2+ viable approaches or when the decision table contains meaningful alternatives. If the path is obvious (single viable approach, well-understood change), note `probes: skipped — single viable approach` rather than filling fields with "n/a".
 
 Keep answers short (1-3 bullets per prompt) and attach them to the existing artifacts:
 
@@ -34,8 +36,8 @@ Not every skill needs every probe. Prioritize by fit:
 
 | Probe | Primary skills | Secondary |
 | --- | --- | --- |
-| #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review`, `testing` |
-| #2 Second-Order Effects | `plan`, `architecture`, `spec` | `review`, `design` |
+| #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review` |
+| #2 Second-Order Effects (+ pre-mortem) | `plan`, `architecture`, `spec` | `review`, `design` |
 | #3 Feedback Loops | `architecture` (covered natively by its inline dynamics check — do not run separately) | `plan`, `spec` |
 | #4 Opportunity Cost | `plan`, `spec`, `architecture` | `review`, `design` |
 | #5 Learning Loop | `finish`, `debug` | — |
@@ -57,18 +59,20 @@ Output (attach to decision table):
 - `assumptions`
 - `assumption-to-test-first`
 
-### 2) Second-Order Effects Scan
+### 2) Second-Order Effects Scan (includes pre-mortem)
 
 Use before locking a decision.
 
 - If we choose this option, what likely happens next week, next quarter, next year?
 - What new load, toil, coupling, or failure mode might this create?
 - Which stakeholder/team absorbs the downside later?
+- Pre-mortem: if this fails in 6-12 months, what likely caused failure?
 
 Output (attach to decision table):
 - `near-term effects`
 - `long-term effects`
 - `deferred cost owner`
+- `pre-mortem cause`
 
 ### 3) Feedback Loop and Dynamics Check
 
@@ -101,10 +105,10 @@ Output (attach to decision table):
 Use in `finish` (after delivery) or `debug` (after incident/rollback). For the full cause-chain flow, escalate to **Retrospective / Postmortem** from [`structured-thinking-templates.md`](structured-thinking-templates.md).
 
 - What happened vs what was expected?
-- Which assumption failed (or held) and why?
-- What one process/control change would reduce repeat risk? (flag for human to assign owner)
+- Which assumption was confirmed or updated, and why? (always answer — even when expectations were met)
+- What one process/control change would reduce repeat risk? (only when expectations diverged; flag for human to assign owner)
 
 Output (attach to finish packet):
 - `outcome delta`
-- `assumption update`
-- `next control + owner`
+- `assumption confirmed or updated`
+- `next control + owner` (only when expectations diverged)

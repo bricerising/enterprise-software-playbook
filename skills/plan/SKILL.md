@@ -30,9 +30,10 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. For non-trivial work (normal or big scope — see `workflow`), run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md):
+6. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
    - Prioritize **Assumptions** and **Second-Order Effects** (attach both to decision table).
-   - Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
+   - Escalate to a template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met.
+   - If the path is obvious, note `probes: skipped — single viable approach`.
 7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
@@ -73,5 +74,4 @@ Return:
 
 ## References
 
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)

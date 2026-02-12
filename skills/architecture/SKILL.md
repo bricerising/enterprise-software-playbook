@@ -32,15 +32,16 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens (degrades an existing quality)
    - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
-6. For non-trivial work (normal or big scope — see `workflow`), run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md):
+6. For non-trivial work with 2+ viable approaches (see decision-presence gate in [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)), run probes:
    - Prioritize **Assumptions** (attach to decision table) and **Second-Order Effects** (attach to system sketch).
    - Escalate to **Technical Design Review** template ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)) when escalation criteria are met.
+   - If the path is obvious, note `probes: skipped — single viable approach`.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
-   - pre-mortem: if this fails in 6-12 months, what likely caused failure?
+   - pre-mortem (covered by probe #2 — Second-Order Effects): if this fails in 6-12 months, what likely caused failure?
 9. Run a dynamics check (satisfies the Feedback Loop probe — do not run both):
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
@@ -133,8 +134,7 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 - Decision tree (pressure → patterns → risks): [`references/decision-tree.md`](references/decision-tree.md)
 - Pattern index (one file per pattern): [`references/patterns.md`](references/patterns.md)
-- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
-- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 
 ## Output Template
 
@@ -142,5 +142,5 @@ When recommending a pattern:
 
 - 1–2 sentences: pattern + why it fits (pressure, assumptions).
 - Decision table summary: options considered, explicit trade-offs, kill criteria, and assumptions (facts vs assumptions from probes).
-- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem narrative.
+- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem cause (from probe #2).
 - A minimal implementation plan (boundaries, contracts, data ownership, tests/metrics, and review ritual owner/cadence).
