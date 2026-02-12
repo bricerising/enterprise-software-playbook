@@ -1,6 +1,6 @@
 # Structured Thinking Templates (Selector Packs)
 
-Use these packs when the compact probe is not enough and you need a repeatable flow for a specific decision shape.
+Use these packs when compact probes are not enough and you need a repeatable flow for a specific decision shape. See escalation criteria in [`structured-thinking-checklists.md`](structured-thinking-checklists.md).
 
 Keep responses concise (usually 1-3 bullets per prompt) and attach outputs to existing artifacts (`objective function`, `decision table`, `measurement ladder`, `finish packet`).
 

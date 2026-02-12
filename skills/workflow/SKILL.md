@@ -1,7 +1,7 @@
 ---
 name: workflow
 description: "Auto-select and orchestrate playbook skills end-to-end for feature, bug-fix, or refactor work. Use when the user gives a general request without naming a specific skill — workflow picks the right skills, sequences them, and keeps overhead proportional to the change size. NOT for creating a standalone task breakdown (use plan) or writing spec artifacts (use spec)."
-metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end"]}
+metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end","structured-thinking"]}
 ---
 
 # Workflow (Auto Router)
@@ -42,16 +42,20 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-### 0.6) Run a mental-model probe (for non-trivial changes)
+### 0.6) Run a structured-thinking probe (for non-trivial changes)
 
-Before locking a direction, run a compact probe and capture outputs in your existing artifacts (objective/system sketch/decision table/measurement ladder):
+Before locking a direction, run a compact probe and capture outputs in your existing artifacts (objective/system sketch/decision table/measurement ladder).
+
+**Normal scope** — answer 1-2 of the most relevant probes inline (usually facts-vs-assumptions and one second-order effect). Skip template packs.
+
+**Big scope or high ambiguity** — run the full probe:
 
 - facts vs assumptions (and first assumption to test)
 - second-order effects (near-term + long-term)
 - feedback loops/delays (amplification vs balancing dynamics)
 - opportunity cost and bias risks (what this choice says "no" to)
 
-If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) and attach only the selected template output.
+If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) (see escalation criteria in [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md)).
 
 ### 1) Define (what are we building?)
 
@@ -133,7 +137,7 @@ When you finish work, report:
 - For non-trivial changes, run `finish` before reporting.
 - **Skills applied**: which ones you used and why (1 line each).
 - **System model** (non-trivial only): objective function + system sketch + reversal signal.
-- **Mental-model probe** (non-trivial only): first-principles assumptions, second-order effects, feedback-loop notes, and opportunity costs.
+- **Structured-thinking probe** (non-trivial only): first-principles assumptions, second-order effects, feedback-loop notes, and opportunity costs.
 - **What changed**: behavior + contract impacts + key files touched.
 - **Decision + measurement** (non-trivial only): chosen option, trade-offs, kill criteria, leading/lagging indicators, and review cadence/owner.
 - **Verification**: commands run and results (or why they couldn’t be run).

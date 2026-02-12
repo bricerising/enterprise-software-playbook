@@ -43,24 +43,23 @@ This keeps the existing taxonomy intact while improving reasoning quality where 
 
 Reverse or narrow this change if either condition is observed for two consecutive review cycles:
 
-- Median non-trivial output size increases by >20% versus baseline (measurement protocol below) with no measurable reduction in avoidable follow-up defects/incidents.
-- Maintainers or users report that probe steps are routinely skipped because they are too abstract or too verbose.
+- Probe sections are empty or marked "n/a" in >50% of sampled non-trivial outputs — indicating probes are too abstract or too verbose for practical use.
+- Maintainers or users report that probe steps are routinely skipped or add friction without improving decision quality.
 
 If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
 
 ## Measurement + review ritual
 
-- **Sampling protocol (to keep decisions objective)**:
-  - Baseline: capture the most recent 20 non-trivial outputs before 2026-02-12 and record median output length (words) plus median turnaround time (minutes).
+- **Sampling protocol**:
   - Per review cycle: sample 10 non-trivial outputs spanning at least 3 core skills (`workflow`, `plan`, `spec`, `architecture`, `review`, `finish`).
-  - Use the same measurement method each cycle (word count from final response + elapsed task time in session logs).
+  - Use a consistent measurement method each cycle (word count from final response + elapsed task time in session logs).
 - **Scoring rubric (0/1 per criterion)**:
   - Includes explicit `facts vs assumptions`.
   - Includes at least one explicit second-order effect.
   - Includes at least one feedback-loop/delay note.
   - Includes an explicit opportunity cost or bias risk.
   - Includes an owner-backed learning/control follow-up when `finish` is used.
-  - Track rubric score as `% criteria met` and compare against baseline.
+  - Track rubric score as `% criteria met` per cycle.
 
 - **Leading indicators (early)**:
   - Non-trivial outputs score >=80% on the rubric above.

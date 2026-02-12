@@ -45,9 +45,11 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - for non-trivial hand-offs, use **Communication & Influence** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
-   - which assumption failed (or held), and what is now updated?
-   - what one process/control change gets an owner?
-   - use **Retrospective / Postmortem** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) to capture cause chain and follow-up controls
+   - if expectations were met: one sentence on what you would keep or change. Done.
+   - if expectations diverged (rollback, incident, surprise scope, or assumption failure):
+     - which assumption failed, and what is now updated?
+     - what one process/control change gets an owner?
+     - use **Retrospective / Postmortem** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) to capture cause chain and follow-up controls
 
 ## Guardrails
 

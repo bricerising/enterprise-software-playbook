@@ -11,7 +11,16 @@ Keep answers short (1-3 bullets per prompt) and attach them to the existing arti
 - decision table
 - measurement ladder
 
-Need a context-specific flow (design review, project trade-off, retrospective, roadmap, communication)? Use [`structured-thinking-templates.md`](structured-thinking-templates.md) as the selector pack.
+## When to escalate to a template pack
+
+Use compact probes by default. Escalate to one targeted template from [`structured-thinking-templates.md`](structured-thinking-templates.md) when any of these apply:
+
+- the decision table has **3+ viable options** with no clear winner
+- **multiple stakeholders** must align on a recommendation
+- a **rollback or incident** requires formal learning capture
+- the work is **big scope** (cross-service, migration, multi-team) and the probes surfaced unresolved ambiguity
+
+If none of these apply, compact probes are sufficient — do not run a template pack.
 
 ## 1) First-Principles Assumption Audit
 

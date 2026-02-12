@@ -57,7 +57,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
    - Add systemic notes for high-priority items: second-order effects, feedback-loop risk, and opportunity cost if deferred.
-   - Frame the final recommendation with **Communication & Influence** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md): core recommendation, evidence, counterpoints, call to action.
+   - For reviews with P0/P1 findings that require stakeholder escalation, frame the recommendation using **Communication & Influence** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
 
 ## Guardrails
 
