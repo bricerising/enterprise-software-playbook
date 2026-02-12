@@ -1,7 +1,7 @@
 ---
 name: debug
 description: "Triage and diagnose production or local issues by following logs → traces → metrics (HTTP/gRPC/async). Use when investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app. NOT for adding new instrumentation (use observability); NOT for applying resilience patterns (use resilience)."
-metadata: {"stage":"Harden","tags":["incident-response","triage","logs","tracing","metrics","production-issue","5xx","latency","regression"],"aliases":["diagnose","troubleshoot","investigate","triage","incident","production-bug","outage"]}
+metadata: {"stage":"Harden","tags":["incident-response","triage","logs","tracing","metrics","production-issue","5xx","latency","regression","postmortem","retrospective"],"aliases":["diagnose","troubleshoot","investigate","triage","incident","production-bug","outage","incident-review"]}
 ---
 
 # Debug (Log → Trace → Metrics)

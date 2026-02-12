@@ -1,7 +1,7 @@
 ---
 name: spec
 description: "Write and maintain spec-first artifacts (service specs, API contracts via OpenAPI/protobuf/WebSocket schemas, ADRs, task lists, quickstarts). Use when creating specs/*.md, apps/*/spec/ bundles, or contracts/ docs, especially before major behavior changes or multi-agent collaboration. NOT for implementation task breakdown without spec artifacts (use plan); NOT for choosing system or code patterns (use architecture or design)."
-metadata: {"stage":"Define","tags":["spec-first","contracts","acceptance-criteria","decision-records","nfrs","openapi","protobuf","adr"],"aliases":["specification","contract","api-contract","schema","acceptance","requirements"]}
+metadata: {"stage":"Define","tags":["spec-first","contracts","acceptance-criteria","decision-records","nfrs","openapi","protobuf","adr","first-principles","second-order-effects","opportunity-cost"],"aliases":["specification","contract","api-contract","schema","acceptance","requirements","mental-models"]}
 ---
 
 # Spec (Spec-Driven Development)
@@ -76,8 +76,10 @@ Use one (or both) of these:
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
 8. Run a structured-thinking probe (non-trivial work):
-   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
-   - attach probe outputs to existing artifacts (objective/system sketch/decision table/measurement ladder)
+   - attach explicit facts vs assumptions to your existing artifacts
+   - capture second-order effects across near/long time horizons
+   - capture feedback-loop/delay risks and opportunity-cost/bias risks
+   - keep outputs attached to existing artifacts (objective/system sketch/decision table/measurement ladder)
    - for ADR-level option selection, optionally run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
    - for roadmap/multi-quarter direction setting, optionally run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 9. Add a measurement ladder:

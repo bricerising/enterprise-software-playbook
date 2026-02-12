@@ -12,7 +12,7 @@ The user provided a structured-thinking template set that maps directly to those
 - **Goal**: Improve quality and repeatability of non-trivial decisions by adding reusable, context-specific template packs.
 - **Constraints**: Keep skill files concise, avoid taxonomy churn, and preserve existing skill names/triggers.
 - **Anti-goals**: Do not replace compact probes; do not force heavyweight process on tiny changes.
-- **Boundary + time horizon**: Define/Verify stage skills and shared workflow references; immediate rollout with short adoption feedback loop.
+- **Boundary + time horizon**: Define/Verify stage skills, plus `debug` as an incident-learning bridge in Harden; immediate rollout with short adoption feedback loop.
 - **Actors + incentives**: Skill users need clearer prompts for common high-stakes decisions; maintainers need low-drift docs and stable routing.
 
 ## Options considered
@@ -34,7 +34,7 @@ Choose **Option C**:
   - Strategic Planning / Roadmap
   - Communication & Influence
 - Keep compact probes as the default baseline.
-- Add lightweight, optional hooks in `workflow`, `plan`, `spec`, `architecture`, `review`, and `finish` pointing to the relevant pack.
+- Add lightweight, optional hooks in `workflow`, `plan`, `spec`, `architecture`, `review`, `finish`, and `debug` pointing to the relevant pack.
 
 This preserves existing behavior while improving prompt quality for recurring non-trivial decision types.
 

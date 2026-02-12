@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: "Design or refactor multi-service system architecture (domain boundaries, service decomposition, event-driven vs request/response, CQRS, sagas, API gateways, data ownership). Use when work spans multiple processes/services, needs eventual consistency, or requires clearer integration seams. NOT for in-process code structure like GoF patterns (use design); NOT for applying timeouts/retries/breakers to a single call (use resilience)."
-metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context"]}
+metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga","first-principles","second-order-effects","feedback-loops","opportunity-cost"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review"]}
 ---
 
 # Architecture (System Pattern Chooser)
@@ -33,7 +33,10 @@ Use code patterns for in-process structure; use system patterns when the problem
    - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
 6. Run a mental-model probe for non-trivial architecture bets:
-   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
+   - separate facts from assumptions and pick the first assumption to validate
+   - map second-order effects (next week/quarter/year)
+   - capture loop dynamics and delay/accumulation risks
+   - capture explicit opportunity cost and bias risks
    - optionally run **Technical Design Review** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) when the design pressure is ambiguous or high-impact
 7. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:

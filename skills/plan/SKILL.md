@@ -1,7 +1,7 @@
 ---
 name: plan
 description: "Break a request into a scoped implementation plan with ordered tasks, risk flags, and verification steps. Use before starting non-trivial, cross-cutting, or ambiguous work to align on approach and prevent rework. NOT for writing spec artifacts or contracts (use spec); NOT for auto-routing across multiple skills (use workflow)."
-metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk-assessment","verification-plan","scope","trade-offs","decision-table"],"aliases":["planning","task-list","breakdown","scope","work-breakdown"]}
+metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk-assessment","verification-plan","scope","trade-offs","decision-table","first-principles","second-order-effects","opportunity-cost"],"aliases":["planning","task-list","breakdown","scope","work-breakdown","mental-models"]}
 ---
 
 # Plan
@@ -31,8 +31,10 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option knowingly worsens
    - kill criteria / reversal trigger
 6. Stress-test the options with a mental-model probe (non-trivial work):
-   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
-   - capture outputs in your decision artifacts (facts/assumptions, near/long-term effects, loop+delay risk, opportunity cost+bias)
+   - capture explicit facts vs assumptions (and pick the first assumption to validate)
+   - capture near-term and long-term second-order effects
+   - capture loop and delay risks (what amplifies vs what self-corrects)
+   - capture opportunity cost and bias risks (what you are choosing not to do)
    - for option selection, optionally run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
    - for roadmap/portfolio planning, optionally run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 7. Choose the minimum up-front artifacts:
