@@ -42,10 +42,12 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - write an executive packet (decision bandwidth)
    - write an engineer packet (implementation bandwidth)
    - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action
+   - for non-trivial hand-offs, use **Communication & Influence** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
    - which assumption failed (or held), and what is now updated?
    - what one process/control change gets an owner?
+   - use **Retrospective / Postmortem** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) to capture cause chain and follow-up controls
 
 ## Guardrails
 
@@ -59,6 +61,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 - CI quality workflow template: [`../../specs/templates/ci/github-actions-quality.yml`](../../specs/templates/ci/github-actions-quality.yml)
 - Change workflow: [`../../specs/004-change-process.md`](../../specs/004-change-process.md)
 - Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
+- Structured-thinking template packs (retrospective + communication selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 
 ## Output Template
 

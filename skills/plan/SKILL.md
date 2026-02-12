@@ -35,6 +35,8 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - second-order effects scan ("and then what?" now/later)
    - feedback-loop and delay check (reinforcing/balancing + accumulations)
    - opportunity-cost and bias check (what this says "no" to; where judgment may drift)
+   - for high-stakes option selection, run the **Trade-Off / Project Decision** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+   - for roadmap/portfolio planning, run the **Strategic Planning / Roadmap** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
@@ -77,3 +79,4 @@ Return:
 ## References
 
 - Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
+- Structured-thinking template packs (trade-off + roadmap selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)

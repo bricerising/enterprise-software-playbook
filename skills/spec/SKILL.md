@@ -80,6 +80,8 @@ Use one (or both) of these:
    - second-order effects across time horizons (now, next quarter, next year)
    - feedback loops and delayed side effects (what can amplify or silently drift)
    - opportunity costs and likely decision biases
+   - for ADR-level option selection, run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+   - for roadmap/multi-quarter direction setting, run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)
@@ -107,6 +109,7 @@ Use one (or both) of these:
 - Templates: [`references/templates.md`](references/templates.md)
 - Spec quality checklist: [`references/checklists.md`](references/checklists.md)
 - Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
+- Structured-thinking template packs (trade-off + roadmap selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 - Architecture choices: [`architecture`](../architecture/SKILL.md)
 - In-process pattern choices: [`design`](../design/SKILL.md)
 - Typed boundaries/errors/lifetimes: [`typescript`](../typescript/SKILL.md)

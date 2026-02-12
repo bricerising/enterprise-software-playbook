@@ -48,6 +48,7 @@ Before locking a direction, run a short probe using [`references/structured-thin
 - Second-order effects scan ("and then what?" now vs later).
 - Feedback-loop/dynamics check (reinforcing, balancing, delay, accumulation).
 - Opportunity-cost + bias check (what we are saying no to, and where judgment can drift).
+- If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) and attach the output to your objective/decision artifacts.
 
 ### 1) Define (what are we building?)
 
@@ -141,3 +142,4 @@ When you finish work, report:
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)
 - Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md)
+- Structured-thinking template packs (design review, trade-off decisions, retrospectives, strategy, communication): [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md)

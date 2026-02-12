@@ -33,17 +33,22 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens
    - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
-6. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
-7. Stress-test with: happy path, failure path, ops path, and blast-radius path:
+6. For non-trivial architecture bets, run the **Technical Design Review** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md):
+   - confirm fundamentals and assumptions
+   - map interaction/feedback loops
+   - evaluate second-order effects and alternative opportunity costs
+   - capture explicit risks + mitigations
+7. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
+8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
    - run a quick pre-mortem: if this fails in 6-12 months, what likely caused failure?
-8. Run a dynamics check:
+9. Run a dynamics check:
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
    - what balancing loop prevents runaway growth?
-9. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
+10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
 
 ## Clarifying Questions
 
@@ -132,6 +137,7 @@ Use code patterns for in-process structure; use system patterns when the problem
 - Decision tree (pressure → patterns → risks): [`references/decision-tree.md`](references/decision-tree.md)
 - Pattern index (one file per pattern): [`references/patterns.md`](references/patterns.md)
 - Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
+- Structured-thinking template packs (technical design review selector): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 
 ## Output Template
 

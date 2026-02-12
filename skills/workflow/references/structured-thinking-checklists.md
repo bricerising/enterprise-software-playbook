@@ -9,6 +9,8 @@ Keep answers short (1-3 bullets per prompt) and attach them to the existing arti
 - decision table
 - measurement ladder
 
+Need a context-specific flow (design review, project trade-off, retrospective, roadmap, communication)? Use [`structured-thinking-templates.md`](structured-thinking-templates.md) as the selector pack.
+
 ## 1) First-Principles Assumption Audit
 
 Use when starting plans/specs/architecture decisions.

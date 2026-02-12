@@ -1,0 +1,136 @@
+# Structured Thinking Templates (Selector Packs)
+
+Use these packs when the compact probe is not enough and you need a repeatable flow for a specific decision shape.
+
+Keep responses concise (usually 1-3 bullets per prompt) and attach outputs to existing artifacts (`objective function`, `decision table`, `measurement ladder`, `finish packet`).
+
+## Quick Selector
+
+| Template | Use when | Primary skills |
+| --- | --- | --- |
+| Technical Design Review | Architecture or boundary design choices need stress-testing | `architecture`, `spec`, `review` |
+| Trade-Off / Project Decision | Multiple viable options must be compared with explicit opportunity cost | `plan`, `spec`, `workflow` |
+| Retrospective / Postmortem | A delivery, incident, or rollout needs learning capture | `finish`, `debug` |
+| Strategic Planning / Roadmap | Multi-quarter direction or initiative portfolio is being set | `plan`, `spec`, `architecture` |
+| Communication & Influence | You must align stakeholders on a recommendation and next action | `finish`, `review`, `workflow` |
+
+## 1) Technical Design Review
+
+Use for non-trivial system/software design decisions before implementation locks in.
+
+Prompts:
+
+- Confirm fundamentals: what requirements/constraints are facts vs assumptions?
+- Map system interactions: where are reinforcing/balancing feedback loops?
+- Scan second-order effects: what likely changes now, next quarter, next year?
+- Compare alternatives: what does each option optimize and what does it force us not to do?
+- Risk + mitigation: what can fail, how will we detect/correct quickly?
+
+Output:
+
+- `fundamentals`
+- `interaction + loops`
+- `second-order effects`
+- `alternatives + opportunity cost`
+- `risks + mitigations`
+- `recommendation`
+
+## 2) Trade-Off / Project Decision
+
+Use when selecting one path among several project options.
+
+Prompts:
+
+- Define goals/constraints: what must be true for this decision to be valid?
+- List options: include status quo/no-change baseline.
+- Evaluate first-order pros/cons per option.
+- Evaluate second-order effects ("and then what?" across time horizons).
+- Check system impact: who absorbs downsides; which loops are triggered?
+- Make opportunity cost explicit: what are we saying "no" to?
+- Run a bias check (sunk cost/familiarity/novelty/confirmation).
+
+Output:
+
+- `decision context`
+- `option table`
+- `short-term effects`
+- `long-term effects`
+- `system + stakeholder impact`
+- `opportunity cost + bias risks`
+- `selected option + rationale`
+
+## 3) Retrospective / Postmortem
+
+Use after completion, incident, or rollback to convert outcomes into controls.
+
+Prompts:
+
+- Facts vs expectation: what happened, and what was expected?
+- Cause/effect chain: what events produced the observed outcome?
+- Root causes: what failed at the assumption/process/invariant level?
+- Second-order effects: what quick fixes created delayed costs (or benefits)?
+- Missed opportunities: what did we skip and what did it cost?
+- Actions: what one process/control change gets an owner/date?
+
+Output:
+
+- `outcome delta`
+- `cause chain`
+- `root causes`
+- `second-order effects`
+- `missed opportunities`
+- `owner-backed actions`
+- `follow-up review date`
+
+## 4) Strategic Planning / Roadmap
+
+Use for strategy and roadmap choices that span multiple teams or quarters.
+
+Prompts:
+
+- Vision + first principles: what core truths anchor this strategy?
+- Current state + assumptions: which assumptions need validation or hedges?
+- Scenario scan: if we do this, then what at 6/12/36 months?
+- System map: what loops, delays, bottlenecks, and dependencies matter?
+- Prioritization + opportunity cost: which initiatives make the cut and why?
+- Pre-mortem: assume failure in 1-2 years; what likely caused it?
+- Execution + feedback loops: what metrics/checkpoints trigger adaptation?
+
+Output:
+
+- `vision + principles`
+- `assumptions + validation plan`
+- `scenario outcomes`
+- `system dynamics notes`
+- `priorities + explicit de-priorities`
+- `pre-mortem risks + safeguards`
+- `execution rhythm + checkpoints`
+
+## 5) Communication & Influence
+
+Use to hand off a recommendation clearly and drive decision/action.
+
+Prompts:
+
+- Core message: what action/decision is requested now?
+- Audience map: who decides, who executes, who is impacted?
+- Framing: gain/loss framing that best matches audience incentives.
+- Evidence: what 2-3 facts best support this recommendation?
+- Counterpoints: what risks remain and how are they mitigated?
+- Feedback loop: what input is requested and by when?
+- Call to action: owner + date + explicit next step.
+
+Output:
+
+- `core recommendation`
+- `audience-aligned framing`
+- `evidence`
+- `counterpoints + mitigation`
+- `feedback request`
+- `owner + date + next step`
+
+## Guardrails
+
+- Prefer one template per decision checkpoint; do not run all packs.
+- Keep outputs attached to existing artifacts, not separate long-form essays.
+- If the work is tiny, skip template packs and use only compact probes.
