@@ -1,4 +1,4 @@
-# Decision 014: Add Structured-Thinking Probes To Core Skills
+# Decision 014: Add Structured-Thinking Probes and Template Packs to Core Skills
 
 **Date**: 2026-02-12
 **Status**: Accepted
@@ -27,15 +27,29 @@ The user provided external structured-thinking templates that reinforce these ga
 | --- | --- | --- | --- |
 | A. Keep current state | Zero migration effort | Missed assumptions/second-order risks persist | Immediate (no change) |
 | B. New dedicated `structured-thinking` skill | Explicit discoverability | More routing complexity and workflow overhead | Medium (requires prompt/docs migration) |
-| C. Shared reference + small probe hooks in core skills | High leverage with low overhead; reuse existing workflow artifacts | Requires coordinated edits across several skills | High (remove hooks/reference if noisy) |
+| C. Shared references + small probe hooks in core skills | High leverage with low overhead; reuse existing workflow artifacts | Requires coordinated edits across several skills | High (remove hooks/references if noisy) |
 
 ## Decision
 
-Choose **Option C**:
+Choose **Option C**, implemented in two phases:
 
-- Add one shared reference with compact probes (first principles, second-order effects, feedback loops, opportunity cost, bias, pre-mortem, retrospective, communication framing).
-- Integrate lightweight probe checkpoints into `workflow`, `plan`, `architecture`, `spec`, `review`, and `finish`.
-- Update `PROMPTS.md` and Spec 001 so the behavior is explicit and discoverable.
+### Phase 1: Compact probes
+
+- Add one shared reference (`skills/references/structured-thinking-checklists.md`) with 5 compact probes: first-principles assumptions, second-order effects, feedback loops/dynamics, opportunity cost/bias, and learning loop.
+- Integrate lightweight probe pointers into `workflow`, `plan`, `architecture`, `spec`, `review`, `finish`, `debug`, and `design`.
+- Each skill points to the canonical probes file and specifies which probes are most relevant (via a skill-affinity table in the checklists file).
+- The first Define-stage skill in a flow owns the probe output; subsequent skills refine it.
+
+### Phase 2: Template packs
+
+- Add `skills/references/structured-thinking-templates.md` with five selector packs for recurring decision shapes:
+  - Technical Design Review
+  - Trade-Off / Project Decision
+  - Retrospective / Postmortem
+  - Strategic Planning / Roadmap
+  - Communication & Influence
+- Keep compact probes as the default baseline; template packs are used only when escalation criteria are met.
+- Add lightweight, optional hooks in relevant skills pointing to the matching pack.
 
 This keeps the existing taxonomy intact while improving reasoning quality where non-trivial decisions are made.
 
@@ -44,9 +58,10 @@ This keeps the existing taxonomy intact while improving reasoning quality where 
 Reverse or narrow this change if either condition is observed for two consecutive review cycles:
 
 - Probe sections are empty or marked "n/a" in >50% of sampled non-trivial outputs — indicating probes are too abstract or too verbose for practical use.
+- Template packs are used in <10% of big-scope outputs, indicating the escalation criteria are unclear or too restrictive.
 - Maintainers or users report that probe steps are routinely skipped or add friction without improving decision quality.
 
-If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
+If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields. For template packs, reduce to only **Trade-Off / Project Decision** and **Retrospective / Postmortem**.
 
 ## Measurement + review ritual
 
@@ -59,6 +74,7 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
   - Includes at least one feedback-loop/delay note.
   - Includes an explicit opportunity cost or bias risk.
   - Includes an owner-backed learning/control follow-up when `finish` is used.
+  - Template was used only when a decision shape warranted it (per escalation criteria).
   - Track rubric score as `% criteria met` per cycle.
 
 - **Leading indicators (early)**:
@@ -69,6 +85,7 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
   - Fewer avoidable reversals caused by unstated assumptions.
   - Fewer "surprise" second-order issues discovered late in rollout.
   - Faster alignment in design/review decisions (fewer back-and-forth cycles).
+  - Better decision clarity in architecture/spec/review hand-offs.
 - **Instrumentation source**:
   - Sampled session outputs from non-trivial tasks.
   - PR/issue retrospectives where this playbook is used.
@@ -76,7 +93,7 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
 - **Owner + cadence + action trigger**:
   - Owner: repo maintainers.
   - Cadence: bi-weekly for first month, then monthly.
-  - Action trigger: if kill criteria are met, propose a follow-up ADR to reduce or reshape probes.
+  - Action trigger: if kill criteria are met, propose a follow-up ADR to reduce or reshape probes/packs.
 
 ## Consequences
 
@@ -84,9 +101,11 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
   - Clearer assumption tracking and decision rationale in non-trivial work.
   - Better anticipation of delayed/systemic side effects.
   - More consistent decision hand-off and learning capture.
+  - Better fit between problem type and reasoning structure (via template packs).
 - Trade-offs / what gets harder:
   - Slightly more structure in planning/review/finish outputs.
-  - Additional maintenance of one shared reference file.
+  - Two shared reference files to maintain.
+  - Cross-links across several skills to keep current.
 - Compatibility/migration impact:
   - Additive only; no skill rename or taxonomy change.
   - Existing prompts continue to work and gain extra guidance when updated.

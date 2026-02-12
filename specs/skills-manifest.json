@@ -39,7 +39,7 @@
       "tags": ["definition-of-done", "verification", "release-readiness", "change-summary", "ship", "merge-readiness", "checklist", "learning-loop", "retrospective", "owner-backed-actions"],
       "trigger": "End of non-trivial work — run verification, spot-check boundaries, produce change summary before merge/release.",
       "related": ["testing", "review", "spec"],
-      "overhead": "minimal"
+      "overhead": "moderate"
     },
     "observability": {
       "path": "skills/observability/SKILL.md",

@@ -1,7 +1,7 @@
 ---
 name: spec
 description: "Write and maintain spec-first artifacts (service specs, API contracts via OpenAPI/protobuf/WebSocket schemas, ADRs, task lists, quickstarts). Use when creating specs/*.md, apps/*/spec/ bundles, or contracts/ docs, especially before major behavior changes or multi-agent collaboration. NOT for implementation task breakdown without spec artifacts (use plan); NOT for choosing system or code patterns (use architecture or design)."
-metadata: {"stage":"Define","tags":["spec-first","contracts","acceptance-criteria","decision-records","nfrs","openapi","protobuf","adr"],"aliases":["specification","contract","api-contract","schema","acceptance","requirements","structured-thinking"]}
+metadata: {"stage":"Define","tags":["spec-first","contracts","acceptance-criteria","decision-records","nfrs","openapi","protobuf","adr"],"aliases":["specification","contract","api-contract","schema","acceptance","requirements"]}
 ---
 
 # Spec (Spec-Driven Development)
@@ -75,16 +75,7 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. Run a structured-thinking probe (non-trivial work):
-   - **normal scope**: answer 1-2 of the most relevant probes inline (usually facts-vs-assumptions and one second-order effect); skip template packs
-   - **big scope or high ambiguity**: run the full probe:
-     - attach explicit facts vs assumptions to your existing artifacts
-     - capture second-order effects across near/long time horizons
-     - capture feedback-loop/delay risks and opportunity-cost/bias risks
-     - keep outputs attached to existing artifacts (objective/system sketch/decision table/measurement ladder)
-   - escalate to a template pack when criteria are met (see [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)):
-     - for ADR-level option selection → **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
-     - for roadmap/multi-quarter direction setting → **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+8. Run structured-thinking probes (non-trivial work) — prioritize probes #1 (assumptions) and #4 (opportunity cost) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, objective function). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)
@@ -111,8 +102,8 @@ Use one (or both) of these:
 
 - Templates: [`references/templates.md`](references/templates.md)
 - Spec quality checklist: [`references/checklists.md`](references/checklists.md)
-- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
-- Structured-thinking template packs (trade-off + roadmap selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
+- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - Architecture choices: [`architecture`](../architecture/SKILL.md)
 - In-process pattern choices: [`design`](../design/SKILL.md)
 - Typed boundaries/errors/lifetimes: [`typescript`](../typescript/SKILL.md)
@@ -124,8 +115,7 @@ When using this skill, return:
 
 - **Scope + objective**: boundary, constraints, anti-goals.
 - **Artifacts created/updated**: exact spec files (and contracts/ADRs when relevant).
-- **Decision summary**: options considered, selected option, trade-offs, and kill criteria.
-- **Structured-thinking probe** (non-trivial): assumptions to validate, second-order effects, feedback-loop notes, opportunity costs/bias risks.
+- **Decision summary**: options considered, selected option, trade-offs, kill criteria, and assumptions (facts vs assumptions, opportunity costs).
 - **Measurement ladder**: leading + lagging indicators, owner/cadence/action trigger.
 - **Verification plan**: concrete checks/commands that prove acceptance scenarios and failure expectations.
 - **Next implementation tasks**: ordered checklist with observable acceptance per task.

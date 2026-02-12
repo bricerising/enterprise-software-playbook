@@ -31,7 +31,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Scope boundaries: default to **changed code + immediate call-chain context** unless user requests a full audit
    - Which “workers” you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
    - For non-trivial reviews, prime the debate with first-principles assumptions and top second-order risks to test.
-   - For `architecture` or `api-design` reviews, optionally run **Technical Design Review** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) to structure pressure-loop-trade-off checks.
+   - For `architecture` or `api-design` reviews, optionally run **Technical Design Review** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) to structure pressure-loop-trade-off checks.
 2. **Create a temporary run directory (scratch)**
    - Create a temporary run directory (outside the repo, e.g. `mktemp -d`).
    - If you run multiple debates in one session, create one subfolder per debate (e.g. `debate-01/`, `debate-02/`).
@@ -57,7 +57,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
    - Add systemic notes for high-priority items: second-order effects, feedback-loop risk, and opportunity cost if deferred.
-   - For reviews with P0/P1 findings that require stakeholder escalation, frame the recommendation using **Communication & Influence** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
+   - For reviews with P0/P1 findings that require stakeholder escalation, frame the recommendation using **Communication & Influence** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
 
 ## Guardrails
 
@@ -72,8 +72,8 @@ Success looks like: findings that a developer can act on immediately (location +
 ## References
 
 - `references/protocol.md`: format contract + prompt templates (base + per-type add-ons)
-- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
-- Structured-thinking template packs (technical-review + communication framing selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
+- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - Deeper checklists by review type (optional, this repo):
   - `security`: [`security`](../security/SKILL.md)
   - `resilience`: [`resilience`](../resilience/SKILL.md)

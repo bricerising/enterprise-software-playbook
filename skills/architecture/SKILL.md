@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: "Design or refactor multi-service system architecture (domain boundaries, service decomposition, event-driven vs request/response, CQRS, sagas, API gateways, data ownership). Use when work spans multiple processes/services, needs eventual consistency, or requires clearer integration seams. NOT for in-process code structure like GoF patterns (use design); NOT for applying timeouts/retries/breakers to a single call (use resilience)."
-metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review","structured-thinking"]}
+metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review"]}
 ---
 
 # Architecture (System Pattern Chooser)
@@ -32,25 +32,14 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens
    - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
-6. Run a structured-thinking probe for non-trivial architecture bets:
-   - **normal scope**: answer 1-2 of the most relevant probes inline (usually facts-vs-assumptions and one second-order effect); skip template packs
-   - **big scope or high ambiguity**: run the full probe:
-     - separate facts from assumptions and pick the first assumption to validate
-     - map second-order effects (next week/quarter/year)
-     - capture loop dynamics and delay/accumulation risks
-     - capture explicit opportunity cost and bias risks
-   - escalate to **Technical Design Review** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) when escalation criteria are met (see [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md))
-7. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
+6. Run structured-thinking probes (non-trivial bets) — prioritize probes #1 (assumptions), #2 (second-order effects), and #3 (feedback loops/dynamics) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts. Escalate to **Technical Design Review** template when escalation criteria are met.
+7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
-   - run a quick pre-mortem: if this fails in 6-12 months, what likely caused failure?
-9. Run a dynamics check:
-   - where are delays (feedback, approvals, recovery)?
-   - what accumulates (toil, backlog, queue lag, exceptions)?
-   - what balancing loop prevents runaway growth?
-10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
+   - pre-mortem: if this fails in 6-12 months, what likely caused failure?
+9. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
 
 ## Clarifying Questions
 
@@ -138,16 +127,14 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 - Decision tree (pressure → patterns → risks): [`references/decision-tree.md`](references/decision-tree.md)
 - Pattern index (one file per pattern): [`references/patterns.md`](references/patterns.md)
-- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
-- Structured-thinking template packs (technical design review selector): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
+- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 
 ## Output Template
 
 When recommending a pattern:
 
 - 1–2 sentences: pattern + why it fits (pressure, assumptions).
-- Decision table summary: options considered, explicit trade-offs, and kill criteria.
-- Structured-thinking probe (non-trivial): facts vs assumptions, second-order effects, feedback-loop/delay notes, opportunity costs.
-- Pre-mortem notes: likely failure narrative if this fails in 6–12 months, top preventable cause, safeguard.
-- Blast-radius + dynamics notes: failure propagation, silent failures, delays, accumulations, balancing loop.
+- Decision table summary: options considered, explicit trade-offs, kill criteria, and assumptions (facts vs assumptions from probes).
+- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem narrative.
 - A minimal implementation plan (boundaries, contracts, data ownership, tests/metrics, and review ritual owner/cadence).

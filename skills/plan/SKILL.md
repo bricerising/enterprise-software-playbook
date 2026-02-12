@@ -1,7 +1,7 @@
 ---
 name: plan
 description: "Break a request into a scoped implementation plan with ordered tasks, risk flags, and verification steps. Use before starting non-trivial, cross-cutting, or ambiguous work to align on approach and prevent rework. NOT for writing spec artifacts or contracts (use spec); NOT for auto-routing across multiple skills (use workflow)."
-metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk-assessment","verification-plan","scope","trade-offs","decision-table"],"aliases":["planning","task-list","breakdown","scope","work-breakdown","structured-thinking"]}
+metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk-assessment","verification-plan","scope","trade-offs","decision-table"],"aliases":["planning","task-list","breakdown","scope","work-breakdown"]}
 ---
 
 # Plan
@@ -30,16 +30,7 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. Stress-test the options with a structured-thinking probe (non-trivial work):
-   - **normal scope**: answer 1-2 of the most relevant probes inline (usually facts-vs-assumptions and one second-order effect); skip template packs
-   - **big scope or high ambiguity**: run the full probe:
-     - capture explicit facts vs assumptions (and pick the first assumption to validate)
-     - capture near-term and long-term second-order effects
-     - capture loop and delay risks (what amplifies vs what self-corrects)
-     - capture opportunity cost and bias risks (what you are choosing not to do)
-   - escalate to a template pack when criteria are met (see [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)):
-     - for option selection → **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
-     - for roadmap/portfolio planning → **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+6. Run structured-thinking probes (non-trivial work) — prioritize probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, system sketch). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
 7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
@@ -71,8 +62,7 @@ Return:
 - **Objective function**: goal + constraints + anti-goals.
 - **System sketch**: boundary/time horizon, actors/incentives, key flows, bottlenecks.
 - **Scope**: in/out.
-- **Decision table**: options, optimizations, known downsides, kill criteria.
-- **Structured-thinking probe** (non-trivial): first-principles assumptions, second-order effects, feedback loops, opportunity costs, bias risks.
+- **Decision table**: options, optimizations, known downsides, kill criteria, assumptions (facts vs assumptions), and opportunity costs.
 - **Risks/assumptions**: 3–6 bullets.
 - **Plan**: ordered checklist with acceptance per task.
 - **Measurement ladder**: leading/lagging indicators, instrumentation, owner/cadence/trigger.
@@ -81,5 +71,5 @@ Return:
 
 ## References
 
-- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md)
-- Structured-thinking template packs (trade-off + roadmap selectors): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
+- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)

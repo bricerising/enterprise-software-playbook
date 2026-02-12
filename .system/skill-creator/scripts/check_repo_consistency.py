@@ -250,7 +250,9 @@ def run_checks(repo_root: Path) -> list[str]:
         return [f"Missing skills directory: {skills_root}"]
 
     skill_names = sorted(
-        skill_dir.name for skill_dir in skills_root.iterdir() if skill_dir.is_dir()
+        skill_dir.name
+        for skill_dir in skills_root.iterdir()
+        if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists()
     )
     _check_headings(readme_text, prompts_text, errors)
     _check_readme_skills(skill_names, readme_text, errors)

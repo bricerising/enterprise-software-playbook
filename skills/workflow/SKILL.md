@@ -1,7 +1,7 @@
 ---
 name: workflow
 description: "Auto-select and orchestrate playbook skills end-to-end for feature, bug-fix, or refactor work. Use when the user gives a general request without naming a specific skill — workflow picks the right skills, sequences them, and keeps overhead proportional to the change size. NOT for creating a standalone task breakdown (use plan) or writing spec artifacts (use spec)."
-metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end","structured-thinking"]}
+metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestration","delivery-loop","taxonomy","orchestrator","router"],"aliases":["orchestrate","route","auto-select","delivery-loop","end-to-end"]}
 ---
 
 # Workflow (Auto Router)
@@ -42,20 +42,15 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-### 0.6) Run a structured-thinking probe (for non-trivial changes)
+### 0.6) Run structured-thinking probes (for non-trivial changes)
 
-Before locking a direction, run a compact probe and capture outputs in your existing artifacts (objective/system sketch/decision table/measurement ladder).
+Before locking a direction, run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md) and attach outputs to your existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
 
-**Normal scope** — answer 1-2 of the most relevant probes inline (usually facts-vs-assumptions and one second-order effect). Skip template packs.
+**Normal scope** — answer 1-2 of the most relevant probes inline (usually #1 assumptions and #2 second-order effects).
 
-**Big scope or high ambiguity** — run the full probe:
+**Big scope or high ambiguity** — run probes #1-#4.
 
-- facts vs assumptions (and first assumption to test)
-- second-order effects (near-term + long-term)
-- feedback loops/delays (amplification vs balancing dynamics)
-- opportunity cost and bias risks (what this choice says "no" to)
-
-If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) (see escalation criteria in [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md)).
+Escalate to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met (see checklists file).
 
 ### 1) Define (what are we building?)
 
@@ -137,7 +132,6 @@ When you finish work, report:
 - For non-trivial changes, run `finish` before reporting.
 - **Skills applied**: which ones you used and why (1 line each).
 - **System model** (non-trivial only): objective function + system sketch + reversal signal.
-- **Structured-thinking probe** (non-trivial only): first-principles assumptions, second-order effects, feedback-loop notes, and opportunity costs.
 - **What changed**: behavior + contract impacts + key files touched.
 - **Decision + measurement** (non-trivial only): chosen option, trade-offs, kill criteria, leading/lagging indicators, and review cadence/owner.
 - **Verification**: commands run and results (or why they couldn’t be run).
@@ -148,5 +142,5 @@ When you finish work, report:
 - Machine-readable skill index (triggers, tags, related, overhead): [`specs/skills-manifest.json`](../../specs/skills-manifest.json)
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)
-- Structured-thinking prompts (first principles, second-order, feedback loops, opportunity cost): [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md)
-- Structured-thinking template packs (design review, trade-off decisions, retrospectives, strategy, communication): [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md)
+- Structured-thinking probes: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)
+- Structured-thinking template packs: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)

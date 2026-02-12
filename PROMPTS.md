@@ -197,7 +197,7 @@ Before calling the work done:
 
 ```text
 Use architecture (read skills/architecture/SKILL.md).
-Template: skills/workflow/references/structured-thinking-templates.md → Technical Design Review
+Template: skills/references/structured-thinking-templates.md, template: Technical Design Review
 
 Stress-test the design for: <system/boundary being designed>
 Confirm fundamentals (facts vs assumptions), map feedback loops, scan second-order effects,
@@ -208,7 +208,7 @@ compare alternatives with explicit opportunity cost, and identify risks + mitiga
 
 ```text
 Use plan (read skills/plan/SKILL.md).
-Template: skills/workflow/references/structured-thinking-templates.md → Trade-Off / Project Decision
+Template: skills/references/structured-thinking-templates.md, template: Trade-Off / Project Decision
 
 Decision: <what are we choosing between?>
 Options: <list options, including status quo>
@@ -222,7 +222,7 @@ make opportunity cost explicit, run a bias check, and recommend with rationale.
 ```text
 Use finish (read skills/finish/SKILL.md) for delivery learning,
  or debug (read skills/debug/SKILL.md) for incident triage.
-Template: skills/workflow/references/structured-thinking-templates.md → Retrospective / Postmortem
+Template: skills/references/structured-thinking-templates.md, template: Retrospective / Postmortem
 
 Context: <what happened — delivery, incident, or rollback>
 
@@ -234,7 +234,7 @@ missed opportunities, and one owner-backed action with a follow-up date.
 
 ```text
 Use plan (read skills/plan/SKILL.md).
-Template: skills/workflow/references/structured-thinking-templates.md → Strategic Planning / Roadmap
+Template: skills/references/structured-thinking-templates.md, template: Strategic Planning / Roadmap
 
 Context: <initiative, portfolio, or multi-quarter direction>
 
@@ -247,7 +247,7 @@ and define execution checkpoints.
 
 ```text
 Use finish (read skills/finish/SKILL.md).
-Template: skills/workflow/references/structured-thinking-templates.md → Communication & Influence
+Template: skills/references/structured-thinking-templates.md, template: Communication & Influence
 
 Recommendation: <what action/decision you are requesting>
 Audience: <who decides, who executes, who is impacted>
