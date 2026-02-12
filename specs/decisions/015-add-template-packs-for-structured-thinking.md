@@ -42,15 +42,26 @@ This preserves existing behavior while improving prompt quality for recurring no
 
 Reverse or trim this decision if either condition persists for two review cycles:
 
-- Template-pack usage increases output length/latency materially (>20%) without a clear reduction in avoidable rework.
+- Template-pack usage increases output length/latency materially (>20%) versus baseline (measurement protocol below) without a clear reduction in avoidable rework.
 - Maintainers report that cross-links are rarely used or create confusion in skill selection.
 
 If triggered, reduce to only two packs (`Trade-Off / Project Decision`, `Retrospective / Postmortem`) and remove low-usage links.
 
 ## Measurement + review ritual
 
+- **Sampling protocol (to keep decisions objective)**:
+  - Baseline: capture the most recent 20 non-trivial outputs before 2026-02-12 and record median output length (words), median turnaround time (minutes), and template-pack usage rate.
+  - Per review cycle: sample 10 non-trivial outputs spanning at least 3 relevant skills (`workflow`, `plan`, `spec`, `architecture`, `review`, `finish`, `debug`).
+  - Use the same measurement method each cycle (word count from final response + elapsed task time in session logs + explicit template mention in output).
+- **Template-fit rubric (0/1 per criterion)**:
+  - A template was used only when a decision shape warranted it.
+  - Exactly one template pack was selected per decision checkpoint.
+  - Template output remained attached to existing artifacts (not a separate long essay).
+  - Template output included explicit opportunity cost and owner/date follow-up where applicable.
+  - Track rubric score as `% criteria met` and compare against baseline.
+
 - **Leading indicators (early)**:
-  - Non-trivial outputs include context-appropriate template sections (not just generic probes).
+  - Non-trivial outputs with template usage score >=75% on the template-fit rubric above.
   - `finish` outputs more consistently include owner-backed retrospective controls.
   - Skill validation and repo-consistency checks remain green.
 - **Lagging outcomes**:

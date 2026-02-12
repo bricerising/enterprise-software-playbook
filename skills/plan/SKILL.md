@@ -30,13 +30,11 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. Stress-test the options with a short mental-model probe:
-   - first-principles assumption audit (facts vs assumptions)
-   - second-order effects scan ("and then what?" now/later)
-   - feedback-loop and delay check (reinforcing/balancing + accumulations)
-   - opportunity-cost and bias check (what this says "no" to; where judgment may drift)
-   - for high-stakes option selection, run the **Trade-Off / Project Decision** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
-   - for roadmap/portfolio planning, run the **Strategic Planning / Roadmap** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+6. Stress-test the options with a mental-model probe (non-trivial work):
+   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
+   - capture outputs in your decision artifacts (facts/assumptions, near/long-term effects, loop+delay risk, opportunity cost+bias)
+   - for option selection, optionally run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+   - for roadmap/portfolio planning, optionally run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`

@@ -2,6 +2,8 @@
 
 Use these prompts to strengthen non-trivial decisions without adding heavy process.
 
+In this repo, **non-trivial = normal or big scope** (see `workflow`); tiny changes usually skip these probes.
+
 Keep answers short (1-3 bullets per prompt) and attach them to the existing artifacts:
 
 - objective function
@@ -65,7 +67,7 @@ Output:
 
 ## 5) Risk Pre-Mortem
 
-Use before implementation of normal/big work.
+Use before implementation of non-trivial work.
 
 - Assume this failed in 6-12 months. What likely caused failure?
 - Which failure mode was most preventable?

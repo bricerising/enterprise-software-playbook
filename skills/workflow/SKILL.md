@@ -22,6 +22,8 @@ Classify the request:
 - **Normal change**: touches behavior, boundary semantics, or adds a feature.
 - **Big change**: cross-service work, migrations, or changes that affect multiple boundaries/teams.
 
+For this repo, **non-trivial = normal or big**.
+
 Rule: only create/expand specs and platform primitives when they reduce future drift for the expected scope.
 
 **Proportionality guide** (what to skip per scope):
@@ -32,7 +34,7 @@ Rule: only create/expand specs and platform primitives when they reduce future d
 | **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
 | **Big** | nothing | `plan`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
 
-### 0.5) Externalize the system model (for normal/big changes)
+### 0.5) Externalize the system model (for non-trivial changes)
 
 Before pattern/tool selection, write a compact model:
 
@@ -40,21 +42,17 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
-### 0.6) Run a mental-model probe (for normal/big changes)
+### 0.6) Run a mental-model probe (for non-trivial changes)
 
-Before locking a direction, run a short probe using [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md):
+Before locking a direction, run the compact probe from [`references/structured-thinking-checklists.md`](references/structured-thinking-checklists.md) (sections 1-4) and capture outputs in your existing artifacts (objective/system sketch/decision table/measurement ladder).
 
-- First-principles assumption audit (facts vs assumptions).
-- Second-order effects scan ("and then what?" now vs later).
-- Feedback-loop/dynamics check (reinforcing, balancing, delay, accumulation).
-- Opportunity-cost + bias check (what we are saying no to, and where judgment can drift).
-- If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) and attach the output to your objective/decision artifacts.
+If the work fits a known decision shape, run one targeted template from [`references/structured-thinking-templates.md`](references/structured-thinking-templates.md) and attach only the selected template output.
 
 ### 1) Define (what are we building?)
 
 Pick the minimal “definition artifacts” needed:
 
-- For **normal/big** changes, use `plan` early to produce an executable task list, trade-off table, and measurement ladder.
+- For **non-trivial** changes, use `plan` early to produce an executable task list, trade-off table, and measurement ladder.
 - If work changes externally visible behavior (API/WS/event schema, boundary error semantics, auth rules), **use `spec`** first:
   - update the relevant `specs/*.md` and/or `apps/<service>/spec/` bundle
   - update contracts (`contracts/`: OpenAPI/proto/WS docs)

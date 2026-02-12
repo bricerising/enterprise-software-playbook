@@ -76,12 +76,10 @@ Use one (or both) of these:
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
 8. Run a structured-thinking probe (non-trivial work):
-   - first-principles assumptions that still need validation
-   - second-order effects across time horizons (now, next quarter, next year)
-   - feedback loops and delayed side effects (what can amplify or silently drift)
-   - opportunity costs and likely decision biases
-   - for ADR-level option selection, run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
-   - for roadmap/multi-quarter direction setting, run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
+   - attach probe outputs to existing artifacts (objective/system sketch/decision table/measurement ladder)
+   - for ADR-level option selection, optionally run **Trade-Off / Project Decision** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
+   - for roadmap/multi-quarter direction setting, optionally run **Strategic Planning / Roadmap** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)

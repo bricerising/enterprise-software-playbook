@@ -89,6 +89,7 @@ If you found a systemic gap, capture it:
 - retries without idempotency / missing time budgets → [`resilience`](../resilience/SKILL.md)
 - repeated boundary logic across services → [`platform`](../platform/SKILL.md)
 - cross-service pattern confusion → [`architecture`](../architecture/SKILL.md)
+- for incident/post-rollback learning capture, run **Retrospective / Postmortem** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 
 ## Guardrails
 
@@ -101,6 +102,7 @@ If you found a systemic gap, capture it:
 
 - Copy/paste commands: [`references/commands.md`](references/commands.md)
 - Scenario checklists (HTTP/gRPC/consumers): [`references/scenarios.md`](references/scenarios.md)
+- Structured-thinking template packs (retrospective selector): [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md)
 - If telemetry is missing: [`observability`](../observability/SKILL.md)
 
 ## Output Template

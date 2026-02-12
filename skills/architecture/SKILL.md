@@ -17,7 +17,6 @@ Use code patterns for in-process structure; use system patterns when the problem
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)
    - boundary (in/out), time horizon, actors/incentives, and key flows
-   - first-principles assumption audit (facts vs assumptions, plus the least-certain assumption to test first)
 2. Classify the problem: single-process design vs multi-process/distributed.
 3. Identify the main pressure (pick 1):
    - Reliability under partial failure (timeouts/retries/circuit breaker/bulkheads)
@@ -33,11 +32,9 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what each option knowingly worsens
    - explicit opportunity cost ("what this option forces us not to do")
    - kill criteria / reversal trigger
-6. For non-trivial architecture bets, run the **Technical Design Review** template from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md):
-   - confirm fundamentals and assumptions
-   - map interaction/feedback loops
-   - evaluate second-order effects and alternative opportunity costs
-   - capture explicit risks + mitigations
+6. Run a mental-model probe for non-trivial architecture bets:
+   - run compact probes from [`../workflow/references/structured-thinking-checklists.md`](../workflow/references/structured-thinking-checklists.md) sections 1-4
+   - optionally run **Technical Design Review** from [`../workflow/references/structured-thinking-templates.md`](../workflow/references/structured-thinking-templates.md) when the design pressure is ambiguous or high-impact
 7. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
