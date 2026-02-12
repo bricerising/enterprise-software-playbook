@@ -29,10 +29,13 @@ Use code patterns for in-process structure; use system patterns when the problem
 4. State what’s stable and what can change (contracts, schemas, SLAs).
 5. Build a compact decision table (2–3 options including no-pattern baseline):
    - what each option optimizes
-   - what each option knowingly worsens
-   - explicit opportunity cost ("what this option forces us not to do")
+   - what each option knowingly worsens (degrades an existing quality)
+   - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
-6. For non-trivial work, run probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, system sketch). Escalate to **Technical Design Review** template when escalation criteria are met.
+6. For non-trivial work (normal or big scope — see `workflow`), run inline probes and attach outputs to existing artifacts:
+   - **Assumptions probe**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly. Attach to decision table.
+   - **Second-order effects probe**: what likely happens next week / next quarter / next year? Who absorbs deferred cost? Attach to system sketch.
+   - Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to **Technical Design Review** template when escalation criteria are met.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?

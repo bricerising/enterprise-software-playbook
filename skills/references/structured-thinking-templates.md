@@ -13,8 +13,8 @@ Use template packs only for non-trivial work unless a tiny change has unusually 
 | Technical Design Review | Architecture or boundary design choices need stress-testing | `architecture`, `spec`, `review` |
 | Trade-Off / Project Decision | Multiple viable options must be compared with explicit opportunity cost | `plan`, `spec`, `workflow` |
 | Retrospective / Postmortem | A delivery, incident, or rollout needs learning capture | `finish`, `debug` |
-| Strategic Planning / Roadmap | Multi-quarter direction or initiative portfolio is being set | `plan`, `spec`, `architecture` |
-| Communication & Influence | You must frame a PR/ADR/technical recommendation for async review | `finish`, `review`, `workflow` |
+| Strategic Planning / Roadmap | Multi-quarter direction or initiative portfolio is being set (edge case — most work uses `plan` directly) | `plan`, `spec`, `architecture` |
+| Recommendation Brief | You must frame a PR/ADR/technical recommendation for async review | `finish`, `review`, `workflow` |
 
 ## 1) Technical Design Review
 
@@ -72,7 +72,7 @@ Prompts:
 - Root causes: what failed at the assumption/process/invariant level?
 - Second-order effects: what quick fixes created delayed costs (or benefits)?
 - Missed opportunities: what did we skip and what did it cost?
-- Actions: what one process/control change gets an owner/date?
+- Actions: what one process/control change would reduce repeat risk? (flag for human to assign owner + date)
 
 Output:
 
@@ -86,7 +86,7 @@ Output:
 
 ## 4) Strategic Planning / Roadmap
 
-Use for strategy and roadmap choices that span multiple teams or quarters.
+Edge case — use only for longer-horizon work (multi-quarter direction, initiative portfolio). Most agent-driven work fits the `plan` skill's normal implementation-planning focus; use this template only when the decision scope genuinely spans multiple teams or quarters.
 
 Prompts:
 
@@ -108,7 +108,7 @@ Output:
 - `pre-mortem risks + safeguards`
 - `execution rhythm + checkpoints`
 
-## 5) Communication & Influence
+## 5) Recommendation Brief
 
 Use to frame a PR description, ADR recommendation, or technical proposal for async review. Keeps the recommendation grounded in evidence and actionable for reviewers.
 

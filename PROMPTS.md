@@ -228,12 +228,14 @@ Include the learning loop. Capture facts vs expectation, cause chain, root cause
 missed opportunities, and one owner-backed action with a follow-up date.
 ```
 
-### Run a strategic planning / roadmap review
+### Run a strategic planning / roadmap review (edge case)
 
 ```text
-Use plan (read skills/plan/SKILL.md).
+Use spec (read skills/spec/SKILL.md) for system-level specs,
+ or plan (read skills/plan/SKILL.md) for implementation-focused breakdowns.
 
 Context: <initiative, portfolio, or multi-quarter direction>
+Note: Most agent work fits plan's normal implementation focus. Use this only when the decision scope genuinely spans multiple teams or quarters.
 
 Include structured-thinking probes. Anchor on first principles, validate assumptions,
 run scenario scans (6/12/36 months), map system dynamics, prioritize with explicit de-priorities,

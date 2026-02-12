@@ -44,13 +44,17 @@ Before pattern/tool selection, write a compact model:
 
 ### 0.6) Run structured-thinking probes (for non-trivial changes)
 
-Before locking a direction, run probes from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
+Before locking a direction, run probes and attach outputs to existing artifacts. The first Define-stage skill that runs probes owns the output; later skills refine it.
 
-**Normal scope** — answer 1-2 of the most relevant probes inline (usually #1 assumptions and #2 second-order effects).
+**Normal scope** — answer 1-2 of the most relevant probes inline:
+- **Assumptions**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly.
+- **Second-order effects**: what likely happens next week / next quarter / next year? Who absorbs deferred cost?
 
-**Big scope or high ambiguity** — run probes #1-#4.
+**Big scope or high ambiguity** — also run:
+- **Feedback loops**: what reinforces (good or bad)? What balancing loop prevents runaway? Where are delays?
+- **Opportunity cost / bias**: what are we saying "no" to? Sunk cost / familiarity / novelty bias?
 
-Escalate to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met (see checklists file).
+Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when escalation criteria are met (see checklists file).
 
 ### 1) Define (what are we building?)
 

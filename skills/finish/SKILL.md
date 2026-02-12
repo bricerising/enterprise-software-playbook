@@ -23,7 +23,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 1. Re-check intent artifacts:
    - if contracts/semantics changed: specs/contracts are updated (`spec`)
    - if shared primitives were added/changed: API surface + adoption notes are clear (`platform`)
-   - for non-trivial work: objective function, decision table, measurement ladder, and kill criteria are documented
+   - for non-trivial work (normal or big scope — see `workflow`): objective function, decision table, measurement ladder, and kill criteria are documented
 2. Run verification (prefer narrow → broad):
    - unit tests / focused tests
    - typecheck
@@ -42,13 +42,13 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - write an executive packet (decision bandwidth)
    - write an engineer packet (implementation bandwidth)
    - use clear framing: recommendation, evidence, remaining risks, and explicit owner/date for next action
-   - for non-trivial hand-offs (PR descriptions, ADR recommendations), use **Communication & Influence** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
+   - for non-trivial hand-offs (PR descriptions, ADR recommendations), use **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 6. Micro-retrospective (non-trivial work):
    - what happened vs what was expected?
    - if expectations were met: one sentence on what you would keep or change. Done.
    - if expectations diverged (rollback, incident, surprise scope, or assumption failure):
      - which assumption failed, and what is now updated?
-     - what one process/control change gets an owner?
+     - what one process/control change would reduce repeat risk? (flag for human to assign owner)
      - use **Retrospective / Postmortem** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) to capture cause chain and follow-up controls
 
 ## Guardrails
@@ -56,7 +56,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 - Don’t claim verification you didn’t run; report “not run” and why.
 - Prefer explicit commands and outputs over vague statements (“tests passed”).
 - Don’t expand scope; if you find unrelated issues, list as follow-ups.
-- Close the loop for non-trivial work: include at least one explicit learning update and owner.
+- Close the loop for non-trivial work: include at least one explicit learning update and flag owner assignment for human review.
 
 ## References
 
@@ -83,4 +83,4 @@ Return:
 - **Learning loop** (non-trivial changes):
   - outcome vs expectation
   - assumption update
-  - one owner-backed process/control change
+  - one process/control change to reduce repeat risk (flag for human to assign owner)

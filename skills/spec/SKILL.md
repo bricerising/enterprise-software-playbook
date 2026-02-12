@@ -75,7 +75,10 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. For non-trivial work, run probes #1 (assumptions) and #4 (opportunity cost) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, objective function). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
+8. For non-trivial work (normal or big scope — see `workflow`), run inline probes and attach outputs to existing artifacts:
+   - **Assumptions probe**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly. Attach to decision table.
+   - **Opportunity cost probe**: what are we explicitly saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty bias? Attach to objective function.
+   - Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
 9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)

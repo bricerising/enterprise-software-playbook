@@ -47,7 +47,7 @@ Choose **Option C**, implemented in two phases:
   - Trade-Off / Project Decision
   - Retrospective / Postmortem
   - Strategic Planning / Roadmap
-  - Communication & Influence
+  - Recommendation Brief
 - Keep compact probes as the default baseline; template packs are used only when escalation criteria are met.
 - Add lightweight, optional hooks in relevant skills pointing to the matching pack.
 

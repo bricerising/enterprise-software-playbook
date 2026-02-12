@@ -34,7 +34,7 @@ Not every skill needs every probe. Prioritize by fit:
 
 | Probe | Primary skills | Secondary |
 | --- | --- | --- |
-| #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review` |
+| #1 Assumptions | `plan`, `spec`, `architecture`, `design` | `review`, `testing` |
 | #2 Second-Order Effects | `plan`, `architecture`, `spec` | `review`, `design` |
 | #3 Feedback Loops | `architecture` (covered natively by its inline dynamics check — do not run separately) | `plan`, `spec` |
 | #4 Opportunity Cost | `plan`, `spec`, `architecture` | `review`, `design` |
@@ -102,7 +102,7 @@ Use in `finish` (after delivery) or `debug` (after incident/rollback). For the f
 
 - What happened vs what was expected?
 - Which assumption failed (or held) and why?
-- What one process change and one owner will reduce repeat risk?
+- What one process/control change would reduce repeat risk? (flag for human to assign owner)
 
 Output (attach to finish packet):
 - `outcome delta`

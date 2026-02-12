@@ -29,9 +29,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Review type (default for PRs): `general | security | correctness | performance | maintainability | testing | architecture | resilience | api-design | accessibility`
    - Review artifact (preferred): PR link / diff / commit range / file list (vs “entire repo”)
    - Scope boundaries: default to **changed code + immediate call-chain context** unless user requests a full audit
-   - Which “workers” you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
-   - For non-trivial work, prime the debate with first-principles assumptions and top second-order risks to test (probes #1 and #2 from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md)).
-   - For `architecture` or `api-design` reviews, optionally run **Technical Design Review** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) to structure pressure-loop-trade-off checks.
+   - Which "workers" you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
 2. **Create a temporary run directory (scratch)**
    - Create a temporary run directory (outside the repo, e.g. `mktemp -d`).
    - If you run multiple debates in one session, create one subfolder per debate (e.g. `debate-01/`, `debate-02/`).
@@ -57,7 +55,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
    - Add systemic notes for high-priority items: second-order effects, feedback-loop risk, and opportunity cost if deferred.
-   - For reviews with P0/P1 findings, frame the recommendation for async review using **Communication & Influence** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
+   - For reviews with P0/P1 findings, frame the recommendation for async review using **Recommendation Brief** from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md). For routine reviews, use the standard recommendation framing (output sections 6-7).
 
 ## Guardrails
 
@@ -99,7 +97,7 @@ When you finish, return:
    - Suggested fix order and verification steps (tests, reproduction, rollout checks)
 5. **Contested items**
    - What would settle each (specific check)
-6. **Systemic risks** (non-trivial reviews only)
+6. **Systemic risks** (non-trivial reviews only — normal or big scope; see `workflow`)
    - Second-order effects, feedback loops, and opportunity cost if unresolved
 7. **Recommendation framing** (non-trivial reviews only)
    - Core recommendation/action request

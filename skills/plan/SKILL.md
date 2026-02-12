@@ -30,7 +30,10 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. For non-trivial work, run probes #1 (assumptions) and #2 (second-order effects) from [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Attach outputs to existing artifacts (decision table, system sketch). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
+6. For non-trivial work (normal or big scope — see `workflow`), run inline probes and attach outputs to existing artifacts:
+   - **Assumptions probe**: separate facts from assumptions; identify the least-certain assumption and how to validate it quickly. Attach to decision table.
+   - **Second-order effects probe**: what likely happens next week / next quarter / next year? Who absorbs deferred cost? Attach to decision table.
+   - Full probe format: [`../references/structured-thinking-checklists.md`](../references/structured-thinking-checklists.md). Escalate to **Trade-Off / Project Decision** or **Strategic Planning / Roadmap** template when escalation criteria are met.
 7. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
