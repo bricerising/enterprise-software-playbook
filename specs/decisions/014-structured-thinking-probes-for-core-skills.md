@@ -72,15 +72,15 @@ If triggered, reduce scope to only `workflow` + `plan` or simplify probe fields.
 - **Scoring rubric (0/1 per criterion)**:
   - Includes explicit `facts vs assumptions`.
   - Includes at least one explicit second-order effect.
-  - Includes at least one feedback-loop/delay note.
+  - Includes at least one feedback-loop/delay note for big-scope or high-ambiguity work; for normal scope this criterion is optional.
   - Includes an explicit opportunity cost or bias risk.
-  - Includes an owner-backed learning/control follow-up when `finish` is used.
+  - Includes a learning-loop section when `finish` is used; if expectations diverged, includes an owner-backed learning/control follow-up (or explicit no-action rationale when expectations matched).
   - Template was used only when a decision shape warranted it (per escalation criteria).
-  - Track rubric score as `% criteria met` per cycle.
+  - Track rubric score as `% criteria met` per cycle (scope-conditional criteria are scored only when applicable).
 
 - **Leading indicators (early)**:
   - Non-trivial outputs score >=80% on the rubric above.
-  - `finish` outputs include a learning-loop section with owner.
+  - `finish` outputs include a learning-loop section, with owner-backed actions when expectations diverged.
   - Skill validators and repo consistency checks remain green.
 - **Lagging outcomes**:
   - Fewer avoidable reversals caused by unstated assumptions.

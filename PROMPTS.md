@@ -19,7 +19,7 @@ For non-trivial work, externalize first:
 - one-page system sketch (boundary/time horizon, actors/incentives, key flows, bottlenecks)
 - compact decision table (options, trade-offs, kill criteria)
 - measurement ladder (leading/lagging indicators, owner/cadence, action trigger)
-- structured-thinking probe (assumptions, second-order effects, feedback loops, opportunity cost/bias)
+- structured-thinking probes (assumptions, second-order effects, opportunity cost/bias; add feedback loops for big-scope or high-ambiguity work)
 
 If you change a boundary contract/semantics (HTTP/gRPC/events/WS), update specs/contracts first and pin behavior with tests.
 

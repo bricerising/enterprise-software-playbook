@@ -29,7 +29,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(include in output trade-offs)*
    - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? *(include in output trade-offs)*
    - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(include in output trade-offs)*
-   - If running inside `workflow`, consume existing probe output instead of re-running.
+   - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 6. Validate with 2 examples: a "happy path" and a likely future change.
 7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
 

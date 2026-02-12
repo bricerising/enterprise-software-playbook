@@ -36,7 +36,7 @@ Use code patterns for in-process structure; use system patterns when the problem
    - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
    - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode? Which team absorbs the downside? *(attach to system sketch)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
-   - If running inside `workflow`, consume existing probe output instead of re-running.
+   - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
    - Note: Feedback Loops are covered natively by step 9 (dynamics check). Pre-mortem is normally part of the Second-Order Effects probe but is already covered in step 8 (blast-radius path); do not duplicate either.
 7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
 8. Stress-test with: happy path, failure path, ops path, and blast-radius path:

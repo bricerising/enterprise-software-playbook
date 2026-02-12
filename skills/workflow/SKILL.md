@@ -44,8 +44,8 @@ Before pattern/tool selection, write a compact model:
 
 Then, if the work involves choosing between 2+ viable approaches, the first Define-stage skill stress-tests the model with probes (later skills refine, never re-run). If the path is obvious, note `probes: skipped — single viable approach` and move on.
 
-- **Normal scope**: run Assumptions (facts vs assumptions, which to validate first) and Second-Order Effects (what changes next week/quarter/year, new load/toil/coupling/failure modes, pre-mortem). Attach to decision table.
-- **Big scope or high ambiguity**: also run Feedback Loops (reinforcing/balancing loops, delays, accumulations — attach to system sketch) and Opportunity Cost / Bias (what we're saying "no" to, sunk cost/familiarity/novelty check — attach to decision table).
+- **Normal scope**: run Assumptions (facts vs assumptions, which to validate first), Second-Order Effects (what changes next week/quarter/year, new load/toil/coupling/failure modes, pre-mortem), and Opportunity Cost / Bias (what we're saying "no" to, sunk cost/familiarity/novelty check). Attach outputs to the decision table.
+- **Big scope or high ambiguity**: also run Feedback Loops (reinforcing/balancing loops, delays, accumulations — attach to system sketch).
 - **Escalate** to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when: 3+ options with no clear winner, multiple stakeholders must align, rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
 
 ### 1) Define (what are we building?)

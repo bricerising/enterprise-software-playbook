@@ -37,10 +37,10 @@ The canonical probe definitions live inline in the skills that execute them. Thi
 | # | Probe | Canonical location | Output fields | Attach to |
 | --- | --- | --- | --- | --- |
 | 1 | Assumptions | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `facts`, `assumptions`, `assumption-to-test-first` | decision table |
-| 2 | Second-Order Effects (+ pre-mortem) | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `near-term effects`, `long-term effects`, `deferred cost owner`, `pre-mortem cause` | decision table |
+| 2 | Second-Order Effects (+ pre-mortem) | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `near-term effects`, `long-term effects`, `deferred cost owner`, `pre-mortem cause` | decision table (`architecture`: system sketch) |
 | 3 | Feedback Loops | `architecture` step 9 (dynamics check — covers this natively) | `reinforcing loop`, `balancing loop`, `delay + accumulation risk` | system sketch |
 | 4 | Opportunity Cost / Bias | `plan` step 6 / `spec` step 8 / `architecture` step 6 / `design` step 5 | `opportunity cost`, `bias risks`, `external challenge` | decision table |
-| 5 | Learning Loop | `finish` step 6 | `outcome delta`, `assumption confirmed or updated`, `next control + owner` | finish packet |
+| 5 | Learning Loop | `finish` step 6 | `outcome delta`, `assumption confirmed or updated`, `next control + owner` (when expectations diverge) | finish packet |
 
 ## Skill affinity
 
@@ -59,5 +59,6 @@ Skills not listed above (`testing`, `security`, `resilience`, `observability`, `
 **Skill-specific tailoring notes:**
 - `design` omits "load" and "toil" from Second-Order Effects because in-process pattern decisions don't create operational load or toil — coupling and failure modes are the relevant concerns.
 - `architecture` omits the pre-mortem question from its probe block because it's already covered in its blast-radius step (step 8). `plan`, `spec`, and `design` include pre-mortem inline since they lack a separate blast-radius step.
-- `architecture` attaches Second-Order Effects to the system sketch (not decision table) since the effects are structural.
+- `architecture` is the only exception for Probe #2 attachment: it writes Second-Order Effects to the system sketch (not the decision table). Do not duplicate it in both places.
 - `debug` is listed as primary for Learning Loop (#5) because incident resolution produces learning output, but debug's capture-learnings step (step 6) addresses systemic gaps discovered during triage (missing telemetry, retries without idempotency) rather than probe #5's outcome-vs-expectation format. For formal learning capture after incident resolution, debug flags a follow-up using the Retrospective template.
+- For Learning Loop (#5), owner-backed control actions are conditional: include them when expectations diverge; otherwise include a brief explicit no-action rationale.
