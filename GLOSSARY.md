@@ -41,6 +41,11 @@ This is intentionally lightweight. When in doubt, follow the workflow and treat 
 - **CQRS**: Separating write and read models for scaling/complexity reasons. Adds operational and consistency complexity. See `architecture`.
 - **Event sourcing**: Persisting state as an append-only event log. Powerful, but high cost; avoid unless you can justify the operational and schema-evolution burden. See `architecture`.
 
+## Decision Quality
+
+- **Structured-thinking probe**: A compact checklist (1-3 bullets per probe) for stress-testing non-trivial decisions. Five probes: (1) Assumptions — facts vs assumptions, (2) Second-Order Effects — near/long-term impacts + pre-mortem, (3) Feedback Loops — reinforcing/balancing loops + delays, (4) Opportunity Cost — what we're saying "no" to + bias check, (5) Learning Loop — outcome vs expectation + owner-backed action. Probes run inline in Define-stage skills; index and affinity in `skills/references/structured-thinking-checklists.md`.
+- **Structured-thinking template pack**: A multi-prompt flow for a specific decision shape. Four packs: Technical Design Review, Trade-Off / Project Decision, Retrospective / Postmortem, Recommendation Brief. Escalate from probes when compact checklists aren't enough (3+ options with no clear winner, multiple stakeholders, rollback/incident). See `skills/references/structured-thinking-templates.md`.
+
 ## Codebase Structure
 
 - **Composition root**: The “wiring” module where dependencies are created and lifetimes are owned (start/stop). Avoid hidden globals and import-time I/O. See `typescript`.

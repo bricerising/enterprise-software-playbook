@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: "Design or refactor multi-service system architecture (domain boundaries, service decomposition, event-driven vs request/response, CQRS, sagas, API gateways, data ownership). Use when work spans multiple processes/services, needs eventual consistency, or requires clearer integration seams. NOT for in-process code structure like GoF patterns (use design); NOT for applying timeouts/retries/breakers to a single call (use resilience)."
-metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context"]}
+metadata: {"stage":"Define","tags":["system-patterns","distributed-systems","consistency","microservices","integration","domain-boundaries","event-driven","saga"],"aliases":["system-design","distributed","multi-service","cross-service","decomposition","bounded-context","technical-design-review"]}
 ---
 
 # Architecture (System Pattern Chooser)
@@ -13,6 +13,12 @@ Pick the smallest system/architecture pattern that addresses the pressure (relia
 Use code patterns for in-process structure; use system patterns when the problem is cross-process or cross-team.
 
 ## Workflow
+
+0. **Gather empirical data** (optional but recommended):
+   - If `archobs` is available, run `archobs report --suggestions-provider rules` on the target repo to get measured coupling, boundary health, and risk hotspots.
+   - Use cluster leakage data to identify where boundaries are already porous.
+   - Use file-level risk scores to focus on the highest-impact areas.
+   - Skip this step if the repo is too small (< 10 files) or if time constraints preclude analysis.
 
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)
@@ -29,18 +35,26 @@ Use code patterns for in-process structure; use system patterns when the problem
 4. State what’s stable and what can change (contracts, schemas, SLAs).
 5. Build a compact decision table (2–3 options including no-pattern baseline):
    - what each option optimizes
-   - what each option knowingly worsens
+   - what each option knowingly worsens (degrades an existing quality)
+   - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
-6. Choose a primary pattern and 0–2 supporting ones (avoid “pattern soup”).
-7. Stress-test with: happy path, failure path, ops path, and blast-radius path:
+6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode? Which team absorbs the downside? *(attach to system sketch)*
+   - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
+   - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
+   - Note: Feedback Loops are covered natively by step 9 (dynamics check). Pre-mortem is normally part of the Second-Order Effects probe but is already covered in step 8 (blast-radius path); do not duplicate either.
+7. Choose a primary pattern and 0–2 supporting ones (avoid "pattern soup").
+8. Stress-test with: happy path, failure path, ops path, and blast-radius path:
    - if X degrades, what breaks next?
    - what breaks silently?
    - what is the organizational cascade (handoffs/approvals/ownership gaps)?
-8. Run a dynamics check:
+   - pre-mortem: if this fails in 6-12 months, what likely caused failure?
+9. Run a dynamics check:
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
    - what balancing loop prevents runaway growth?
-9. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
+10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
 
 ## Clarifying Questions
 
@@ -114,6 +128,7 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 ## Map To Existing Skills
 
+- Empirical coupling data and boundary health metrics: [`archobs`](../archobs/SKILL.md).
 - Spec + contracts + plans: [`spec`](../spec/SKILL.md).
 - Shared primitives across services: [`platform`](../platform/SKILL.md).
 - Observability (logs/metrics/traces correlation): [`observability`](../observability/SKILL.md).
@@ -128,12 +143,13 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 - Decision tree (pressure → patterns → risks): [`references/decision-tree.md`](references/decision-tree.md)
 - Pattern index (one file per pattern): [`references/patterns.md`](references/patterns.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 
 ## Output Template
 
 When recommending a pattern:
 
 - 1–2 sentences: pattern + why it fits (pressure, assumptions).
-- Decision table summary: options considered, explicit trade-offs, and kill criteria.
-- Blast-radius + dynamics notes: failure propagation, silent failures, delays, accumulations, balancing loop.
+- Decision table summary: options considered, explicit trade-offs, kill criteria, and assumptions (facts vs assumptions).
+- Blast-radius + dynamics notes: failure propagation, silent failures, feedback loops, delays, accumulations, pre-mortem cause.
 - A minimal implementation plan (boundaries, contracts, data ownership, tests/metrics, and review ritual owner/cadence).

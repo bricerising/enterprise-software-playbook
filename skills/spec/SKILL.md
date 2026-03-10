@@ -75,15 +75,20 @@ Use one (or both) of these:
    - options considered (include baseline/no-change)
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
-8. Add a measurement ladder:
+8. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
+   - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
+9. Add a measurement ladder:
    - decision being measured
    - leading indicators (early signal)
    - lagging outcomes (business/ops)
    - instrumentation sources + review ritual (owner/cadence/action trigger)
-9. Break it into tasks with acceptance:
+10. Break it into tasks with acceptance:
    - keep tasks small and orderable
    - each task has an observable acceptance check
-10. Implement and keep docs honest:
+11. Implement and keep docs honest:
    - if implementation forces a change in behavior, update specs first
    - keep quickstarts and contracts current
 
@@ -93,6 +98,7 @@ Use one (or both) of these:
 - Don’t hide requirements in code; put them in `spec.md` where agents can find them.
 - Keep contracts stable; prefer additive changes and version explicitly when you can’t.
 - Write down **non-goals** to stop scope creep.
+- For non-trivial decisions, record opportunity cost explicitly to avoid accidental scope drift.
 - No metric without a named decision and review ritual.
 - If a design cannot be measured cheaply enough to guide weekly decisions, treat that as a constraint and simplify.
 
@@ -100,6 +106,7 @@ Use one (or both) of these:
 
 - Templates: [`references/templates.md`](references/templates.md)
 - Spec quality checklist: [`references/checklists.md`](references/checklists.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 - Architecture choices: [`architecture`](../architecture/SKILL.md)
 - In-process pattern choices: [`design`](../design/SKILL.md)
 - Typed boundaries/errors/lifetimes: [`typescript`](../typescript/SKILL.md)
@@ -111,7 +118,7 @@ When using this skill, return:
 
 - **Scope + objective**: boundary, constraints, anti-goals.
 - **Artifacts created/updated**: exact spec files (and contracts/ADRs when relevant).
-- **Decision summary**: options considered, selected option, trade-offs, and kill criteria.
+- **Decision summary**: options considered, selected option, trade-offs, kill criteria, and assumptions (facts vs assumptions, opportunity costs).
 - **Measurement ladder**: leading + lagging indicators, owner/cadence/action trigger.
 - **Verification plan**: concrete checks/commands that prove acceptance scenarios and failure expectations.
 - **Next implementation tasks**: ordered checklist with observable acceptance per task.

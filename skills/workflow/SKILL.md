@@ -22,6 +22,8 @@ Classify the request:
 - **Normal change**: touches behavior, boundary semantics, or adds a feature.
 - **Big change**: cross-service work, migrations, or changes that affect multiple boundaries/teams.
 
+For this repo, **non-trivial = normal or big**.
+
 Rule: only create/expand specs and platform primitives when they reduce future drift for the expected scope.
 
 **Proportionality guide** (what to skip per scope):
@@ -32,7 +34,7 @@ Rule: only create/expand specs and platform primitives when they reduce future d
 | **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
 | **Big** | nothing | `plan`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
 
-### 0.5) Externalize the system model (for normal/big changes)
+### 0.5) Externalize the system model (for non-trivial changes)
 
 Before pattern/tool selection, write a compact model:
 
@@ -40,17 +42,24 @@ Before pattern/tool selection, write a compact model:
 - System sketch: boundary (in/out), time horizon, actors/incentives, key flows, top bottlenecks.
 - Reversibility signal: what evidence would make you change direction.
 
+Then, if the work involves choosing between 2+ viable approaches, the first Define-stage skill stress-tests the model with probes (later skills refine, never re-run). If the path is obvious, note `probes: skipped — single viable approach` and move on.
+
+- **Normal scope**: run Assumptions (facts vs assumptions, which to validate first), Second-Order Effects (what changes next week/quarter/year, new load/toil/coupling/failure modes, pre-mortem), and Opportunity Cost / Bias (what we're saying "no" to, sunk cost/familiarity/novelty check). Attach outputs to the decision table.
+- **Big scope or high ambiguity**: also run Feedback Loops (reinforcing/balancing loops, delays, accumulations — attach to system sketch).
+- **Escalate** to one template from [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) when: 3+ options with no clear winner, multiple stakeholders must align, rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
+
 ### 1) Define (what are we building?)
 
 Pick the minimal “definition artifacts” needed:
 
-- For **normal/big** changes, use `plan` early to produce an executable task list, trade-off table, and measurement ladder.
+- For **non-trivial** changes, use `plan` early to produce an executable task list, trade-off table, and measurement ladder.
 - If work changes externally visible behavior (API/WS/event schema, boundary error semantics, auth rules), **use `spec`** first:
   - update the relevant `specs/*.md` and/or `apps/<service>/spec/` bundle
   - update contracts (`contracts/`: OpenAPI/proto/WS docs)
   - write acceptance scenarios and failure-mode expectations
 - If the primary pressure is cross-service (partial failures, sagas, event-driven, domain boundaries), **use `architecture`**.
 - If the primary pressure is in-process design (construction/structure/behavior), **use `design`**.
+- If the work is a refactoring or boundary reorganization and empirical coupling data would help prioritize, **use `archobs`** before `architecture` or `design`.
 
 ### 2) Standardize (make it consistent)
 
@@ -92,13 +101,16 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `debug` → *(fix)* → `testing` → `finish`
 
 **Refactor (in-process)**:
-`design` → `patterns-*` → `testing` → `review` → `finish`
+`archobs` (optional) → `design` → `patterns-*` → `testing` → `review` → `finish`
 
 **New service**:
 `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `finish`
 
 **Cross-service feature**:
-`plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+`archobs` (optional) → `plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+
+**Architecture health pass**:
+`archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`
 
 **Security hardening pass**:
 `security` → `testing` → `review` (type: security) → `finish`
@@ -130,3 +142,4 @@ When you finish work, report:
 - Machine-readable skill index (triggers, tags, related, overhead): [`specs/skills-manifest.json`](../../specs/skills-manifest.json)
 - Workflow taxonomy: [`specs/003-taxonomy-and-workflow.md`](../../specs/003-taxonomy-and-workflow.md)
 - Change process: [`specs/004-change-process.md`](../../specs/004-change-process.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)

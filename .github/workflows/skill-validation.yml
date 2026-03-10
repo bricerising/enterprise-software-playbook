@@ -24,8 +24,9 @@ jobs:
       - name: Validate all skills
         run: |
           set -euo pipefail
-          for d in skills/*; do
-            [ -d "$d" ] || continue
+          for skill_md in skills/*/SKILL.md; do
+            [ -f "$skill_md" ] || continue
+            d="${skill_md%/SKILL.md}"
             python3 .system/skill-creator/scripts/quick_validate.py "$d"
           done
 
@@ -39,8 +40,9 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/skill-dist
           skill_count=0
-          for d in skills/*; do
-            [ -d "$d" ] || continue
+          for skill_md in skills/*/SKILL.md; do
+            [ -f "$skill_md" ] || continue
+            d="${skill_md%/SKILL.md}"
             python3 .system/skill-creator/scripts/package_skill.py "$d" /tmp/skill-dist
             skill_count=$((skill_count + 1))
           done

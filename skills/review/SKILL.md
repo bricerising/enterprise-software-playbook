@@ -29,7 +29,8 @@ Success looks like: findings that a developer can act on immediately (location +
    - Review type (default for PRs): `general | security | correctness | performance | maintainability | testing | architecture | resilience | api-design | accessibility`
    - Review artifact (preferred): PR link / diff / commit range / file list (vs “entire repo”)
    - Scope boundaries: default to **changed code + immediate call-chain context** unless user requests a full audit
-   - Which “workers” you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
+   - If review type is `architecture` and archobs data exists (`.archobs/artifacts/file_metrics.parquet`), load risk scores and cluster metrics to ground findings in measured coupling data
+   - Which "workers" you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
 2. **Create a temporary run directory (scratch)**
    - Create a temporary run directory (outside the repo, e.g. `mktemp -d`).
    - If you run multiple debates in one session, create one subfolder per debate (e.g. `debate-01/`, `debate-02/`).
@@ -54,6 +55,7 @@ Success looks like: findings that a developer can act on immediately (location +
 7. **Moderator post-pass**
    - Ensure every CONFIRMED item has: location, evidence, concrete failure mode, and a minimal fix direction.
    - Merge duplicates and collapse “same root cause” items into one finding where possible.
+   - For confirmed P0–P2 findings with systemic implications: add a 1-2 bullet systemic note (second-order effects, feedback-loop risk, opportunity cost if deferred).
 
 ## Guardrails
 
@@ -68,12 +70,13 @@ Success looks like: findings that a developer can act on immediately (location +
 ## References
 
 - `references/protocol.md`: format contract + prompt templates (base + per-type add-ons)
+- Recommendation Brief template (for critical findings needing stakeholder alignment): [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - Deeper checklists by review type (optional, this repo):
   - `security`: [`security`](../security/SKILL.md)
   - `resilience`: [`resilience`](../resilience/SKILL.md)
   - `testing` / `correctness`: [`testing`](../testing/SKILL.md)
   - `maintainability`: [`typescript`](../typescript/SKILL.md)
-  - `architecture`: [`architecture`](../architecture/SKILL.md), [`design`](../design/SKILL.md)
+  - `architecture`: [`architecture`](../architecture/SKILL.md), [`design`](../design/SKILL.md), [`archobs`](../archobs/SKILL.md) (for empirical coupling data)
   - `api-design`: [`spec`](../spec/SKILL.md), [`platform`](../platform/SKILL.md)
   - `performance`: [`observability`](../observability/SKILL.md) (measure + verify)
 
@@ -93,3 +96,6 @@ When you finish, return:
    - Suggested fix order and verification steps (tests, reproduction, rollout checks)
 5. **Contested items**
    - What would settle each (specific check)
+6. **Systemic risks** (for confirmed P0–P2 findings with systemic implications)
+   - Second-order effects, feedback loops, and opportunity cost if unresolved
+   - For critical findings needing stakeholder alignment, suggest running the **Recommendation Brief** template separately ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md))

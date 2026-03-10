@@ -18,15 +18,22 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 ## Workflow
 
+0. **Check for archobs data** (optional): If `.archobs/artifacts/file_metrics.parquet` exists, read the risk scores and coupling signals for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator.
+
 1. Decide whether the context is **scriptic vs systemic** (short-lived script vs long-lived system). Set policies for boundary validation, error semantics, and ownership/lifetimes.
 2. Restate the problem as: **what varies** and **what must stay stable** (API, data model, timing, performance).
 3. Identify the main pressure:
    - **Creation** pressure: hard-to-test construction, many variants, environment-specific families.
    - **Structure** pressure: wrapping/combining objects, incompatible interfaces, indirection, memory sharing.
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
-4. Pick 1 primary pattern (avoid “pattern soup”). Add a 2nd only if it addresses a different pressure.
-5. Validate with 2 examples: a “happy path” and a likely future change.
-6. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
+4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
+5. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(include in output trade-offs)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? *(include in output trade-offs)*
+   - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(include in output trade-offs)*
+   - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
+6. Validate with 2 examples: a "happy path" and a likely future change.
+7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
 
 ## Clarifying Questions
 
@@ -92,16 +99,18 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 ## References
 
+- Empirical coupling data to inform pattern choice: [`archobs`](../archobs/SKILL.md)
 - If the pressure is cross-service/system-level: [`architecture`](../architecture/SKILL.md)
 - If you need a concrete implementation guide: [`patterns-creational`](../patterns-creational/SKILL.md), [`patterns-structural`](../patterns-structural/SKILL.md), [`patterns-behavioral`](../patterns-behavioral/SKILL.md)
 - If the seam should be shared across services: [`platform`](../platform/SKILL.md)
-- If you’re in TypeScript and hitting systemic constraints (boundaries/lifetimes/errors): [`typescript`](../typescript/SKILL.md)
+- If you're in TypeScript and hitting systemic constraints (boundaries/lifetimes/errors): [`typescript`](../typescript/SKILL.md)
+- Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
 
 ## Output Template
 
 When recommending a pattern, return:
 
 - 1–2 sentences: pattern + why it fits this problem (what changes, what stays stable).
-- Trade-offs and 1 alternative (“no pattern” option included).
+- Trade-offs and 1 alternative ("no pattern" option included), with assumptions (facts vs assumptions) and opportunity costs if probes were run.
 - A minimal implementation plan (roles/interfaces, wiring point, tests).
 - If implementing: small skeleton + one example call site.

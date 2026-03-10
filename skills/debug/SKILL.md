@@ -1,7 +1,7 @@
 ---
 name: debug
 description: "Triage and diagnose production or local issues by following logs → traces → metrics (HTTP/gRPC/async). Use when investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app. NOT for adding new instrumentation (use observability); NOT for applying resilience patterns (use resilience)."
-metadata: {"stage":"Harden","tags":["incident-response","triage","logs","tracing","metrics","production-issue","5xx","latency","regression"],"aliases":["diagnose","troubleshoot","investigate","triage","incident","production-bug","outage"]}
+metadata: {"stage":"Harden","tags":["incident-response","triage","logs","tracing","metrics","production-issue","5xx","latency","regression","postmortem"],"aliases":["diagnose","troubleshoot","investigate","triage","incident","production-bug","outage","incident-review"]}
 ---
 
 # Debug (Log → Trace → Metrics)
@@ -101,6 +101,7 @@ If you found a systemic gap, capture it:
 
 - Copy/paste commands: [`references/commands.md`](references/commands.md)
 - Scenario checklists (HTTP/gRPC/consumers): [`references/scenarios.md`](references/scenarios.md)
+- Retrospective / Postmortem template: [`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md)
 - If telemetry is missing: [`observability`](../observability/SKILL.md)
 
 ## Output Template
@@ -116,3 +117,4 @@ When using this skill, return:
 - **Mitigation**: what you did / recommend doing now (rollback/flag/scale).
 - **Fix plan**: code/config changes to make it correct and durable.
 - **Follow-ups**: telemetry gaps, runbook updates, tests, new invariants.
+  - If root cause is systemic, flag for a follow-up retrospective ([`../references/structured-thinking-templates.md`](../references/structured-thinking-templates.md) — Retrospective / Postmortem).

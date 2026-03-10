@@ -19,6 +19,7 @@ For non-trivial work, externalize first:
 - one-page system sketch (boundary/time horizon, actors/incentives, key flows, bottlenecks)
 - compact decision table (options, trade-offs, kill criteria)
 - measurement ladder (leading/lagging indicators, owner/cadence, action trigger)
+- structured-thinking probes (assumptions, second-order effects, opportunity cost/bias; add feedback loops for big-scope or high-ambiguity work)
 
 If you change a boundary contract/semantics (HTTP/gRPC/events/WS), update specs/contracts first and pin behavior with tests.
 
@@ -42,7 +43,7 @@ Before implementing, write or update the relevant spec bundle:
 - Service-level: apps/<service>/spec/ (spec.md, contracts/, plan.md, tasks.md, quickstart.md)
 
 Include: acceptance scenarios, edge cases, failure-mode expectations, and a verification plan.
-Also include: objective function, system sketch, decision table, measurement ladder, and kill criteria.
+Also include: objective function, system sketch, decision table, structured-thinking probe, measurement ladder, and kill criteria.
 ```
 
 ### Create an implementation plan (tasks + verification)
@@ -54,7 +55,7 @@ Task: <what do you want to build/fix?>
 
 Produce an ordered checklist of tasks with acceptance checks and exact verification commands (or ask once if unknown).
 Keep it short and reversible.
-Include: system sketch, decision table, blast-radius check, and measurement ladder.
+Include: system sketch, decision table, structured-thinking probe, blast-radius check, and measurement ladder.
 ```
 
 ### Choose a system/architecture pattern
@@ -66,7 +67,22 @@ Context: <system pressure(s): partial failures, consistency, cross-service workf
 Constraints: <latency/SLOs, scalability, team boundaries, compliance>
 
 Recommend the smallest viable pattern(s), risks/anti-patterns, and a validation plan.
-Include: options table, what each option worsens, kill criteria, and a failure-propagation map.
+Include: options table, what each option worsens, opportunity cost, kill criteria, pre-mortem risks, and a failure-propagation map.
+```
+
+### Measure architecture health before refactoring
+
+```text
+Use archobs (read skills/archobs/SKILL.md).
+
+Target repo: <path>
+Goal: Measure coupling, boundary leakage, and risk hotspots before choosing a refactoring or architecture change.
+
+Run the full analysis and report:
+- top risk files
+- leakiest clusters
+- drift assessment
+- the next skill to invoke based on the dominant findings
 ```
 
 ### Choose an in-process/design pattern
@@ -187,6 +203,58 @@ Before calling the work done:
 - report two packets:
   - executive packet (goal, decision/bet, risks, signals/ritual, next step)
   - engineer packet (what changed, verification, risks/follow-ups)
+- include a short learning loop (outcome vs expectation, assumption confirmed or updated, one owner-backed improvement if expectations diverged)
+```
+
+## Structured Thinking (decision-quality add-ons)
+
+These prompts **augment** the normal skill workflows above with deeper decision stress-testing via template packs. They do not replace the skill's own workflow — the skill still runs its full playbook (pattern chooser, clarifying questions, implementation tactics, etc.).
+
+For most non-trivial work, the compact probes built into each skill are sufficient. Use these add-on prompts when escalation criteria are met: 3+ options with no clear winner, multiple stakeholders must align, rollback/incident needs formal learning capture, or big-scope probes surfaced unresolved ambiguity.
+
+Full template details live in `skills/references/structured-thinking-templates.md`. Compact probe index lives in `skills/references/structured-thinking-checklists.md`.
+
+### Run a technical design review
+
+```text
+Use architecture (read skills/architecture/SKILL.md).
+Design for: <system/boundary being designed>
+Additionally, run the Technical Design Review template for deeper decision stress-testing
+(see skills/references/structured-thinking-templates.md — Technical Design Review).
+Prioritize: assumptions, feedback loops, second-order effects.
+```
+
+### Run a trade-off / project decision analysis
+
+```text
+Use plan (read skills/plan/SKILL.md).
+Decision: <what are we choosing between?>
+Options: <list options, including status quo>
+Additionally, run the Trade-Off / Project Decision template for deeper analysis
+(see skills/references/structured-thinking-templates.md — Trade-Off / Project Decision).
+Prioritize: assumptions, opportunity cost, second-order effects.
+```
+
+### Run a retrospective / postmortem
+
+```text
+Use finish (read skills/finish/SKILL.md) for delivery learning,
+ or debug (read skills/debug/SKILL.md) for incident triage.
+Context: <what happened — delivery, incident, or rollback>
+Additionally, run the Retrospective / Postmortem template for formal learning capture
+(see skills/references/structured-thinking-templates.md — Retrospective / Postmortem).
+Prioritize: learning loop (outcome vs expectation, assumption update, owner-backed action).
+```
+
+### Frame a technical recommendation for async review
+
+```text
+Use finish (read skills/finish/SKILL.md).
+Recommendation: <what action/decision this PR/ADR is requesting>
+Reviewers: <who will review and approve>
+Additionally, run the Recommendation Brief template for structured async review framing
+(see skills/references/structured-thinking-templates.md — Recommendation Brief).
+Prioritize: evidence, counterpoints, explicit owner + next step.
 ```
 
 ## Mechanics (in-process building blocks)

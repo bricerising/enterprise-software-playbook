@@ -28,6 +28,7 @@ PATTERN_SKILLS = {
     "patterns-behavioral",
 }
 STAGE_NAMES = ("Define", "Standardize", "Harden", "Verify", "Mechanics")
+NON_SKILL_SUBDIRS = {"references"}
 
 
 def _load_text(path: Path) -> str:
@@ -236,6 +237,39 @@ def _check_manifest(repo_root: Path, skill_names: list[str], errors: list[str]) 
             )
 
 
+def _check_markdown_links(skills_root: Path, errors: list[str]) -> None:
+    """Verify that relative markdown links in skill .md files resolve to existing files."""
+    link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+\.md(?:#[^)]+)?)\)")
+
+    def _strip_fenced_code_blocks(markdown: str) -> str:
+        lines: list[str] = []
+        in_fence = False
+        for line in markdown.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if not in_fence:
+                lines.append(line)
+        return "\n".join(lines)
+
+    for md_file in sorted(skills_root.rglob("*.md")):
+        content = _strip_fenced_code_blocks(md_file.read_text())
+        for match in link_pattern.finditer(content):
+            target = match.group(1).strip()
+            if target.startswith("http://") or target.startswith("https://"):
+                continue
+            target_path = target.split("#", 1)[0]
+            if not target_path or target_path.startswith("/"):
+                continue
+            resolved = (md_file.parent / target_path).resolve()
+            if not resolved.exists():
+                rel_source = md_file.relative_to(skills_root.parent)
+                errors.append(
+                    f"Broken link in {rel_source}: '{target}' does not resolve to a file"
+                )
+
+
 def run_checks(repo_root: Path) -> list[str]:
     errors: list[str] = []
 
@@ -249,14 +283,30 @@ def run_checks(repo_root: Path) -> list[str]:
     if not skills_root.is_dir():
         return [f"Missing skills directory: {skills_root}"]
 
+    skill_dirs = sorted(
+        (skill_dir for skill_dir in skills_root.iterdir() if skill_dir.is_dir()),
+        key=lambda path: path.name,
+    )
+    for skill_dir in skill_dirs:
+        if skill_dir.name.startswith(".") or skill_dir.name in NON_SKILL_SUBDIRS:
+            continue
+        if not (skill_dir / "SKILL.md").exists():
+            rel_dir = skill_dir.relative_to(repo_root)
+            errors.append(f"Skill directory missing SKILL.md: {rel_dir}")
+
     skill_names = sorted(
-        skill_dir.name for skill_dir in skills_root.iterdir() if skill_dir.is_dir()
+        skill_dir.name
+        for skill_dir in skill_dirs
+        if (skill_dir / "SKILL.md").exists()
+        and not skill_dir.name.startswith(".")
+        and skill_dir.name not in NON_SKILL_SUBDIRS
     )
     _check_headings(readme_text, prompts_text, errors)
     _check_readme_skills(skill_names, readme_text, errors)
     _check_prompt_skills(skill_names, prompts_text, errors)
     _check_finish_order(prompts_text, errors)
     _check_manifest(repo_root, skill_names, errors)
+    _check_markdown_links(skills_root, errors)
     return errors
 
 

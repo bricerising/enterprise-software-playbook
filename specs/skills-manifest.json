@@ -1,26 +1,34 @@
 {
   "version": 2,
-  "updated": "2026-02-08",
+  "updated": "2026-03-10",
   "stages": {
-    "Define": ["workflow", "plan", "spec", "architecture", "design"],
+    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
     "Verify": ["testing", "review", "finish"],
     "Mechanics": ["patterns-creational", "patterns-structural", "patterns-behavioral"]
   },
   "skills": {
+    "archobs": {
+      "path": "skills/archobs/SKILL.md",
+      "stage": "Define",
+      "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
+      "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
+      "related": ["architecture", "design", "plan", "review", "finish"],
+      "overhead": "moderate"
+    },
     "architecture": {
       "path": "skills/architecture/SKILL.md",
       "stage": "Define",
       "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga"],
       "trigger": "Work spans multiple services/processes or needs eventual consistency or clearer integration seams.",
-      "related": ["design", "resilience", "platform", "spec"],
+      "related": ["design", "resilience", "platform", "spec", "archobs"],
       "overhead": "significant"
     },
     "debug": {
       "path": "skills/debug/SKILL.md",
       "stage": "Harden",
-      "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression"],
+      "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression", "postmortem"],
       "trigger": "Investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app.",
       "related": ["observability", "resilience"],
       "overhead": "minimal"
@@ -30,15 +38,15 @@
       "stage": "Define",
       "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process"],
       "trigger": "Need to choose an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
-      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript"],
+      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs"],
       "overhead": "minimal"
     },
     "finish": {
       "path": "skills/finish/SKILL.md",
       "stage": "Verify",
-      "tags": ["definition-of-done", "verification", "release-readiness", "change-summary", "ship", "merge-readiness", "checklist"],
+      "tags": ["definition-of-done", "verification", "release-readiness", "change-summary", "ship", "merge-readiness", "checklist", "learning-loop", "retrospective", "owner-backed-actions"],
       "trigger": "End of non-trivial work — run verification, spot-check boundaries, produce change summary before merge/release.",
-      "related": ["testing", "review", "spec"],
+      "related": ["testing", "review", "spec", "archobs"],
       "overhead": "minimal"
     },
     "observability": {
@@ -78,7 +86,7 @@
       "stage": "Define",
       "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table"],
       "trigger": "Non-trivial, cross-cutting, or ambiguous work that needs a scoped task breakdown before starting.",
-      "related": ["spec", "workflow", "architecture"],
+      "related": ["spec", "workflow", "architecture", "archobs"],
       "overhead": "moderate"
     },
     "platform": {
@@ -102,7 +110,7 @@
       "stage": "Verify",
       "tags": ["code-review", "adversarial-review", "findings", "moderation", "risk-analysis", "pr-review", "pull-request", "debate"],
       "trigger": "Want a thorough, multi-perspective adversarial review of code changes, a PR, or a design.",
-      "related": ["testing", "security", "finish"],
+      "related": ["testing", "security", "finish", "archobs"],
       "overhead": "significant"
     },
     "security": {
@@ -142,7 +150,7 @@
       "stage": "Define",
       "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router"],
       "trigger": "General request without a named skill — auto-select and sequence the right skills for the work.",
-      "related": ["plan", "spec", "finish"],
+      "related": ["plan", "spec", "finish", "archobs"],
       "overhead": "minimal"
     }
   }
