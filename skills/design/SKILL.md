@@ -18,6 +18,8 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 ## Workflow
 
+0. **Check for archobs data** (optional): If `.archobs/artifacts/file_metrics.parquet` exists, read the risk scores and coupling signals for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator.
+
 1. Decide whether the context is **scriptic vs systemic** (short-lived script vs long-lived system). Set policies for boundary validation, error semantics, and ownership/lifetimes.
 2. Restate the problem as: **what varies** and **what must stay stable** (API, data model, timing, performance).
 3. Identify the main pressure:
@@ -97,6 +99,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 ## References
 
+- Empirical coupling data to inform pattern choice: [`archobs`](../archobs/SKILL.md)
 - If the pressure is cross-service/system-level: [`architecture`](../architecture/SKILL.md)
 - If you need a concrete implementation guide: [`patterns-creational`](../patterns-creational/SKILL.md), [`patterns-structural`](../patterns-structural/SKILL.md), [`patterns-behavioral`](../patterns-behavioral/SKILL.md)
 - If the seam should be shared across services: [`platform`](../platform/SKILL.md)

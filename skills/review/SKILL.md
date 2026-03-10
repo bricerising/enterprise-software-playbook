@@ -29,6 +29,7 @@ Success looks like: findings that a developer can act on immediately (location +
    - Review type (default for PRs): `general | security | correctness | performance | maintainability | testing | architecture | resilience | api-design | accessibility`
    - Review artifact (preferred): PR link / diff / commit range / file list (vs “entire repo”)
    - Scope boundaries: default to **changed code + immediate call-chain context** unless user requests a full audit
+   - If review type is `architecture` and archobs data exists (`.archobs/artifacts/file_metrics.parquet`), load risk scores and cluster metrics to ground findings in measured coupling data
    - Which "workers" you can call (other models, other agents, humans), or whether you will role-play the workers yourself.
 2. **Create a temporary run directory (scratch)**
    - Create a temporary run directory (outside the repo, e.g. `mktemp -d`).
@@ -75,7 +76,7 @@ Success looks like: findings that a developer can act on immediately (location +
   - `resilience`: [`resilience`](../resilience/SKILL.md)
   - `testing` / `correctness`: [`testing`](../testing/SKILL.md)
   - `maintainability`: [`typescript`](../typescript/SKILL.md)
-  - `architecture`: [`architecture`](../architecture/SKILL.md), [`design`](../design/SKILL.md)
+  - `architecture`: [`architecture`](../architecture/SKILL.md), [`design`](../design/SKILL.md), [`archobs`](../archobs/SKILL.md) (for empirical coupling data)
   - `api-design`: [`spec`](../spec/SKILL.md), [`platform`](../platform/SKILL.md)
   - `performance`: [`observability`](../observability/SKILL.md) (measure + verify)
 

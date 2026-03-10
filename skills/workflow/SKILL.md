@@ -59,6 +59,7 @@ Pick the minimal “definition artifacts” needed:
   - write acceptance scenarios and failure-mode expectations
 - If the primary pressure is cross-service (partial failures, sagas, event-driven, domain boundaries), **use `architecture`**.
 - If the primary pressure is in-process design (construction/structure/behavior), **use `design`**.
+- If the work is a refactoring or boundary reorganization and empirical coupling data would help prioritize, **use `archobs`** before `architecture` or `design`.
 
 ### 2) Standardize (make it consistent)
 
@@ -100,13 +101,16 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `debug` → *(fix)* → `testing` → `finish`
 
 **Refactor (in-process)**:
-`design` → `patterns-*` → `testing` → `review` → `finish`
+`archobs` (optional) → `design` → `patterns-*` → `testing` → `review` → `finish`
 
 **New service**:
 `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `finish`
 
 **Cross-service feature**:
-`plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+`archobs` (optional) → `plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+
+**Architecture health pass**:
+`archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`
 
 **Security hardening pass**:
 `security` → `testing` → `review` (type: security) → `finish`

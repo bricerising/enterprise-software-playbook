@@ -35,6 +35,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - timeouts/cancellation/retry safety (`resilience`)
    - authn/authz + input validation + safe logging (`security`)
    - logs/traces/metrics correlation + low-cardinality labels (`observability`)
+   - architecture health regression (if archobs data exists): re-run `archobs report --suggestions-provider rules` and verify that top file risk scores and cluster leakage did not increase compared to the previous run (`archobs`)
 4. Cleanup:
    - remove dead code, debug logs, commented-out blocks
    - ensure errors are actionable and don’t leak secrets/PII
@@ -60,6 +61,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
 
 ## References
 
+- Architecture health regression checks: [`archobs`](../archobs/SKILL.md)
 - CI quality workflow template: [`../../specs/templates/ci/github-actions-quality.yml`](../../specs/templates/ci/github-actions-quality.yml)
 - Change workflow: [`../../specs/004-change-process.md`](../../specs/004-change-process.md)
 - Structured-thinking references (learning loop, retrospective, recommendation brief): [`../references/`](../references/)
