@@ -70,6 +70,21 @@ Recommend the smallest viable pattern(s), risks/anti-patterns, and a validation 
 Include: options table, what each option worsens, opportunity cost, kill criteria, pre-mortem risks, and a failure-propagation map.
 ```
 
+### Measure architecture health before refactoring
+
+```text
+Use archobs (read skills/archobs/SKILL.md).
+
+Target repo: <path>
+Goal: Measure coupling, boundary leakage, and risk hotspots before choosing a refactoring or architecture change.
+
+Run the full analysis and report:
+- top risk files
+- leakiest clusters
+- drift assessment
+- the next skill to invoke based on the dominant findings
+```
+
 ### Choose an in-process/design pattern
 
 ```text

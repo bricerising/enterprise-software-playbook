@@ -49,6 +49,7 @@ Please review this enterprise web application.
 - [`skills/spec/`](skills/spec/SKILL.md): Write specs, contracts, plans, and task lists so agents converge on cohesive solutions.
 - [`skills/architecture/`](skills/architecture/SKILL.md): Choose the smallest system pattern(s) for cross-service pressures.
 - [`skills/design/`](skills/design/SKILL.md): Choose the smallest code pattern(s) for in-process design pressures.
+- [`skills/archobs/`](skills/archobs/SKILL.md): Measure coupling, boundary health, and risk hotspots before architecture or refactoring decisions.
 
 **Standardize (make it consistent)**
 
