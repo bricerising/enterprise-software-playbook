@@ -39,11 +39,13 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    done
    ```
 
-3. **Run full analysis**:
+3. **Run full analysis (blocking — wait for completion)**:
    ```bash
    archobs report --repo <path> --out .archobs --suggestions-provider rules
    ```
    Use `--suggestions-provider rules` (the default) when running inside a skill — the rule-based engine is fast, deterministic, and produces structured suggestions that the current session can interpret directly.
+
+   **Do not proceed to step 4 until the report command has finished.** Steps 4–6 depend on the artifacts produced by this command (parquet files in `.archobs/artifacts/` and the HTML report in `.archobs/report/`). If the command is run in the background, wait for it to complete before continuing.
 
 4. **Interpret key metrics** (see [`references/interpreting-metrics.md`](references/interpreting-metrics.md)):
 
