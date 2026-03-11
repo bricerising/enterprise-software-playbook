@@ -59,7 +59,7 @@ Pick the minimal “definition artifacts” needed:
   - write acceptance scenarios and failure-mode expectations
 - If the primary pressure is cross-service (partial failures, sagas, event-driven, domain boundaries), **use `architecture`**.
 - If the primary pressure is in-process design (construction/structure/behavior), **use `design`**.
-- For non-trivial changes, **use `archobs`** before `architecture` or `design` to ground decisions in empirical coupling, boundary health, and risk data.
+- For non-trivial changes, **run `archobs` and wait for its report to complete** before proceeding to `architecture` or `design`. Downstream skills depend on archobs output (risk scores, boundary leakage, cluster assignments) to make evidence-based decisions — do not continue until the report is available.
 
 ### 2) Standardize (make it consistent)
 

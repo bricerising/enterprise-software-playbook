@@ -14,11 +14,11 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 ## Workflow
 
-0. **Gather empirical data** (optional but recommended):
-   - If `archobs` is available, run `archobs report --suggestions-provider rules` on the target repo to get measured coupling, boundary health, and risk hotspots.
+0. **Gather empirical data** (required — wait for completion):
+   - If `.archobs/artifacts/file_metrics.parquet` already exists and is newer than the most recent commit, reuse it; otherwise run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for the report to complete** before continuing.
    - Use cluster leakage data to identify where boundaries are already porous.
    - Use file-level risk scores to focus on the highest-impact areas.
-   - Skip this step if the repo is too small (< 10 files) or if time constraints preclude analysis.
+   - Skip this step only if the repo is too small (< 10 files) for meaningful analysis.
 
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)
