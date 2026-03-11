@@ -40,10 +40,26 @@ done
 ln -sf ~/.codex/enterprise-software-playbook/specs/skills-manifest.json ~/.codex/skills/skills-manifest.json
 ```
 
+3) Install tools:
+
+```bash
+# archobs — architecture observability CLI (requires Python 3.11+)
+
+# Install Codanna (provides semantic search embeddings)
+# macOS
+brew install codanna
+# Linux / other
+# curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+
+pip install -e "$HOME/.codex/enterprise-software-playbook/tools/archobs[full]"
+```
+
 ## Verify
 
 ```bash
 test -f ~/.codex/skills/workflow/SKILL.md && echo "OK: workflow installed"
+command -v codanna >/dev/null 2>&1 && echo "OK: codanna installed"
+archobs --help >/dev/null 2>&1 && echo "OK: archobs installed"
 ```
 
 ## Use
