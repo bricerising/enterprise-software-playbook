@@ -25,7 +25,7 @@ Python, TypeScript, JavaScript (including `.tsx`, `.jsx`, `.mjs`, `.cjs`), and J
 
 - Python 3.11+
 - A Git repository with some history
-- [Codanna](https://codanna.dev) — a CLI that generates semantic search embeddings for file similarity. Maintained by [@bricerising](https://github.com/bricerising).
+- [Codanna](https://codanna.dev) — a CLI that generates semantic search embeddings for file similarity.
 
 ## Install
 
