@@ -14,6 +14,17 @@ This repo is an opinionated system. Changes should preserve coherence and prompt
 - Keep `SKILL.md` lean; put depth in `references/` (progressive disclosure).
 - Prefer cross-links between skills over duplicating content.
 
+## Tool subprojects
+
+The `tools/` directory contains bundled tool implementations (e.g., `tools/archobs/`). Each tool is a self-contained project with its own package manifest, license, and tests.
+
+When modifying a tool subproject:
+
+- Run the tool's own tests: `pytest -q tools/<tool>/tests`
+- Keep the corresponding skill docs (`skills/<name>/references/`) aligned with tool behavior.
+- Tool subprojects may have different licenses than the top-level repo (e.g., MIT for archobs). Preserve license files within the tool directory.
+- See `specs/decisions/015-vendor-archobs-tool.md` for the rationale behind this pattern.
+
 ## Verification
 
 - Validate changed skills: `python3 .system/skill-creator/scripts/quick_validate.py skills/<skill-folder>`

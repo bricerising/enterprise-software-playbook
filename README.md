@@ -91,6 +91,10 @@ These skills bias toward practices that make codebases easier for humans to oper
 - Treat expected failures as data (typed results) instead of exceptions.
 - Use design patterns as names for proven structures, not as goals.
 
+## Bundled tools
+
+- [`tools/archobs/`](tools/archobs/README.md): Architecture observability CLI — measures coupling, boundary health, risk hotspots, and drift. Install with `pip install -e 'tools/archobs[full]'`. This is the implementation behind the [`archobs` skill](skills/archobs/SKILL.md).
+
 ## Docs
 
 - Prompt recipes: [`PROMPTS.md`](PROMPTS.md)

@@ -24,9 +24,9 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 ## Workflow
 
 1. **Check prerequisites**:
-   - Verify `archobs` is installed: `pip install archobs` or `pip install -e '.[full]'` from the archobs repo
+   - Install codanna: `brew install codanna` (macOS) or `curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh` (Linux)
+   - Install `archobs` from the bundled tool: `pip install -e 'tools/archobs[full]'`
    - Verify the target repo has git history (`git log` must succeed)
-   - Note optional dependencies: `leidenalg` for higher-quality clustering, a semantic embedding provider for richer signal
 
 2. **Initialize workspace** (first run only):
    ```bash
@@ -43,7 +43,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```bash
    archobs report --repo <path> --out .archobs --suggestions-provider rules
    ```
-   Use `--suggestions-provider rules` (the default) when running inside a skill — the rule-based engine is fast, deterministic, and produces structured suggestions that the current session can interpret directly. The `claude`/`codex`/`auto` providers spawn external LLM subprocesses and are only useful for standalone automation (e.g. `arch-loop.sh`) where suggestions must be self-contained prompts fed to a separate agent.
+   Use `--suggestions-provider rules` (the default) when running inside a skill — the rule-based engine is fast, deterministic, and produces structured suggestions that the current session can interpret directly.
 
 4. **Interpret key metrics** (see [`references/interpreting-metrics.md`](references/interpreting-metrics.md)):
 
@@ -111,6 +111,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 ## References
 
 - Interpreting archobs metrics: [`references/interpreting-metrics.md`](references/interpreting-metrics.md)
+- Running archobs locally: [`references/running-archobs.md`](references/running-archobs.md)
+- Tool source and standalone docs: [`tools/archobs/README.md`](../../tools/archobs/README.md)
 
 ## Output Template
 
