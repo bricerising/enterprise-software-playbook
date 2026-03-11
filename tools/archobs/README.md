@@ -24,12 +24,12 @@ Python, TypeScript, JavaScript (including `.tsx`, `.jsx`, `.mjs`, `.cjs`), and J
 ## Requirements
 
 - Python 3.11+
-- [Codanna](https://codanna.dev) — provides semantic search embeddings
 - A Git repository with some history
+- [Codanna](https://codanna.dev) — a CLI that generates semantic search embeddings for file similarity. Maintained by [@bricerising](https://github.com/bricerising).
 
 ## Install
 
-Install codanna, then install archobs from the playbook repo root:
+Install Codanna, then install archobs from the playbook repo root:
 
 ```bash
 # macOS

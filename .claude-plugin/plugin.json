@@ -1,0 +1,5 @@
+{
+  "name": "enterprise-software-playbook",
+  "description": "Opinionated agent skills for cohesive enterprise software: workflow, architecture, patterns, testing, security, observability, and more.",
+  "version": "1.0.0"
+}

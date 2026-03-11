@@ -45,7 +45,8 @@ ln -sf ~/.codex/enterprise-software-playbook/specs/skills-manifest.json ~/.codex
 ```bash
 # archobs — architecture observability CLI (requires Python 3.11+)
 
-# Install Codanna (provides semantic search embeddings)
+# Install Codanna — semantic search embedding CLI (https://codanna.dev)
+# Maintained by @bricerising; used by archobs for file-similarity signals.
 # macOS
 brew install codanna
 # Linux / other

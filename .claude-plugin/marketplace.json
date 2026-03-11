@@ -1,0 +1,38 @@
+{
+  "name": "enterprise-software-playbook",
+  "owner": {
+    "name": "Brice Rising"
+  },
+  "metadata": {
+    "description": "Opinionated agent skills for cohesive, high-quality enterprise software"
+  },
+  "plugins": [
+    {
+      "name": "enterprise-software-playbook",
+      "source": {
+        "source": "github",
+        "repo": "bricerising/enterprise-software-playbook"
+      },
+      "description": "18 composable skills for enterprise web apps: workflow routing, architecture, design patterns, security, resilience, observability, testing, code review, and more.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Brice Rising"
+      },
+      "homepage": "https://github.com/bricerising/enterprise-software-playbook",
+      "repository": "https://github.com/bricerising/enterprise-software-playbook",
+      "license": "MIT",
+      "keywords": [
+        "enterprise",
+        "architecture",
+        "design-patterns",
+        "testing",
+        "security",
+        "observability",
+        "resilience",
+        "code-review",
+        "typescript"
+      ],
+      "category": "development"
+    }
+  ]
+}
