@@ -31,8 +31,8 @@ Rule: only create/expand specs and platform primitives when they reduce future d
 | Scope | Skip | Always apply | Use if relevant |
 | --- | --- | --- | --- |
 | **Tiny** | `plan`, `spec`, `architecture`, `design`, `platform`, `review`, `finish` | `typescript` (if TS) | `testing` (if behavior changed) |
-| **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
-| **Big** | nothing | `plan`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
+| **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `archobs`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
+| **Big** | nothing | `plan`, `archobs`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
 
 ### 0.5) Externalize the system model (for non-trivial changes)
 
@@ -59,7 +59,7 @@ Pick the minimal “definition artifacts” needed:
   - write acceptance scenarios and failure-mode expectations
 - If the primary pressure is cross-service (partial failures, sagas, event-driven, domain boundaries), **use `architecture`**.
 - If the primary pressure is in-process design (construction/structure/behavior), **use `design`**.
-- If the work is a refactoring or boundary reorganization and empirical coupling data would help prioritize, **use `archobs`** before `architecture` or `design`.
+- For non-trivial changes, **use `archobs`** before `architecture` or `design` to ground decisions in empirical coupling, boundary health, and risk data.
 
 ### 2) Standardize (make it consistent)
 
@@ -101,13 +101,13 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `debug` → *(fix)* → `testing` → `finish`
 
 **Refactor (in-process)**:
-`archobs` (optional) → `design` → `patterns-*` → `testing` → `review` → `finish`
+`archobs` → `design` → `patterns-*` → `testing` → `review` → `finish`
 
 **New service**:
 `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `finish`
 
 **Cross-service feature**:
-`archobs` (optional) → `plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
+`archobs` → `plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
 
 **Architecture health pass**:
 `archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`
