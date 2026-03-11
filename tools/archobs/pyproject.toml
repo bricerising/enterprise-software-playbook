@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archobs"
+version = "0.1.0"
+description = "Architecture observability via graph analysis for Git repositories."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "OpenAI Codex"}
+]
+dependencies = [
+  "networkx>=3.0",
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "pyarrow>=11.0.0",
+  "typer>=0.12,<1.0",
+]
+
+[project.optional-dependencies]
+graph = [
+  "python-igraph>=0.11",
+  "leidenalg>=0.10",
+  "pyvis>=0.3",
+]
+parsing = [
+  "tree-sitter>=0.21",
+]
+full = [
+  "python-igraph>=0.11",
+  "leidenalg>=0.10",
+  "pyvis>=0.3",
+  "tree-sitter>=0.21",
+]
+
+[project.scripts]
+archobs = "archobs.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

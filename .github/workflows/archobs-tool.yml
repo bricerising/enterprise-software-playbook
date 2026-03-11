@@ -1,0 +1,46 @@
+name: Archobs Tool
+
+on:
+  push:
+    paths:
+      - 'tools/archobs/**'
+  pull_request:
+    paths:
+      - 'tools/archobs/**'
+
+permissions: read-all
+
+jobs:
+  test:
+    name: Test Archobs Tool
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: tools/archobs/pyproject.toml
+
+      - name: Install codanna
+        run: curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+
+      - name: Install archobs (core)
+        run: pip install -e 'tools/archobs'
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          python -m archobs --help
+          archobs --help
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run unit tests
+        run: pytest -q tools/archobs/tests

@@ -9,3 +9,15 @@ dist
 !.system/skill-creator/scripts/package_skill.py
 !.system/skill-creator/scripts/check_repo_consistency.py
 review.txt
+
+# archobs tool artifacts (generated, never commit)
+.archobs/
+.codanna/
+.codannaignore
+.fastembed_cache
+
+# Python (for tools/ subprojects)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
