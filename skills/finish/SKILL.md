@@ -35,7 +35,7 @@ Turn “it works on my machine” into “this is ready to ship” by running ve
    - timeouts/cancellation/retry safety (`resilience`)
    - authn/authz + input validation + safe logging (`security`)
    - logs/traces/metrics correlation + low-cardinality labels (`observability`)
-   - architecture health regression: run `archobs report --suggestions-provider rules` and **wait for the report to complete** before proceeding — then verify that top file risk scores and cluster leakage did not increase compared to the previous run; if no prior `.archobs/` baseline exists, create one now so future runs can detect regressions (`archobs`)
+   - architecture health regression: run `archobs report --suggestions-provider rules` and **wait for the report to complete** — then run `archobs show summary --format json` and `archobs show risks --top 5 --format json` to verify that top file risk scores and cluster leakage did not increase compared to the previous run; if no prior `.archobs/` baseline exists, create one now so future runs can detect regressions (`archobs`)
 4. Cleanup:
    - remove dead code, debug logs, commented-out blocks
    - ensure errors are actionable and don’t leak secrets/PII

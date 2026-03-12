@@ -14,7 +14,7 @@ The fused graph is partitioned into clusters (subsystems) using community detect
 
 ## File-Level Metrics
 
-Found in `.archobs/artifacts/file_metrics.parquet`.
+Query with `archobs show risks --format json` (or read `.archobs/file_metrics.parquet` directly).
 
 ### `risk` (0.0 - 1.0)
 
@@ -53,7 +53,7 @@ Graph centrality: how often this file appears on shortest paths between other fi
 
 ## Cluster-Level Metrics
 
-Found in `.archobs/artifacts/cluster_metrics.parquet`.
+Query with `archobs show clusters --format json` (or read `.archobs/cluster_metrics.parquet` directly).
 
 ### `leakage` (0.0 - 1.0)
 
@@ -82,7 +82,7 @@ Average and maximum file-level risk within the cluster. Clusters with high `risk
 
 ## Drift Metrics
 
-Found in `.archobs/artifacts/drift.parquet`.
+Query with `archobs show drift --format json` (or read `.archobs/drift.parquet` directly).
 
 ### `ari_prev` — Adjusted Rand Index (−1.0 to 1.0)
 

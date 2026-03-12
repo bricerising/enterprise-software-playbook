@@ -25,7 +25,7 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - impacted components/services
    - impacted boundaries/contracts (HTTP/gRPC/events/WS/data model)
    - what is explicitly *out of scope*
-4. **Load archobs data** (required): Use risk scores from `.archobs/artifacts/file_metrics.parquet` to prioritize which areas to tackle first. Files with `risk > 0.5` and clusters with `leakage > 0.20` should appear earlier in the task order. Drift data (`ari_prev < 0.50`) flags areas to avoid broad moves in. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
+4. **Load archobs data** (required): Run `archobs show all --format json` to get risk scores, cluster health, and drift in one shot. Files with `risk > 0.5` and clusters with `leakage > 0.20` should appear earlier in the task order. Drift data (`ari_prev < 0.50`) flags areas to avoid broad moves in. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
 5. Identify the primary risk(s) (pick 1–3): correctness, migration, partial failure, security/privacy, performance, operability.
 5. Add a compact decision table (2–3 options including a no-change baseline):
    - what each option optimizes

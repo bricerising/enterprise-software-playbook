@@ -2,7 +2,7 @@
 
 `archobs` analyzes a Git repository and tells you where your architecture is healthy and where it's not. It builds a graph of file relationships from three signals -- git co-change history, import/dependency edges, and semantic similarity -- then clusters files into subsystems and scores each one for boundary health, risk hotspots, and drift over time.
 
-The output is an HTML report you open in a browser.
+The output is structured data you query from the CLI (`archobs show`) or browse as an HTML report.
 
 > **Part of [enterprise-software-playbook](../../README.md).**
 > This tool is the implementation behind the [`archobs` skill](../../skills/archobs/SKILL.md).
@@ -74,11 +74,28 @@ This runs the complete pipeline:
 7. Computes boundary health metrics and risk scores
 8. Writes an HTML report to `.archobs/report/index.html`
 
-Open the report in your browser:
+### 3. Read the results
+
+The fastest way to consume results is the `show` subcommand group:
 
 ```bash
-open .archobs/report/index.html
+archobs show all --format json          # everything in one shot (best for agents)
+archobs show risks --top 10             # top risk files (table)
+archobs show clusters --sort leakage    # clusters sorted by leakage
+archobs show drift                      # temporal stability
+archobs show summary                    # key metrics
 ```
+
+Use `--format json` for machine-readable output, `--format csv` for piping, or omit for aligned tables. Use `--out-file path` to write to a file instead of stdout.
+
+To discover column names for any artifact:
+
+```bash
+archobs schema file_metrics
+archobs schema cluster_metrics
+```
+
+The HTML report is also available at `.archobs/report/index.html`.
 
 ### Run individual stages
 
@@ -93,7 +110,7 @@ archobs build-graph --repo .          # fused graph
 archobs cluster --repo .              # subsystem clustering
 ```
 
-Each stage writes Parquet files to `.archobs/artifacts/` that downstream stages consume.
+Each stage writes Parquet files to `.archobs/` that downstream stages consume.
 
 ## Key options
 
@@ -113,21 +130,43 @@ After running `archobs report`, the `.archobs/` directory contains:
 ```
 .archobs/
   config.json                 # your configuration
-  artifacts/
-    files.parquet             # file inventory
-    commits.parquet           # git co-change data
-    imports.parquet           # resolved import edges
-    graph_edges.parquet       # fused relationship graph
-    clusters.parquet          # cluster assignments
-    file_metrics.parquet      # per-file risk scores
-    cluster_metrics.parquet   # per-cluster health scores
-    ...
+  files.parquet               # file inventory
+  commits.parquet             # git co-change data
+  imports.parquet             # resolved import edges
+  graph_edges.parquet         # fused relationship graph
+  clusters.parquet            # cluster assignments
+  file_metrics.parquet        # per-file risk scores
+  cluster_metrics.parquet     # per-cluster health scores
+  drift.parquet               # temporal clustering stability
+  suggestions.json            # prioritized change suggestions
   report/
-    index.html                # open this in a browser
+    index.html                # interactive HTML report
     graph.html                # interactive graph visualization
     graph.graphml             # for Gephi / yEd
     graph.gexf                # for Gephi
     summary.json              # machine-readable summary
+```
+
+## `show` subcommands
+
+| Command | What it shows |
+|---|---|
+| `archobs show risks [--top N] [--min-risk F] [--min-xnbr F] [--min-hubness F]` | Top risk files sorted by combined risk score |
+| `archobs show clusters [--sort leakage\|cohesion\|risk_max\|size] [--min-size N]` | Cluster health metrics |
+| `archobs show drift` | Temporal clustering stability (ARI, modularity, cluster count per window) |
+| `archobs show summary` | Key aggregate metrics (files, edges, clusters, modularity, hub dominance) |
+| `archobs show all [--top N]` | All of the above in a single output |
+
+All `show` subcommands accept `--format table|json|csv` (default: `table`) and `--out-file PATH`.
+
+## `schema` command
+
+Print column names and types for any Parquet artifact without loading data:
+
+```bash
+archobs schema file_metrics
+archobs schema cluster_metrics
+archobs schema drift
 ```
 
 ## Configuration

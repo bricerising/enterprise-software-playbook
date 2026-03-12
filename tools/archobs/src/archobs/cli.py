@@ -21,6 +21,8 @@ from archobs.storage import ArtifactStore
 app = typer.Typer(help="Architecture observability via graph analysis.")
 extract_app = typer.Typer(help="Extract intermediate artifacts.")
 app.add_typer(extract_app, name="extract")
+show_app = typer.Typer(help="Display analysis results.")
+app.add_typer(show_app, name="show")
 
 
 def _check_dependencies() -> None:
@@ -208,6 +210,101 @@ def prompts(
         print(f"No prompts to generate: {error}", file=sys.stderr)
         raise typer.Exit(code=0)
     print("\n\n".join(blocks))
+
+
+# ---------------------------------------------------------------------------
+# show subcommands
+# ---------------------------------------------------------------------------
+
+def _write_or_print(text: str, out_path: Path | None) -> None:
+    if out_path is not None:
+        out_path.write_text(text + "\n", encoding="utf-8")
+        typer.echo(f"Wrote output to {out_path}")
+    else:
+        print(text)
+
+
+@show_app.command("risks")
+def show_risks(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(15, help="Number of top-risk files to show."),
+    min_risk: float | None = typer.Option(None, help="Minimum risk score filter."),
+    min_xnbr: float | None = typer.Option(None, help="Minimum xnbr filter."),
+    min_hubness: float | None = typer.Option(None, help="Minimum hubness filter."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    from archobs.display import format_risks, read_file_metrics
+
+    df = read_file_metrics(out)
+    text = format_risks(df, top=top, fmt=fmt, min_risk=min_risk, min_xnbr=min_xnbr, min_hubness=min_hubness)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("clusters")
+def show_clusters(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    sort: str = typer.Option("leakage", help="Sort column: leakage, cohesion, risk_max, size."),
+    min_size: int = typer.Option(2, help="Minimum cluster size."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    from archobs.display import format_clusters, read_cluster_metrics
+
+    df = read_cluster_metrics(out)
+    text = format_clusters(df, sort_by=sort, fmt=fmt, min_size=min_size)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("drift")
+def show_drift(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    from archobs.display import format_drift, read_drift
+
+    df = read_drift(out)
+    text = format_drift(df, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("summary")
+def show_summary(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    from archobs.display import format_summary, read_summary
+
+    data = read_summary(out)
+    text = format_summary(data, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("all")
+def show_all(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(10, help="Number of top entries per section."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    from archobs.display import format_all
+
+    text = format_all(out, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@app.command()
+def schema(
+    artifact: str = typer.Argument(help="Artifact name (e.g. file_metrics, cluster_metrics, drift)."),
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+) -> None:
+    """Print column names and types for a parquet artifact."""
+    from archobs.display import format_schema
+
+    text = format_schema(out, artifact)
+    print(text)
 
 
 def main() -> None:
