@@ -18,7 +18,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 ## Workflow
 
-0. **Load archobs data** (required): Read risk scores and coupling signals from `.archobs/artifacts/file_metrics.parquet` for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
+0. **Load archobs data** (required): Run `archobs show risks --format json` and `archobs show clusters --format json` to get risk scores and coupling signals for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
 
 1. Decide whether the context is **scriptic vs systemic** (short-lived script vs long-lived system). Set policies for boundary validation, error semantics, and ownership/lifetimes.
 2. Restate the problem as: **what varies** and **what must stay stable** (API, data model, timing, performance).

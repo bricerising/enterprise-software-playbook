@@ -40,7 +40,7 @@ python -m archobs --help
 ```bash
 archobs init --repo . --out .archobs
 archobs report --repo . --out .archobs --suggestions-provider rules
-open .archobs/report/index.html
+archobs show all --format json          # structured output for agents
 ```
 
 ### Re-run after refactoring
@@ -49,7 +49,7 @@ open .archobs/report/index.html
 archobs report --repo . --out .archobs --suggestions-provider rules
 ```
 
-Previous artifacts in `.archobs/artifacts/` are overwritten. If you need to compare before/after, copy `summary.json` before re-running (see "Comparing runs" below).
+Previous artifacts in `.archobs/` are overwritten. If you need to compare before/after, copy `summary.json` before re-running (see "Comparing runs" below).
 
 ### Stage-by-stage runs
 
@@ -64,7 +64,24 @@ archobs build-graph --repo .           # fused relationship graph
 archobs cluster --repo .               # subsystem clustering
 ```
 
-Each stage writes Parquet files to `.archobs/artifacts/` that downstream stages consume.
+Each stage writes Parquet files to `.archobs/` that downstream stages consume.
+
+## Reading results
+
+After the report completes, use `archobs show` to query results without ad-hoc scripting:
+
+```bash
+archobs show all --format json              # everything in one JSON object
+archobs show risks --top 10 --format json   # top 10 risk files
+archobs show risks --min-risk 0.5           # files above risk threshold
+archobs show clusters --sort leakage        # clusters by leakage (table)
+archobs show drift --format json            # temporal stability
+archobs show summary                        # key metrics overview
+```
+
+To discover column names and types: `archobs schema file_metrics`
+
+All `show` subcommands accept `--format table|json|csv` and `--out-file PATH`.
 
 ## Output management
 
@@ -94,10 +111,11 @@ On subsequent runs, compare key metrics (modularity, cluster count, top risk sco
 ```bash
 git stash
 archobs report --repo . --out .archobs
-cp .archobs/report/summary.json /tmp/main-summary.json
+archobs show summary --format json --out-file /tmp/main-summary.json
 git stash pop
 archobs report --repo . --out .archobs
-# Compare /tmp/main-summary.json vs .archobs/report/summary.json
+archobs show summary --format json
+# Compare against /tmp/main-summary.json
 ```
 
 ## Key CLI options

@@ -45,11 +45,26 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```
    Use `--suggestions-provider rules` (the default) when running inside a skill — the rule-based engine is fast, deterministic, and produces structured suggestions that the current session can interpret directly.
 
-   **Do not proceed to step 4 until the report command has finished.** Steps 4–6 depend on the artifacts produced by this command (parquet files in `.archobs/artifacts/` and the HTML report in `.archobs/report/`). If the command is run in the background, wait for it to complete before continuing.
+   **Do not proceed to step 4 until the report command has finished.** Steps 4–6 depend on the artifacts produced by this command. If the command is run in the background, wait for it to complete before continuing.
 
-4. **Interpret key metrics** (see [`references/interpreting-metrics.md`](references/interpreting-metrics.md)):
+4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed):
+   ```bash
+   # All metrics in one shot (preferred for agents):
+   archobs show all --format json
 
-   **File-level risk** (from `.archobs/artifacts/file_metrics.parquet`):
+   # Or query individual sections:
+   archobs show risks --top 10 --format json
+   archobs show clusters --sort leakage --format json
+   archobs show drift --format json
+   archobs show summary --format json
+   ```
+   Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
+
+   To discover column names for any artifact: `archobs schema file_metrics`
+
+5. **Interpret key metrics** (see [`references/interpreting-metrics.md`](references/interpreting-metrics.md)):
+
+   **File-level risk** (`archobs show risks`):
    | Signal | Threshold | Meaning |
    |--------|-----------|---------|
    | `risk` | > 0.5 | High combined risk — prioritize for refactoring |
@@ -57,31 +72,34 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | `hubness` | > 0.45 | High fan-in — changes here have wide blast radius |
    | `volatility` | relative | High churn rate compared to peers |
 
-   **Cluster-level health** (from `.archobs/artifacts/cluster_metrics.parquet`):
+   Filter directly: `archobs show risks --min-risk 0.5 --format json` or `--min-xnbr 0.35` or `--min-hubness 0.45`.
+
+   **Cluster-level health** (`archobs show clusters`):
    | Signal | Threshold | Meaning |
    |--------|-----------|---------|
    | `leakage` | > 0.20 | Boundary is porous — responsibilities bleed across |
    | `cohesion` | < 0.30 | Weak internal connectivity — cluster may be artificial |
    | `conductance` | relative | Cross-boundary edge fraction (lower is healthier) |
 
-   **Drift** (from `.archobs/artifacts/drift.parquet`):
+   **Drift** (`archobs show drift`):
    | Signal | Threshold | Meaning |
    |--------|-----------|---------|
    | `ari_prev` | < 0.50 | Architecture is unstable — subsystem map is reshuffling |
    | `modularity` | declining | Boundaries are weakening over time |
 
-5. **Route findings to the right skill**:
+6. **Route findings to the right skill**:
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
-6. **Read suggestions** (if generated):
+7. **Read suggestions** (if generated):
    ```bash
    archobs prompts --out .archobs
    ```
    Each suggestion includes: priority, title, why (evidence), change (action), scope (affected files).
+   Suggestions are also included in `archobs show all --format json` under the `"suggestions"` key.
 
 ## Clarifying Questions
 

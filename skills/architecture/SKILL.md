@@ -15,7 +15,8 @@ Use code patterns for in-process structure; use system patterns when the problem
 ## Workflow
 
 0. **Gather empirical data** (required — wait for completion):
-   - If `.archobs/artifacts/file_metrics.parquet` already exists and is newer than the most recent commit, reuse it; otherwise run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for the report to complete** before continuing.
+   - If `.archobs/file_metrics.parquet` already exists and is newer than the most recent commit, reuse it; otherwise run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for the report to complete** before continuing.
+   - Read results: `archobs show all --format json` (or query `archobs show risks`, `archobs show clusters` individually).
    - Use cluster leakage data to identify where boundaries are already porous.
    - Use file-level risk scores to focus on the highest-impact areas.
    - Skip this step only if the repo is too small (< 10 files) for meaningful analysis.
