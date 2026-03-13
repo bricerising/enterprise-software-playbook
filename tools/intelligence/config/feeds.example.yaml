@@ -1,88 +1,22 @@
 # Intelligence tool feed configuration
 # Copy to ~/.config/intel/config.yaml and customize
+#
+# This is a minimal starter config. Add feeds that match your interests.
+# Run `intel collect --once` after editing, then `intel stats` to verify.
 
 database: ~/.local/share/intel/intelligence.db
 
 collector:
   poll_interval_seconds: 300
-  fetch_content: true
-  content_timeout_ms: 10000
-  max_content_length: 50000
   retention_days: 30
-  edgar_contact: user@example.com  # Required for SEC EDGAR feeds
-  edgar_max_rps: 2                 # Max 10, SEC fair access policy
-  batch_size: 100
-  synchronous: normal
-  wal_autocheckpoint: 1000
-  journal_size_limit_bytes: 67108864
-  blocked_domains:
-    - medium.com
-    - bloomberg.com
 
 feeds:
-  - url: https://aws.amazon.com/blogs/aws/feed/
-    source: rss
-    name: AWS Blog
-    category: aws
-    poll_interval: 600
-
-  - url: https://aws.amazon.com/blogs/compute/feed/
-    source: rss
-    name: AWS Compute Blog
-    category: aws
-    poll_interval: 600
-
-  - url: https://aws.amazon.com/blogs/machine-learning/feed/
-    source: rss
-    name: AWS ML Blog
-    category: aws
-    poll_interval: 600
-
-  - url: https://openai.com/blog/rss/
-    source: rss
-    name: OpenAI Blog
-    category: ai
-    poll_interval: 900
-
-  - url: https://blog.google/technology/ai/rss/
-    source: rss
-    name: Google AI Blog
-    category: ai
-    poll_interval: 900
-
-  - url: https://engineering.fb.com/feed/
-    source: rss
-    name: Meta Engineering
-    category: engineering
-    poll_interval: 900
-
-  - url: https://netflixtechblog.com/feed
-    source: rss
-    name: Netflix Tech Blog
-    category: engineering
-    poll_interval: 1800
-
-  - url: https://www.anthropic.com/research/rss
-    source: rss
-    name: Anthropic Research
-    category: ai
-    poll_interval: 900
-
+  # -- Community (high signal-to-noise) --
   - source: hackernews
     name: Hacker News
-    modes: [new, top]
+    modes: [top]
     poll_interval: 300
-    max_items: 100
-
-  - source: lobsters
-    name: Lobsters
-    poll_interval: 300
-
-  - source: edgar
-    name: SEC EDGAR
-    form_types: [8-K, 10-K, 10-Q]
-    poll_interval: 900
-    entities: ["AMZN", "GOOG", "MSFT", "AAPL", "META", "NVDA"]
+    max_items: 50
 
 topics_file: ~/.config/intel/topics.yaml
 
