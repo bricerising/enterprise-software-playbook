@@ -16,11 +16,11 @@ This repo is an opinionated system. Changes should preserve coherence and prompt
 
 ## Tool subprojects
 
-The `tools/` directory contains bundled tool implementations (e.g., `tools/archobs/`). Each tool is a self-contained project with its own package manifest, license, and tests.
+The `tools/` directory contains bundled tool implementations (e.g., `tools/archobs/`, `tools/intelligence/`). Each tool is a self-contained project with its own package manifest, license, and tests.
 
 When modifying a tool subproject:
 
-- Run the tool's own tests: `pytest -q tools/<tool>/tests`
+- Run the tool's own tests: `pytest -q tools/<tool>/tests` (Python) or `npm test` in `tools/<tool>/` (Node.js).
 - Keep the corresponding skill docs (`skills/<name>/references/`) aligned with tool behavior.
 - Tool subprojects may have different licenses than the top-level repo (e.g., MIT for archobs). Preserve license files within the tool directory.
 - See `specs/decisions/015-vendor-archobs-tool.md` for the rationale behind this pattern.

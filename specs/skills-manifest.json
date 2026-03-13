@@ -2,7 +2,7 @@
   "version": 2,
   "updated": "2026-03-10",
   "stages": {
-    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs"],
+    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "brief"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
     "Verify": ["testing", "review", "finish"],
@@ -151,6 +151,22 @@
       "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router"],
       "trigger": "General request without a named skill — auto-select and sequence the right skills for the work.",
       "related": ["plan", "spec", "finish", "archobs"],
+      "overhead": "minimal"
+    },
+    "intel": {
+      "path": "skills/intel/SKILL.md",
+      "stage": "Define",
+      "tags": ["intelligence", "trends", "signals", "research", "briefing", "news", "feeds", "evidence"],
+      "trigger": "Need current signal on a technology, vendor, or industry trend from collected feeds before making decisions.",
+      "related": ["plan", "spec", "architecture", "archobs", "brief"],
+      "overhead": "minimal"
+    },
+    "brief": {
+      "path": "skills/brief/SKILL.md",
+      "stage": "Define",
+      "tags": ["brief", "audience", "executive", "engineering", "decision", "digest", "synthesis", "presentation", "stakeholder"],
+      "trigger": "Have intel signals and need a reader-ready brief tailored for a specific audience or decision context.",
+      "related": ["intel", "plan", "spec", "architecture"],
       "overhead": "minimal"
     }
   }
