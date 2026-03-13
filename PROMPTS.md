@@ -85,6 +85,29 @@ Run the full analysis and report:
 - the next skill to invoke based on the dominant findings
 ```
 
+### Gather intelligence signals on a topic
+
+```text
+Use intel (read skills/intel/SKILL.md).
+
+Topic: <technology, vendor, standard, or trend to research>
+Goal: Produce a focused intelligence brief with trending signals, search hits, and evidence.
+
+Run the full workflow: collect signals, rank by relevance, and synthesize into a brief with source citations and a clear "so what".
+```
+
+### Shape intel into an audience-aware brief
+
+```text
+Use brief (read skills/brief/SKILL.md).
+
+Audience: <executive | engineering | decision | digest>
+Topic: <what the brief is about>
+Goal: Synthesize intel signals into a reader-ready brief tailored to the target audience.
+
+Filter and rank signals through the audience lens and produce a brief readable in under 2 minutes.
+```
+
 ### Choose an in-process/design pattern
 
 ```text

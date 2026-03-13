@@ -128,7 +128,7 @@ Success looks like: a brief that the target audience can read in under 2 minutes
 - Do not fabricate signals — only use data returned by `intel` commands.
 - Executive briefs must be readable by non-technical stakeholders — no jargon, no acronyms without expansion.
 
-## Output Templates
+## Output Template
 
 ### Executive
 
