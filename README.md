@@ -50,6 +50,8 @@ Please review this enterprise web application.
 - [`skills/architecture/`](skills/architecture/SKILL.md): Choose the smallest system pattern(s) for cross-service pressures.
 - [`skills/design/`](skills/design/SKILL.md): Choose the smallest code pattern(s) for in-process design pressures.
 - [`skills/archobs/`](skills/archobs/SKILL.md): Measure coupling, boundary health, and risk hotspots before architecture or refactoring decisions.
+- [`skills/intel/`](skills/intel/SKILL.md): Query collected intelligence signals — trends, search, events, evidence packs — from curated feeds.
+- [`skills/brief/`](skills/brief/SKILL.md): Shape intel signals into audience-aware briefs (executive, engineering, decision, daily digest).
 
 **Standardize (make it consistent)**
 
@@ -95,6 +97,7 @@ These skills bias toward practices that make codebases easier for humans to oper
 
 - [`tools/archobs/`](tools/archobs/README.md): Architecture observability CLI — measures coupling, boundary health, risk hotspots, and drift. Install with `pip install -e 'tools/archobs[full]'`. This is the implementation behind the [`archobs` skill](skills/archobs/SKILL.md).
 - **[Codanna](https://codanna.dev)**: A companion CLI that generates semantic search embeddings, used by archobs to compute file similarity. Install with `brew install codanna` (macOS) or see the [archobs README](tools/archobs/README.md) for other platforms.
+- [`tools/intelligence/`](tools/intelligence/README.md): Intelligence collector and query CLI (`intel`) — polls RSS, Hacker News, Lobsters, and SEC EDGAR feeds, stores events in SQLite, and exposes trends/search/events via CLI and MCP tools. Install with `cd tools/intelligence && npm install && npm run build && npm link`. This is the implementation behind the [`intel` skill](skills/intel/SKILL.md). See the [intelligence README](tools/intelligence/README.md) for configuration and service setup.
 
 ## Docs
 

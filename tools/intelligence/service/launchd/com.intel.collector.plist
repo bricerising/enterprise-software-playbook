@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.intel.collector</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Resolve with: which intel -->
+        <string>__INTEL_BIN__</string>
+        <string>collect</string>
+        <string>--config</string>
+        <string>__HOME__/.config/intel/config.yaml</string>
+    </array>
+
+    <!-- Start on load and restart on exit -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Minimum 10s between restarts to prevent crash loops -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Collector logs to stderr; capture both streams -->
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/intel-collector.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/intel-collector.log</string>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>__HOME__</string>
+
+    <!-- Ensure node/intel are on PATH -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>XDG_RUNTIME_DIR</key>
+        <string>__HOME__/.local/run</string>
+    </dict>
+
+    <!-- Resource limits: soft kill after 20s, hard kill after 30s -->
+    <key>ExitTimeOut</key>
+    <integer>20</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
