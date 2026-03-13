@@ -1,0 +1,39 @@
+[Unit]
+Description=Intel Collector — tech intelligence feed poller
+Documentation=https://github.com/bricerising/enterprise-software-playbook/blob/main/specs/006-intelligence-tool.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/intel collect --config %h/.config/intel/config.yaml
+
+# Restart on any non-zero exit; 10s delay prevents crash loops
+Restart=on-failure
+RestartSec=10
+
+# After 5 consecutive failures within 60s, stop trying
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Graceful shutdown: SIGTERM, then SIGKILL after 20s
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Environment
+Environment=NODE_ENV=production
+Environment=XDG_RUNTIME_DIR=%t
+
+# Resource limits — light daemon, no need for large allocations
+MemoryMax=512M
+TasksMax=64
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/intel %h/.local/run/intel %t/intel
+
+[Install]
+WantedBy=default.target

@@ -741,6 +741,81 @@ Events older than `retention_days` (default 30) are pruned periodically. The col
 
 **FTS5 secure-delete compatibility warning:** If FTS5 `secure-delete=1` is ever enabled, be aware that after rows are updated or deleted with this mode active, older SQLite/FTS5 versions (pre-3.42.0) may refuse to read the FTS table unless it is rebuilt. This is a one-way format change — once rows are deleted with secure-delete enabled, the index is no longer backward-compatible with older SQLite builds.
 
+## Service Management
+
+The collector runs as a long-lived foreground process (`intel collect`). OS-native service managers handle lifecycle concerns — start on boot, restart on crash, log routing — so the `--daemon` flag is unnecessary under managed supervision.
+
+### macOS (launchd)
+
+Template plist at `tools/intelligence/service/launchd/com.intel.collector.plist`. Key properties:
+
+- **`KeepAlive: true`** — launchd restarts the process whenever it exits (crash or clean)
+- **`RunAtLoad: true`** — starts automatically on user login
+- **`ThrottleInterval: 10`** — minimum 10 seconds between restarts, preventing crash loops
+- **`ProcessType: Background`** — signals macOS this is a low-priority background task
+
+Logs route to `~/Library/Logs/intel-collector.log` via `StandardOutPath`/`StandardErrorPath`. The collector writes all diagnostic output to stderr, which launchd captures to the same file.
+
+**Install:** `./service/install.sh` resolves the `intel` binary path and `$HOME` into the plist template, copies it to `~/Library/LaunchAgents/`, and bootstraps the service via `launchctl`.
+
+**Commands:**
+```bash
+# Status
+launchctl print gui/$(id -u)/com.intel.collector
+
+# Manual stop/start
+launchctl kickstart -k gui/$(id -u)/com.intel.collector  # restart
+launchctl bootout gui/$(id -u)/com.intel.collector        # stop
+
+# Logs
+tail -f ~/Library/Logs/intel-collector.log
+```
+
+### Linux (systemd)
+
+User unit at `tools/intelligence/service/systemd/intel-collector.service`. Key directives:
+
+- **`Restart=on-failure`** — restarts on non-zero exit; clean shutdowns (SIGTERM → exit 0) stay down
+- **`RestartSec=10`** — 10-second delay between restart attempts
+- **`StartLimitIntervalSec=60`, `StartLimitBurst=5`** — after 5 failures within 60 seconds, systemd stops retrying (prevents infinite crash loops)
+- **`ProtectHome=read-only`, `ProtectSystem=strict`** — security hardening; only `~/.local/share/intel` and runtime dirs are writable
+- **`MemoryMax=512M`** — hard memory ceiling
+
+Logs route to the systemd journal. The collector's stderr output is captured automatically.
+
+**Install:** `./service/install.sh` copies the unit to `~/.config/systemd/user/`, enables it, and starts it.
+
+**Commands:**
+```bash
+# Status
+systemctl --user status intel-collector
+
+# Manual control
+systemctl --user restart intel-collector
+systemctl --user stop intel-collector
+
+# Logs
+journalctl --user -u intel-collector -f
+
+# Survive logout (run once)
+loginctl enable-linger $USER
+```
+
+### Why Not `--daemon`
+
+The `--daemon` flag and PID file management exist for manual operation without a service manager. Under launchd/systemd supervision, the collector runs in foreground mode:
+
+- The supervisor owns process lifecycle (start, stop, restart) — a self-daemonized process confuses the supervisor's process tracking
+- Crash restart is handled by the supervisor, not by the collector re-spawning itself
+- Log capture works naturally when stdout/stderr are connected to the supervisor
+- PID files become redundant since the supervisor tracks the process directly
+
+The `--daemon` flag remains available for environments without a service manager (e.g., quick manual testing).
+
+### Interaction with Control Channel
+
+The control channel (Unix socket) continues to work under service management. CLI commands like `intel db checkpoint` and `intel collect status` detect the running daemon via PID file and route maintenance requests through the socket. The PID file is written by the control channel's `start()` method regardless of whether the process was launched by a supervisor or manually.
+
 ## MCP Server
 
 The CLI commands map 1:1 to MCP tools. An MCP server wrapper (`intel mcp`) exposes them for direct agent integration without shelling out.
@@ -887,6 +962,12 @@ tools/intelligence/
 │       ├── time.ts                      # duration parsing, formatting
 │       ├── text.ts                      # sanitization, truncation
 │       └── url.ts                       # canonical URL normalization
+├── service/
+│   ├── install.sh                       # cross-platform service installer
+│   ├── launchd/
+│   │   └── com.intel.collector.plist    # macOS launchd agent (template)
+│   └── systemd/
+│       └── intel-collector.service      # Linux systemd user unit
 ├── tests/
 │   ├── topics.test.ts                   # topic classification precision
 │   ├── trends.test.ts                   # trend computation
