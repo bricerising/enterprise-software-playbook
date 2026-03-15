@@ -104,12 +104,12 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'intel_forecast',
-    description: 'Predict likely next developments from topic co-movement patterns and lifecycle analysis',
+    description: 'Predict likely next developments using Bayesian scenario projection, exponential decay weighting, entropy scoring, CUSUM change-point detection, and HMM lifecycle classification',
     inputSchema: {
       type: 'object' as const,
       properties: {
         lag_window_days: { type: 'number', description: 'Max days between chain links (default: 7)' },
-        min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 3)' },
+        min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 2)' },
         top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
         dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
       },

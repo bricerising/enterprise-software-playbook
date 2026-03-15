@@ -6,6 +6,12 @@ import { sinceISO as _sinceISO, formatISO } from '../util/time.js';
 
 /* ── Constants ──────────────────────────────────────────────────────── */
 
+/** SQL expression for real-world event timestamp (publication time, fetch-time fallback).
+ *  Temporal analysis must use this instead of raw fetched_at so that bulk ingests
+ *  don't compress weeks of signal into a single calendar day. */
+const PUB_TS = 'COALESCE(e.published_at, e.fetched_at)';
+const PUB_DAY = `DATE(${PUB_TS})`;
+
 const WINDOWS = [
   { label: '1d', ms: 86_400_000 },
   { label: '7d', ms: 604_800_000 },
@@ -14,6 +20,33 @@ const WINDOWS = [
 ] as const;
 
 const MAX_TITLES_PER_SCENARIO = 3;
+
+/** Exponential decay half-life in days. Chains with recent co-occurrences
+ *  are weighted higher than old ones. */
+const DECAY_HALF_LIFE_DAYS = 14;
+const DECAY_LAMBDA = Math.LN2 / DECAY_HALF_LIFE_DAYS;
+
+/** CUSUM change-point detection sensitivity.
+ *  k = allowance (slack) in standard deviations; h = decision threshold. */
+const CUSUM_K_SIGMA = 0.5;
+const CUSUM_H_SIGMA = 4.0;
+
+/** Days within which a CUSUM change point discounts chain reliability.
+ *  A change point 0 days ago → full discount; at the horizon → no discount. */
+const CUSUM_DISCOUNT_HORIZON_DAYS = 7;
+
+/** HMM-style Gaussian emission model parameters.
+ *  Each phase has expected accelerations at each window and a spread. */
+const PHASE_EMISSIONS: Record<
+  string,
+  { means: Record<string, number>; stddev: number }
+> = {
+  emerging:     { means: { '1d': 1.0, '7d': 0.5, '14d': 0.2, '30d': 0.0 }, stddev: 0.5 },
+  accelerating: { means: { '1d': 0.5, '7d': 0.5, '14d': 0.3, '30d': 0.3 }, stddev: 0.4 },
+  peaking:      { means: { '1d': -0.3, '7d': 0.3, '14d': 0.2, '30d': 0.1 }, stddev: 0.4 },
+  decaying:     { means: { '1d': -0.5, '7d': -0.3, '14d': -0.2, '30d': -0.1 }, stddev: 0.4 },
+  stable:       { means: { '1d': 0.0, '7d': 0.0, '14d': 0.0, '30d': 0.0 }, stddev: 0.15 },
+};
 
 /* ── Interfaces ─────────────────────────────────────────────────────── */
 
@@ -25,14 +58,18 @@ export interface ForecastData {
   scenarios: ScenarioItem[];
   multiscale: MultiscaleItem[];
   transitive_chains: TransitiveChainItem[];
+  entropy: EntropyItem[];
+  dynamics: DynamicItem[];
 }
 
 export interface LifecycleItem {
   topic: string;
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;
+  phase_probabilities: Record<string, number>;
   volumes: Record<string, number>;
   accelerations: Record<string, number>;
+  change_points: number[];
 }
 
 export interface ChainItem {
@@ -46,6 +83,7 @@ export interface ChainItem {
   confidence: number;
   directionality: number;
   lag_stddev: number;
+  decay_weighted_support: number;
 }
 
 export interface TransitiveChainItem {
@@ -68,6 +106,14 @@ export interface ScenarioItem {
   trigger_topics: string[];
   supporting_chains: number;
   evidence_titles: string[];
+  target_entropy: number;
+}
+
+export interface EntropyItem {
+  topic: string;
+  entropy: number;
+  normalized_entropy: number;
+  active_days: number;
 }
 
 export interface MultiscaleItem {
@@ -76,6 +122,15 @@ export interface MultiscaleItem {
   d1_accel: number;
   d7_accel: number;
   d30_accel: number;
+}
+
+export type DynamicType = 'reinforcing_loop' | 'delay' | 'accumulation' | 'dampening';
+
+export interface DynamicItem {
+  type: DynamicType;
+  topics: string[];
+  metric: { name: string; value: number; secondary_value?: number };
+  interpretation: string;
 }
 
 export interface ComputeForecastOpts {
@@ -92,7 +147,9 @@ export function computeForecast(
   opts: ComputeForecastOpts = {},
 ): IntelResponse<ForecastData> {
   const lagWindowDays = opts.lag_window_days ?? 7;
-  const minSupport = opts.min_support ?? 3;
+  // TODO: raise to 3 once the collector has 6+ weeks of steady data and top
+  // topics consistently show 5+ spike-days per 30d window.
+  const minSupport = opts.min_support ?? 2;
   const topScenarios = opts.top_scenarios ?? 10;
   const useDedup = opts.dedup !== 'none';
 
@@ -107,11 +164,27 @@ export function computeForecast(
   const { cnt: eventsAnalyzed } = db.prepare(countSql).get(window30dStart) as { cnt: number };
 
   const lifecycles = computeLifecycles(db, now, useDedup);
+
+  // G. CUSUM change-point detection — merge into lifecycle items
+  const changePointMap = detectChangePoints(db, window30dStart, useDedup);
+  for (const lc of lifecycles) {
+    lc.change_points = changePointMap.get(lc.topic) ?? [];
+  }
+
   const chains = detectChains(db, window30dStart, lagWindowDays, minSupport, useDedup, lifecycles);
   const transitive_chains = detectTransitiveChains(chains);
-  const scenarios = projectScenarios(db, chains, lifecycles, window30dStart, topScenarios, useDedup);
+
+  // F. Entropy scoring
+  const entropy = computeEntropy(db, window30dStart, useDedup);
+
+  // J. Bayesian scenario projection (replaces heuristic scoring)
+  const scenarios = projectScenariosBayesian(
+    db, chains, lifecycles, entropy, window30dStart, topScenarios, useDedup,
+  );
+
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
+  const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy);
 
   return ok({
     window: { start: window30dStart, end, events_analyzed: eventsAnalyzed },
@@ -121,6 +194,8 @@ export function computeForecast(
     scenarios,
     multiscale,
     transitive_chains,
+    entropy,
+    dynamics,
   });
 }
 
@@ -147,7 +222,7 @@ function computeLifecycles(
       SELECT et.topic, ${volumeExpr} AS volume
       FROM event_topics et
       JOIN events e ON e.event_id = et.event_id
-      WHERE e.fetched_at >= ?
+      WHERE ${PUB_TS} >= ?
       GROUP BY et.topic
     `;
     const currentRows = db.prepare(currentSql).all(windowStart) as Array<{
@@ -159,7 +234,7 @@ function computeLifecycles(
       SELECT et.topic, ${volumeExpr} AS volume
       FROM event_topics et
       JOIN events e ON e.event_id = et.event_id
-      WHERE e.fetched_at >= ? AND e.fetched_at < ?
+      WHERE ${PUB_TS} >= ? AND ${PUB_TS} < ?
       GROUP BY et.topic
     `;
     const prevRows = db.prepare(prevSql).all(prevStart, windowStart) as Array<{
@@ -205,14 +280,23 @@ function computeLifecycles(
     const d30 = accels['30d'] ?? 0;
     const v30 = volumes['30d'] ?? 0;
 
-    const { phase, confidence } = classifyPhase(d1, d7, d14, d30, v30, median30d);
+    const ruleResult = classifyPhase(d1, d7, d14, d30, v30, median30d);
+    const hmmResult = classifyPhaseHMM(accels);
+
+    // Use HMM phase when its confidence is substantially higher;
+    // otherwise keep the deterministic rule-based phase for backward compat.
+    const useHmm = hmmResult.confidence > ruleResult.confidence + 0.15;
+    const phase = useHmm ? hmmResult.phase : ruleResult.phase;
+    const confidence = useHmm ? hmmResult.confidence : ruleResult.confidence;
 
     results.push({
       topic,
       phase,
       phase_confidence: confidence,
+      phase_probabilities: hmmResult.probabilities,
       volumes,
       accelerations: accels,
+      change_points: [], // populated after lifecycle computation
     });
   }
 
@@ -289,12 +373,12 @@ function detectChains(
 
   const chainSql = `
     WITH daily_volumes AS (
-      SELECT et.topic, DATE(e.fetched_at) AS day,
+      SELECT et.topic, ${PUB_DAY} AS day,
              ${volumeExpr} AS volume,
              COUNT(DISTINCT e.source) AS sources
       FROM event_topics et JOIN events e ON e.event_id = et.event_id
-      WHERE e.fetched_at >= ?
-      GROUP BY et.topic, DATE(e.fetched_at)
+      WHERE ${PUB_TS} >= ?
+      GROUP BY et.topic, ${PUB_DAY}
       HAVING volume >= 3
     ),
     topic_spike_days AS (
@@ -314,7 +398,8 @@ function detectChains(
            SQRT(MAX(0,
              AVG((JULIANDAY(b.day) - JULIANDAY(a.day)) * (JULIANDAY(b.day) - JULIANDAY(a.day)))
              - AVG(JULIANDAY(b.day) - JULIANDAY(a.day)) * AVG(JULIANDAY(b.day) - JULIANDAY(a.day))
-           )) AS lag_stddev
+           )) AS lag_stddev,
+           MAX(b.day) AS most_recent_day
     FROM daily_volumes a
     JOIN daily_volumes b
       ON b.day > a.day
@@ -341,9 +426,13 @@ function detectChains(
     lift: number;
     confidence: number;
     lag_stddev: number | null;
+    most_recent_day: string;
   }>;
 
   if (chainRows.length === 0) return [];
+
+  const nowDate = new Date();
+  const nowJulian = julianDay(nowDate);
 
   // Normalize source_diversity to 0-1
   const maxMinSources = Math.max(...chainRows.map((r) => r.avg_min_sources));
@@ -352,7 +441,7 @@ function detectChains(
   const spikeSql = `
     SELECT et.topic, ${volumeExpr} AS volume
     FROM event_topics et JOIN events e ON e.event_id = et.event_id
-    WHERE e.fetched_at >= ?
+    WHERE ${PUB_TS} >= ?
     GROUP BY et.topic
     HAVING volume >= 3
   `;
@@ -367,20 +456,28 @@ function detectChains(
     if ((lc.accelerations['7d'] ?? 0) > 1.0) spiking.add(lc.topic);
   }
 
-  const chainList = chainRows.map((row) => ({
-    from_topic: row.from_topic,
-    to_topic: row.to_topic,
-    support: row.support,
-    avg_lag_days: Math.round(row.avg_lag_days * 10) / 10,
-    source_diversity: maxMinSources > 0
-      ? Math.round((row.avg_min_sources / maxMinSources) * 100) / 100
-      : 0,
-    active: spiking.has(row.from_topic),
-    lift: Math.round((row.lift ?? 0) * 100) / 100,
-    confidence: Math.round(Math.min(row.confidence ?? 0, 1) * 100) / 100,
-    directionality: 1.0, // placeholder, computed below
-    lag_stddev: Math.round((row.lag_stddev ?? 0) * 100) / 100,
-  }));
+  const chainList = chainRows.map((row) => {
+    // Exponential decay: weight support by recency of most recent co-occurrence
+    const recentJulian = julianDay(new Date(row.most_recent_day + 'T00:00:00Z'));
+    const daysSinceRecent = Math.max(0, nowJulian - recentJulian);
+    const decayFactor = Math.exp(-DECAY_LAMBDA * daysSinceRecent);
+
+    return {
+      from_topic: row.from_topic,
+      to_topic: row.to_topic,
+      support: row.support,
+      avg_lag_days: Math.round(row.avg_lag_days * 10) / 10,
+      source_diversity: maxMinSources > 0
+        ? Math.round((row.avg_min_sources / maxMinSources) * 100) / 100
+        : 0,
+      active: spiking.has(row.from_topic),
+      lift: Math.round((row.lift ?? 0) * 100) / 100,
+      confidence: Math.round(Math.min(row.confidence ?? 0, 1) * 100) / 100,
+      directionality: 1.0, // placeholder, computed below
+      lag_stddev: Math.round((row.lag_stddev ?? 0) * 100) / 100,
+      decay_weighted_support: Math.round(row.support * decayFactor * 100) / 100,
+    };
+  });
 
   // Compute directionality: support(A→B) / (support(A→B) + support(B→A))
   const supportLookup = new Map<string, number>();
@@ -431,127 +528,6 @@ function detectTransitiveChains(chains: ChainItem[]): TransitiveChainItem[] {
   // Sort by combined_lift descending, cap at 100
   results.sort((a, b) => b.combined_lift - a.combined_lift);
   return results.slice(0, 100);
-}
-
-/* ── C. Scenario projection ─────────────────────────────────────────── */
-
-function projectScenarios(
-  db: Database.Database,
-  chains: ChainItem[],
-  lifecycles: LifecycleItem[],
-  window30dStart: string,
-  topN: number,
-  useDedup: boolean,
-): ScenarioItem[] {
-  // Filter: active chains with above-chance lift
-  const activeChains = chains.filter((c) => c.active && c.lift >= 1.5);
-  if (activeChains.length === 0) return [];
-
-  // Build acceleration lookup from lifecycles (prefer d1, fallback to d7)
-  const accelMap = new Map<string, number>();
-  for (const lc of lifecycles) {
-    const d1 = lc.accelerations['1d'] ?? 0;
-    const d7 = lc.accelerations['7d'] ?? 0;
-    accelMap.set(lc.topic, Math.abs(d1) >= 0.1 ? d1 : d7);
-  }
-
-  // Score each chain using confidence-based formula
-  const scored = activeChains.map((chain) => {
-    const fromAccel = Math.max(0, accelMap.get(chain.from_topic) ?? 0);
-    return {
-      ...chain,
-      rawScore: chain.confidence * chain.lift * chain.source_diversity * (1 + fromAccel),
-    };
-  });
-
-  // Find max score for normalization
-  const maxScore = Math.max(...scored.map((s) => s.rawScore));
-
-  // Aggregate chains pointing to same target
-  const targetMap = new Map<
-    string,
-    {
-      totalScore: number;
-      triggerTopics: Set<string>;
-      chainCount: number;
-      avgLagMin: number;
-      avgLagMax: number;
-    }
-  >();
-
-  for (const s of scored) {
-    // Compute stddev-based timeframe: [avg_lag - 2*stddev, avg_lag + 2*stddev]
-    const stddev = s.lag_stddev || 0;
-    const lagMin = Math.max(0, s.avg_lag_days - 2 * stddev);
-    const lagMax = s.avg_lag_days + 2 * stddev;
-
-    const existing = targetMap.get(s.to_topic);
-    if (existing) {
-      existing.totalScore += s.rawScore;
-      existing.triggerTopics.add(s.from_topic);
-      existing.chainCount += 1;
-      existing.avgLagMin = Math.min(existing.avgLagMin, lagMin);
-      existing.avgLagMax = Math.max(existing.avgLagMax, lagMax);
-    } else {
-      targetMap.set(s.to_topic, {
-        totalScore: s.rawScore,
-        triggerTopics: new Set([s.from_topic]),
-        chainCount: 1,
-        avgLagMin: lagMin,
-        avgLagMax: lagMax,
-      });
-    }
-  }
-
-  // Normalize probabilities across all targets
-  const maxTotalScore = Math.max(...[...targetMap.values()].map((t) => t.totalScore));
-
-  // Fetch evidence titles
-  const volumeExpr = useDedup
-    ? 'COALESCE(e.canonical_url, e.event_id)'
-    : 'e.event_id';
-  const titleSql = `
-    SELECT e.title
-    FROM event_topics et
-    JOIN events e ON e.event_id = et.event_id
-    WHERE et.topic = ? AND e.fetched_at >= ?
-    ORDER BY e.score DESC, e.fetched_at DESC
-    LIMIT ?
-  `;
-  const titleStmt = db.prepare(titleSql);
-
-  const scenarios: ScenarioItem[] = [];
-  for (const [target, data] of targetMap) {
-    const probability = maxTotalScore > 0
-      ? Math.round((data.totalScore / maxTotalScore) * 100) / 100
-      : 0;
-
-    const titleRows = titleStmt.all(
-      target,
-      window30dStart,
-      MAX_TITLES_PER_SCENARIO,
-    ) as Array<{ title: string | null }>;
-
-    const evidenceTitles = titleRows
-      .map((r) => sanitizeSnippet(r.title, { maxLength: 200 }).text)
-      .filter((t) => t.length > 0);
-
-    scenarios.push({
-      target_topic: target,
-      probability,
-      timeframe_days: [
-        Math.round(data.avgLagMin * 10) / 10,
-        Math.round(data.avgLagMax * 10) / 10,
-      ],
-      trigger_topics: [...data.triggerTopics],
-      supporting_chains: data.chainCount,
-      evidence_titles: evidenceTitles,
-    });
-  }
-
-  // Sort by probability descending, take top N
-  scenarios.sort((a, b) => b.probability - a.probability);
-  return scenarios.slice(0, topN);
 }
 
 /* ── D. Multiscale convergence ──────────────────────────────────────── */
@@ -624,8 +600,502 @@ function computeRankedChains(
   return ranked.slice(0, 50);
 }
 
+/* ── F. Entropy-based surprise scoring ─────────────────────────────── */
+
+function computeEntropy(
+  db: Database.Database,
+  window30dStart: string,
+  useDedup: boolean,
+): EntropyItem[] {
+  const volumeExpr = useDedup
+    ? 'COUNT(DISTINCT COALESCE(e.canonical_url, e.event_id))'
+    : 'COUNT(*)';
+
+  const sql = `
+    SELECT et.topic, ${PUB_DAY} AS day, ${volumeExpr} AS volume
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE ${PUB_TS} >= ?
+    GROUP BY et.topic, ${PUB_DAY}
+  `;
+  const rows = db.prepare(sql).all(window30dStart) as Array<{
+    topic: string;
+    day: string;
+    volume: number;
+  }>;
+
+  // Group by topic
+  const byTopic = new Map<string, number[]>();
+  for (const r of rows) {
+    const arr = byTopic.get(r.topic);
+    if (arr) arr.push(r.volume);
+    else byTopic.set(r.topic, [r.volume]);
+  }
+
+  const results: EntropyItem[] = [];
+  for (const [topic, volumes] of byTopic) {
+    const totalVolume = volumes.reduce((a, b) => a + b, 0);
+    if (totalVolume === 0) continue;
+
+    // Shannon entropy: H = -Σ p_i × log2(p_i)
+    let entropy = 0;
+    for (const v of volumes) {
+      if (v > 0) {
+        const p = v / totalVolume;
+        entropy -= p * Math.log2(p);
+      }
+    }
+
+    const activeDays = volumes.length;
+    // Normalize: max entropy = log2(active_days) for uniform distribution
+    const maxEntropy = activeDays > 1 ? Math.log2(activeDays) : 1;
+    const normalizedEntropy = Math.round((entropy / maxEntropy) * 100) / 100;
+
+    results.push({
+      topic,
+      entropy: Math.round(entropy * 1000) / 1000,
+      normalized_entropy: normalizedEntropy,
+      active_days: activeDays,
+    });
+  }
+
+  return results;
+}
+
+/* ── F2. Systems dynamics detection ────────────────────────────────── */
+
+export function detectDynamics(
+  chains: ChainItem[],
+  lifecycles: LifecycleItem[],
+  multiscale: MultiscaleItem[],
+  entropy: EntropyItem[],
+): DynamicItem[] {
+  return [
+    ...detectReinforcingLoops(chains),
+    ...detectDelays(chains),
+    ...detectAccumulations(lifecycles, multiscale, entropy),
+    ...detectDampening(lifecycles),
+  ];
+}
+
+function detectReinforcingLoops(chains: ChainItem[]): DynamicItem[] {
+  const lookup = new Map<string, ChainItem>();
+  for (const c of chains) {
+    lookup.set(`${c.from_topic}→${c.to_topic}`, c);
+  }
+
+  const seen = new Set<string>();
+  const results: DynamicItem[] = [];
+
+  for (const c of chains) {
+    if (c.directionality < 0.3 || c.directionality > 0.7) continue;
+    if (c.lift <= 1) continue;
+
+    const reverseKey = `${c.to_topic}→${c.from_topic}`;
+    const reverse = lookup.get(reverseKey);
+    if (!reverse || reverse.lift <= 1) continue;
+
+    const pairKey = [c.from_topic, c.to_topic].sort().join('↔');
+    if (seen.has(pairKey)) continue;
+    seen.add(pairKey);
+
+    const mutualLift = Math.round(Math.min(c.lift, reverse.lift) * 100) / 100;
+    results.push({
+      type: 'reinforcing_loop',
+      topics: [c.from_topic, c.to_topic],
+      metric: { name: 'directionality', value: c.directionality, secondary_value: mutualLift },
+      interpretation: `${c.from_topic} and ${c.to_topic} amplify each other (directionality ${c.directionality}, mutual lift ${mutualLift}x)`,
+    });
+  }
+
+  return results;
+}
+
+function detectDelays(chains: ChainItem[]): DynamicItem[] {
+  return chains
+    .filter((c) => c.active && c.avg_lag_days >= 0.5)
+    .map((c) => ({
+      type: 'delay' as const,
+      topics: [c.from_topic, c.to_topic],
+      metric: { name: 'avg_lag_days', value: c.avg_lag_days, secondary_value: c.lag_stddev },
+      interpretation: `When ${c.from_topic} spikes, ${c.to_topic} follows in ${c.avg_lag_days}±${c.lag_stddev} days`,
+    }));
+}
+
+function detectAccumulations(
+  lifecycles: LifecycleItem[],
+  multiscale: MultiscaleItem[],
+  entropy: EntropyItem[],
+): DynamicItem[] {
+  const msMap = new Map<string, MultiscaleItem>();
+  for (const ms of multiscale) msMap.set(ms.topic, ms);
+
+  const entMap = new Map<string, EntropyItem>();
+  for (const e of entropy) entMap.set(e.topic, e);
+
+  const results: DynamicItem[] = [];
+
+  for (const lc of lifecycles) {
+    if (lc.phase !== 'emerging' && lc.phase !== 'accelerating') continue;
+
+    const ms = msMap.get(lc.topic);
+    if (!ms || ms.alignment !== 'aligned_up') continue;
+
+    const ent = entMap.get(lc.topic);
+    if (!ent || ent.normalized_entropy <= 0.5) continue;
+
+    results.push({
+      type: 'accumulation',
+      topics: [lc.topic],
+      metric: { name: 'normalized_entropy', value: ent.normalized_entropy },
+      interpretation: `${lc.topic} is ${lc.phase} with all timescales aligned upward and rising entropy — pressure is accumulating`,
+    });
+  }
+
+  return results;
+}
+
+function detectDampening(lifecycles: LifecycleItem[]): DynamicItem[] {
+  const results: DynamicItem[] = [];
+
+  for (const lc of lifecycles) {
+    if (lc.phase !== 'decaying') continue;
+
+    const recentCps = lc.change_points.filter((cp) => cp <= 14);
+    if (recentCps.length === 0) continue;
+
+    const mostRecent = Math.min(...recentCps);
+    results.push({
+      type: 'dampening',
+      topics: [lc.topic],
+      metric: { name: 'change_point_days_ago', value: mostRecent },
+      interpretation: `${lc.topic} had a structural break ${mostRecent} days ago and is now decaying — a balancing force may be dampening this signal`,
+    });
+  }
+
+  return results;
+}
+
+/* ── G. CUSUM change-point detection ──────────────────────────────── */
+
+function detectChangePoints(
+  db: Database.Database,
+  window30dStart: string,
+  useDedup: boolean,
+): Map<string, number[]> {
+  const volumeExpr = useDedup
+    ? 'COUNT(DISTINCT COALESCE(e.canonical_url, e.event_id))'
+    : 'COUNT(*)';
+
+  const sql = `
+    SELECT et.topic, ${PUB_DAY} AS day, ${volumeExpr} AS volume
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE ${PUB_TS} >= ?
+    GROUP BY et.topic, ${PUB_DAY}
+    ORDER BY et.topic, day
+  `;
+  const rows = db.prepare(sql).all(window30dStart) as Array<{
+    topic: string;
+    day: string;
+    volume: number;
+  }>;
+
+  // Group daily volumes by topic (ordered by day)
+  const byTopic = new Map<string, Array<{ day: string; volume: number }>>();
+  for (const r of rows) {
+    const arr = byTopic.get(r.topic);
+    if (arr) arr.push({ day: r.day, volume: r.volume });
+    else byTopic.set(r.topic, [{ day: r.day, volume: r.volume }]);
+  }
+
+  const today = new Date();
+  const result = new Map<string, number[]>();
+
+  for (const [topic, dayVolumes] of byTopic) {
+    if (dayVolumes.length < 3) {
+      result.set(topic, []);
+      continue;
+    }
+
+    const volumes = dayVolumes.map((d) => d.volume);
+    const mean = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+    const variance =
+      volumes.reduce((a, v) => a + (v - mean) ** 2, 0) / volumes.length;
+    const stddev = Math.sqrt(variance);
+
+    if (stddev < 0.01) {
+      result.set(topic, []);
+      continue;
+    }
+
+    const k = CUSUM_K_SIGMA * stddev;
+    const h = CUSUM_H_SIGMA * stddev;
+    const changePoints: number[] = [];
+
+    // Upper CUSUM (detects upward shifts)
+    let sUp = 0;
+    // Lower CUSUM (detects downward shifts)
+    let sDown = 0;
+
+    for (let i = 0; i < volumes.length; i++) {
+      sUp = Math.max(0, sUp + (volumes[i] - mean) - k);
+      sDown = Math.max(0, sDown - (volumes[i] - mean) - k);
+
+      if (sUp > h || sDown > h) {
+        // Change point detected — compute day offset from today
+        const dayDate = new Date(dayVolumes[i].day + 'T00:00:00Z');
+        const offset = Math.round(
+          (today.getTime() - dayDate.getTime()) / 86_400_000,
+        );
+        changePoints.push(offset);
+        // Reset after detection
+        sUp = 0;
+        sDown = 0;
+      }
+    }
+
+    result.set(topic, changePoints);
+  }
+
+  return result;
+}
+
+/* ── H. HMM-style probabilistic phase classifier ─────────────────── */
+
+/** Gaussian log-probability density. */
+function gaussianLogPdf(x: number, mean: number, stddev: number): number {
+  const z = (x - mean) / stddev;
+  return -0.5 * Math.log(2 * Math.PI) - Math.log(stddev) - 0.5 * z * z;
+}
+
+/**
+ * Compute posterior probability of each phase given observed accelerations.
+ * Uses Gaussian emission model with uniform prior across phases.
+ */
+function classifyPhaseHMM(
+  accels: Record<string, number>,
+): { phase: LifecycleItem['phase']; confidence: number; probabilities: Record<string, number> } {
+  const phases = Object.keys(PHASE_EMISSIONS) as LifecycleItem['phase'][];
+  const logLikelihoods: Record<string, number> = {};
+
+  for (const phase of phases) {
+    const { means, stddev } = PHASE_EMISSIONS[phase];
+    let logLik = 0;
+    for (const w of ['1d', '7d', '14d', '30d']) {
+      const observed = accels[w] ?? 0;
+      logLik += gaussianLogPdf(observed, means[w], stddev);
+    }
+    logLikelihoods[phase] = logLik;
+  }
+
+  // Convert log-likelihoods to probabilities via log-sum-exp
+  const maxLogLik = Math.max(...Object.values(logLikelihoods));
+  const expValues: Record<string, number> = {};
+  let sumExp = 0;
+  for (const phase of phases) {
+    const e = Math.exp(logLikelihoods[phase] - maxLogLik);
+    expValues[phase] = e;
+    sumExp += e;
+  }
+
+  const probabilities: Record<string, number> = {};
+  let bestPhase: LifecycleItem['phase'] = 'stable';
+  let bestProb = 0;
+  for (const phase of phases) {
+    const prob = Math.round((expValues[phase] / sumExp) * 1000) / 1000;
+    probabilities[phase] = prob;
+    if (prob > bestProb) {
+      bestProb = prob;
+      bestPhase = phase;
+    }
+  }
+
+  return { phase: bestPhase, confidence: bestProb, probabilities };
+}
+
+/* ── J. Bayesian scenario projection ──────────────────────────────── */
+
+function projectScenariosBayesian(
+  db: Database.Database,
+  chains: ChainItem[],
+  lifecycles: LifecycleItem[],
+  entropyItems: EntropyItem[],
+  window30dStart: string,
+  topN: number,
+  useDedup: boolean,
+): ScenarioItem[] {
+  // Filter: active chains with above-chance lift
+  const activeChains = chains.filter((c) => c.active && c.lift >= 1.5);
+  if (activeChains.length === 0) return [];
+
+  // Compute base rates: P(topic spikes on any given day)
+  // Use spike_days / total_days from chain data (approximate from lifecycles)
+  const volumeExpr = useDedup
+    ? 'COUNT(DISTINCT COALESCE(e.canonical_url, e.event_id))'
+    : 'COUNT(*)';
+  const baseRateSql = `
+    WITH daily_volumes AS (
+      SELECT et.topic, ${PUB_DAY} AS day, ${volumeExpr} AS volume
+      FROM event_topics et JOIN events e ON e.event_id = et.event_id
+      WHERE ${PUB_TS} >= ?
+      GROUP BY et.topic, ${PUB_DAY}
+      HAVING volume >= 3
+    ),
+    total_window AS (
+      SELECT COUNT(DISTINCT ${PUB_DAY}) AS total_days
+      FROM events e WHERE ${PUB_TS} >= ?
+    )
+    SELECT dv.topic,
+           COUNT(DISTINCT dv.day) AS spike_days,
+           tw.total_days
+    FROM daily_volumes dv CROSS JOIN total_window tw
+    GROUP BY dv.topic
+  `;
+  const baseRateRows = db.prepare(baseRateSql).all(
+    window30dStart,
+    window30dStart,
+  ) as Array<{ topic: string; spike_days: number; total_days: number }>;
+
+  const baseRates = new Map<string, number>();
+  for (const r of baseRateRows) {
+    baseRates.set(r.topic, r.total_days > 0 ? r.spike_days / r.total_days : 0.1);
+  }
+
+  // Entropy lookup for target topics
+  const entropyMap = new Map<string, number>();
+  for (const e of entropyItems) {
+    entropyMap.set(e.topic, e.normalized_entropy);
+  }
+
+  // CUSUM: build lookup of most recent change point per topic (days ago)
+  const recentCpMap = new Map<string, number>();
+  for (const lc of lifecycles) {
+    if (lc.change_points.length > 0) {
+      recentCpMap.set(lc.topic, Math.min(...lc.change_points));
+    }
+  }
+
+  // Bayesian aggregation: for each target, posterior ∝ prior × ∏(lift_i × decay_factor_i)
+  const targetMap = new Map<
+    string,
+    {
+      logPosterior: number;
+      triggerTopics: Set<string>;
+      chainCount: number;
+      avgLagMin: number;
+      avgLagMax: number;
+    }
+  >();
+
+  for (const chain of activeChains) {
+    const stddev = chain.lag_stddev || 0;
+    const lagMin = Math.max(0, chain.avg_lag_days - 2 * stddev);
+    const lagMax = chain.avg_lag_days + 2 * stddev;
+
+    // Use decay-weighted lift as the likelihood ratio
+    const decayRatio = chain.support > 0
+      ? chain.decay_weighted_support / chain.support
+      : 1;
+    let effectiveLift = chain.lift * decayRatio;
+
+    // CUSUM discount: if trigger or target had a recent structural break,
+    // historical co-movement patterns may not hold. Linearly discount
+    // from full strength at the horizon to half strength at day 0.
+    const fromCp = recentCpMap.get(chain.from_topic);
+    const toCp = recentCpMap.get(chain.to_topic);
+    const mostRecentCp = Math.min(fromCp ?? Infinity, toCp ?? Infinity);
+    if (mostRecentCp < CUSUM_DISCOUNT_HORIZON_DAYS) {
+      const cpDiscount = 0.5 + 0.5 * (mostRecentCp / CUSUM_DISCOUNT_HORIZON_DAYS);
+      effectiveLift *= cpDiscount;
+    }
+
+    const existing = targetMap.get(chain.to_topic);
+    if (existing) {
+      existing.logPosterior += Math.log(Math.max(effectiveLift, 1.01));
+      existing.triggerTopics.add(chain.from_topic);
+      existing.chainCount += 1;
+      existing.avgLagMin = Math.min(existing.avgLagMin, lagMin);
+      existing.avgLagMax = Math.max(existing.avgLagMax, lagMax);
+    } else {
+      const prior = baseRates.get(chain.to_topic) ?? 0.05;
+      targetMap.set(chain.to_topic, {
+        logPosterior: Math.log(prior) + Math.log(Math.max(effectiveLift, 1.01)),
+        triggerTopics: new Set([chain.from_topic]),
+        chainCount: 1,
+        avgLagMin: lagMin,
+        avgLagMax: lagMax,
+      });
+    }
+  }
+
+  // Convert log-posteriors to normalized probabilities
+  const entries = [...targetMap.entries()];
+  const maxLogPost = Math.max(...entries.map(([, d]) => d.logPosterior));
+
+  // Fetch evidence titles
+  const titleSql = `
+    SELECT e.title
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE et.topic = ? AND ${PUB_TS} >= ?
+    ORDER BY e.score DESC, ${PUB_TS} DESC
+    LIMIT ?
+  `;
+  const titleStmt = db.prepare(titleSql);
+
+  const scenarios: ScenarioItem[] = [];
+  for (const [target, data] of entries) {
+    // Normalize: exp(logPost - maxLogPost) / Σexp(logPost - maxLogPost)
+    const probability = maxLogPost === data.logPosterior
+      ? 1.0
+      : Math.round(Math.exp(data.logPosterior - maxLogPost) * 100) / 100;
+
+    const titleRows = titleStmt.all(
+      target,
+      window30dStart,
+      MAX_TITLES_PER_SCENARIO,
+    ) as Array<{ title: string | null }>;
+
+    const evidenceTitles = titleRows
+      .map((r) => sanitizeSnippet(r.title, { maxLength: 200 }).text)
+      .filter((t) => t.length > 0);
+
+    // Entropy-widened timeframe: bursty targets get wider prediction windows.
+    // entropyFactor ranges from 1.0 (perfectly predictable) to 2.0 (max entropy).
+    const targetEnt = entropyMap.get(target) ?? 0;
+    const entropyFactor = 1 + targetEnt;
+    const center = (data.avgLagMin + data.avgLagMax) / 2;
+    const halfWidth = (data.avgLagMax - data.avgLagMin) / 2;
+    const widenedMin = Math.max(0, center - halfWidth * entropyFactor);
+    const widenedMax = center + halfWidth * entropyFactor;
+
+    scenarios.push({
+      target_topic: target,
+      probability,
+      timeframe_days: [
+        Math.round(widenedMin * 10) / 10,
+        Math.round(widenedMax * 10) / 10,
+      ],
+      trigger_topics: [...data.triggerTopics],
+      supporting_chains: data.chainCount,
+      evidence_titles: evidenceTitles,
+      target_entropy: targetEnt,
+    });
+  }
+
+  // Sort by probability descending, take top N
+  scenarios.sort((a, b) => b.probability - a.probability);
+  return scenarios.slice(0, topN);
+}
+
 /** sinceISO with optional explicit `now` for deterministic window alignment. */
 function sinceISO(durationMs: number, now?: number): string {
   if (now === undefined) return _sinceISO(durationMs);
   return formatISO(new Date(now - durationMs));
+}
+
+/** Convert a Date to a Julian day number (for age calculations matching SQL JULIANDAY). */
+function julianDay(d: Date): number {
+  return d.getTime() / 86_400_000 + 2_440_587.5;
 }

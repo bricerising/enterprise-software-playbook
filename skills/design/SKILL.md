@@ -28,8 +28,8 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
 4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
 5. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(include in output trade-offs)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? *(include in output trade-offs)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? If forecast data is available, check lifecycle phases and chain decay_weighted_support to validate or challenge trajectory assumptions. *(include in output trade-offs)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? If forecast data is available, check transitive chains for empirical second-order effects and scenarios for quantified downstream probabilities. *(include in output trade-offs)*
    - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(include in output trade-offs)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 6. Validate with 2 examples: a "happy path" and a likely future change.

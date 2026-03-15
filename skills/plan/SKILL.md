@@ -32,8 +32,8 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - what each option knowingly worsens
    - kill criteria / reversal trigger
 6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? If forecast data is available, check lifecycle phases and chain decay_weighted_support to validate or challenge trajectory assumptions. *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? If forecast data is available, check transitive chains for empirical second-order effects and scenarios for quantified downstream probabilities. *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 7. Choose the minimum up-front artifacts:
