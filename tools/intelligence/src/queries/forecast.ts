@@ -24,6 +24,7 @@ export interface ForecastData {
   ranked_chains: RankedChainItem[];
   scenarios: ScenarioItem[];
   multiscale: MultiscaleItem[];
+  transitive_chains: TransitiveChainItem[];
 }
 
 export interface LifecycleItem {
@@ -41,6 +42,18 @@ export interface ChainItem {
   avg_lag_days: number;
   source_diversity: number;
   active: boolean;
+  lift: number;
+  confidence: number;
+  directionality: number;
+  lag_stddev: number;
+}
+
+export interface TransitiveChainItem {
+  path: string[];
+  total_lag_days: number;
+  min_support: number;
+  combined_lift: number;
+  cross_domain: boolean;
 }
 
 export interface RankedChainItem extends ChainItem {
@@ -95,6 +108,7 @@ export function computeForecast(
 
   const lifecycles = computeLifecycles(db, now, useDedup);
   const chains = detectChains(db, window30dStart, lagWindowDays, minSupport, useDedup, lifecycles);
+  const transitive_chains = detectTransitiveChains(chains);
   const scenarios = projectScenarios(db, chains, lifecycles, window30dStart, topScenarios, useDedup);
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
@@ -106,6 +120,7 @@ export function computeForecast(
     ranked_chains,
     scenarios,
     multiscale,
+    transitive_chains,
   });
 }
 
@@ -281,15 +296,33 @@ function detectChains(
       WHERE e.fetched_at >= ?
       GROUP BY et.topic, DATE(e.fetched_at)
       HAVING volume >= 3
+    ),
+    topic_spike_days AS (
+      SELECT topic, COUNT(DISTINCT day) AS spike_days
+      FROM daily_volumes
+      GROUP BY topic
+    ),
+    total_window AS (
+      SELECT COUNT(DISTINCT day) AS total_days FROM daily_volumes
     )
     SELECT a.topic AS from_topic, b.topic AS to_topic,
            COUNT(*) AS support,
            AVG(JULIANDAY(b.day) - JULIANDAY(a.day)) AS avg_lag_days,
-           COUNT(DISTINCT a.sources || ',' || b.sources) AS source_pairs
-    FROM daily_volumes a JOIN daily_volumes b
+           AVG(CASE WHEN a.sources < b.sources THEN a.sources ELSE b.sources END) AS avg_min_sources,
+           (COUNT(*) * 1.0 * tw.total_days) / (sa.spike_days * sb.spike_days) AS lift,
+           (COUNT(*) * 1.0) / sa.spike_days AS confidence,
+           SQRT(MAX(0,
+             AVG((JULIANDAY(b.day) - JULIANDAY(a.day)) * (JULIANDAY(b.day) - JULIANDAY(a.day)))
+             - AVG(JULIANDAY(b.day) - JULIANDAY(a.day)) * AVG(JULIANDAY(b.day) - JULIANDAY(a.day))
+           )) AS lag_stddev
+    FROM daily_volumes a
+    JOIN daily_volumes b
       ON b.day > a.day
       AND JULIANDAY(b.day) - JULIANDAY(a.day) <= ?
       AND a.topic != b.topic
+    JOIN topic_spike_days sa ON sa.topic = a.topic
+    JOIN topic_spike_days sb ON sb.topic = b.topic
+    CROSS JOIN total_window tw
     GROUP BY a.topic, b.topic
     HAVING support >= ?
     ORDER BY support DESC
@@ -304,13 +337,16 @@ function detectChains(
     to_topic: string;
     support: number;
     avg_lag_days: number;
-    source_pairs: number;
+    avg_min_sources: number;
+    lift: number;
+    confidence: number;
+    lag_stddev: number | null;
   }>;
 
   if (chainRows.length === 0) return [];
 
   // Normalize source_diversity to 0-1
-  const maxSourcePairs = Math.max(...chainRows.map((r) => r.source_pairs));
+  const maxMinSources = Math.max(...chainRows.map((r) => r.avg_min_sources));
 
   // Determine which topics are currently spiking (volume >= 3 in last 24h)
   const spikeSql = `
@@ -331,16 +367,70 @@ function detectChains(
     if ((lc.accelerations['7d'] ?? 0) > 1.0) spiking.add(lc.topic);
   }
 
-  return chainRows.map((row) => ({
+  const chainList = chainRows.map((row) => ({
     from_topic: row.from_topic,
     to_topic: row.to_topic,
     support: row.support,
     avg_lag_days: Math.round(row.avg_lag_days * 10) / 10,
-    source_diversity: maxSourcePairs > 0
-      ? Math.round((row.source_pairs / maxSourcePairs) * 100) / 100
+    source_diversity: maxMinSources > 0
+      ? Math.round((row.avg_min_sources / maxMinSources) * 100) / 100
       : 0,
     active: spiking.has(row.from_topic),
+    lift: Math.round((row.lift ?? 0) * 100) / 100,
+    confidence: Math.round(Math.min(row.confidence ?? 0, 1) * 100) / 100,
+    directionality: 1.0, // placeholder, computed below
+    lag_stddev: Math.round((row.lag_stddev ?? 0) * 100) / 100,
   }));
+
+  // Compute directionality: support(A→B) / (support(A→B) + support(B→A))
+  const supportLookup = new Map<string, number>();
+  for (const c of chainList) {
+    supportLookup.set(`${c.from_topic}→${c.to_topic}`, c.support);
+  }
+  for (const c of chainList) {
+    const forward = supportLookup.get(`${c.from_topic}→${c.to_topic}`) ?? 0;
+    const reverse = supportLookup.get(`${c.to_topic}→${c.from_topic}`) ?? 0;
+    c.directionality = reverse === 0
+      ? 1.0
+      : Math.round((forward / (forward + reverse)) * 100) / 100;
+  }
+
+  return chainList;
+}
+
+/* ── B2. Transitive chain detection ────────────────────────────────── */
+
+function detectTransitiveChains(chains: ChainItem[]): TransitiveChainItem[] {
+  // Build adjacency: from_topic → list of chains
+  const adj = new Map<string, ChainItem[]>();
+  for (const c of chains) {
+    const list = adj.get(c.from_topic);
+    if (list) list.push(c);
+    else adj.set(c.from_topic, [c]);
+  }
+
+  const results: TransitiveChainItem[] = [];
+
+  for (const ab of chains) {
+    const bcList = adj.get(ab.to_topic);
+    if (!bcList) continue;
+    for (const bc of bcList) {
+      // Skip loops: A→B→A
+      if (bc.to_topic === ab.from_topic) continue;
+
+      const path = [ab.from_topic, ab.to_topic, bc.to_topic];
+      const total_lag_days = Math.round((ab.avg_lag_days + bc.avg_lag_days) * 10) / 10;
+      const min_support = Math.min(ab.support, bc.support);
+      const combined_lift = Math.round(ab.lift * bc.lift * 100) / 100;
+      const cross_domain = path[0].split('.')[0] !== path[path.length - 1].split('.')[0];
+
+      results.push({ path, total_lag_days, min_support, combined_lift, cross_domain });
+    }
+  }
+
+  // Sort by combined_lift descending, cap at 100
+  results.sort((a, b) => b.combined_lift - a.combined_lift);
+  return results.slice(0, 100);
 }
 
 /* ── C. Scenario projection ─────────────────────────────────────────── */
@@ -353,7 +443,8 @@ function projectScenarios(
   topN: number,
   useDedup: boolean,
 ): ScenarioItem[] {
-  const activeChains = chains.filter((c) => c.active);
+  // Filter: active chains with above-chance lift
+  const activeChains = chains.filter((c) => c.active && c.lift >= 1.5);
   if (activeChains.length === 0) return [];
 
   // Build acceleration lookup from lifecycles (prefer d1, fallback to d7)
@@ -364,12 +455,12 @@ function projectScenarios(
     accelMap.set(lc.topic, Math.abs(d1) >= 0.1 ? d1 : d7);
   }
 
-  // Score each chain
+  // Score each chain using confidence-based formula
   const scored = activeChains.map((chain) => {
     const fromAccel = Math.max(0, accelMap.get(chain.from_topic) ?? 0);
     return {
       ...chain,
-      rawScore: chain.support * chain.source_diversity * (1 + fromAccel),
+      rawScore: chain.confidence * chain.lift * chain.source_diversity * (1 + fromAccel),
     };
   });
 
@@ -389,20 +480,25 @@ function projectScenarios(
   >();
 
   for (const s of scored) {
+    // Compute stddev-based timeframe: [avg_lag - 2*stddev, avg_lag + 2*stddev]
+    const stddev = s.lag_stddev || 0;
+    const lagMin = Math.max(0, s.avg_lag_days - 2 * stddev);
+    const lagMax = s.avg_lag_days + 2 * stddev;
+
     const existing = targetMap.get(s.to_topic);
     if (existing) {
       existing.totalScore += s.rawScore;
       existing.triggerTopics.add(s.from_topic);
       existing.chainCount += 1;
-      existing.avgLagMin = Math.min(existing.avgLagMin, s.avg_lag_days * 0.5);
-      existing.avgLagMax = Math.max(existing.avgLagMax, s.avg_lag_days * 1.5);
+      existing.avgLagMin = Math.min(existing.avgLagMin, lagMin);
+      existing.avgLagMax = Math.max(existing.avgLagMax, lagMax);
     } else {
       targetMap.set(s.to_topic, {
         totalScore: s.rawScore,
         triggerTopics: new Set([s.from_topic]),
         chainCount: 1,
-        avgLagMin: s.avg_lag_days * 0.5,
-        avgLagMax: s.avg_lag_days * 1.5,
+        avgLagMin: lagMin,
+        avgLagMax: lagMax,
       });
     }
   }
@@ -513,7 +609,7 @@ function computeRankedChains(
   const ranked: RankedChainItem[] = activeChains.map((chain) => {
     const accel = Math.max(0, accelMap.get(chain.from_topic) ?? 0);
     const score =
-      Math.round(chain.support * chain.source_diversity * (1 + accel) * 100) / 100;
+      Math.round(chain.support * chain.source_diversity * chain.lift * chain.confidence * (1 + accel) * 100) / 100;
     const cross_domain =
       chain.from_topic.split('.')[0] !== chain.to_topic.split('.')[0];
     return { ...chain, score, cross_domain };

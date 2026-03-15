@@ -111,6 +111,7 @@ describe('computeForecast', () => {
     expect(result.data).toHaveProperty('ranked_chains');
     expect(result.data).toHaveProperty('scenarios');
     expect(result.data).toHaveProperty('multiscale');
+    expect(result.data).toHaveProperty('transitive_chains');
     expect(result.data.window.events_analyzed).toBeGreaterThan(0);
   });
 
@@ -119,12 +120,16 @@ describe('computeForecast', () => {
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
 
-    // Each chain should have support >= min_support
+    // Each chain should have support >= min_support and new statistical fields
     for (const chain of chains) {
       expect(chain.support).toBeGreaterThanOrEqual(2);
       expect(chain.avg_lag_days).toBeGreaterThan(0);
       expect(chain.source_diversity).toBeGreaterThanOrEqual(0);
       expect(chain.source_diversity).toBeLessThanOrEqual(1);
+      expect(typeof chain.lift).toBe('number');
+      expect(typeof chain.confidence).toBe('number');
+      expect(typeof chain.directionality).toBe('number');
+      expect(typeof chain.lag_stddev).toBe('number');
     }
   });
 
@@ -208,6 +213,7 @@ describe('computeForecast', () => {
       expect(result.data.ranked_chains).toEqual([]);
       expect(result.data.scenarios).toEqual([]);
       expect(result.data.multiscale).toEqual([]);
+      expect(result.data.transitive_chains).toEqual([]);
       expect(result.data.window.events_analyzed).toBe(0);
     } finally {
       emptyDb.close();
@@ -372,5 +378,87 @@ describe('sparse-day fallbacks', () => {
       const toDomain = rc.to_topic.split('.')[0];
       expect(rc.cross_domain).toBe(fromDomain !== toDomain);
     }
+  });
+});
+
+/* ── Statistical rigor tests ───────────────────────────────────────── */
+
+describe('chain statistical fields', () => {
+  it('lift and confidence are finite and in expected ranges', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const chains = result.data.chains;
+    expect(chains.length).toBeGreaterThan(0);
+
+    for (const c of chains) {
+      expect(Number.isFinite(c.lift)).toBe(true);
+      expect(c.lift).toBeGreaterThan(0);
+      expect(Number.isFinite(c.confidence)).toBe(true);
+      expect(c.confidence).toBeGreaterThanOrEqual(0);
+      expect(c.confidence).toBeLessThanOrEqual(1);
+      expect(Number.isFinite(c.lag_stddev)).toBe(true);
+      expect(c.lag_stddev).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('directionality symmetry: A→B + B→A directionalities sum to 1.0', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const chains = result.data.chains;
+
+    const lookup = new Map<string, number>();
+    for (const c of chains) {
+      lookup.set(`${c.from_topic}→${c.to_topic}`, c.directionality);
+    }
+
+    for (const c of chains) {
+      const reverseKey = `${c.to_topic}→${c.from_topic}`;
+      const reverseDir = lookup.get(reverseKey);
+      if (reverseDir !== undefined) {
+        // A→B directionality + B→A directionality should sum to ~1.0
+        expect(c.directionality + reverseDir).toBeCloseTo(1.0, 1);
+      } else {
+        // No reverse chain means directionality = 1.0
+        expect(c.directionality).toBe(1.0);
+      }
+    }
+  });
+});
+
+/* ── Transitive chain tests ────────────────────────────────────────── */
+
+describe('transitive chains', () => {
+  it('has valid structure and no A→B→A loops', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const tc = result.data.transitive_chains;
+
+    for (const chain of tc) {
+      // Path must have 3 elements
+      expect(chain.path).toHaveLength(3);
+      // No loops: first != last
+      expect(chain.path[0]).not.toBe(chain.path[2]);
+      // Numeric fields are finite
+      expect(Number.isFinite(chain.total_lag_days)).toBe(true);
+      expect(chain.total_lag_days).toBeGreaterThan(0);
+      expect(Number.isFinite(chain.min_support)).toBe(true);
+      expect(chain.min_support).toBeGreaterThanOrEqual(2);
+      expect(Number.isFinite(chain.combined_lift)).toBe(true);
+      expect(chain.combined_lift).toBeGreaterThan(0);
+      expect(typeof chain.cross_domain).toBe('boolean');
+    }
+  });
+
+  it('cross_domain is correct for transitive paths', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const tc = result.data.transitive_chains;
+
+    for (const chain of tc) {
+      const firstDomain = chain.path[0].split('.')[0];
+      const lastDomain = chain.path[chain.path.length - 1].split('.')[0];
+      expect(chain.cross_domain).toBe(firstDomain !== lastDomain);
+    }
+  });
+
+  it('capped at 100 results', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    expect(result.data.transitive_chains.length).toBeLessThanOrEqual(100);
   });
 });
