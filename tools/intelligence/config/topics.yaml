@@ -307,6 +307,23 @@ topics:
     priority: 35
 
   # --- Business & Finance ---
+  - id: biz.cloud_revenue
+    label: Cloud Revenue
+    keywords: [cloud revenue, aws revenue, azure revenue, gcp revenue, cloud growth, cloud segment]
+    priority: 50
+
+  - id: biz.ai_spend
+    label: AI Investment
+    keywords: [ai spending, ai investment, ai capex, data center spending, data center capex, ai revenue]
+    priority: 50
+
+  - id: biz.guidance
+    label: Earnings Guidance
+    keywords: [guidance, outlook, raised guidance, lowered guidance, forward guidance, full-year outlook]
+    priority: 45
+    context_required: true
+    context_terms: [earnings, revenue, quarter, fiscal, expects, forecast]
+
   - id: biz.sec_filing
     label: SEC Filings
     keywords: [sec filing, 10-k, 10-q, 8-k, annual report, quarterly report]

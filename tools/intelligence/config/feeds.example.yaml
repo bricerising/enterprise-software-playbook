@@ -9,6 +9,7 @@ database: ~/.local/share/intel/intelligence.db
 collector:
   poll_interval_seconds: 300
   retention_days: 30
+  edgar_contact: user@example.com
 
 feeds:
   # -- Community (high signal-to-noise) --
@@ -17,6 +18,11 @@ feeds:
     modes: [top]
     poll_interval: 300
     max_items: 50
+
+  # -- Tech Earnings (SEC filings for major tech companies) --
+  - source: earnings
+    name: Tech Earnings
+    poll_interval: 3600      # hourly — filings are infrequent
 
 topics_file: ~/.config/intel/topics.yaml
 

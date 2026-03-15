@@ -14,6 +14,7 @@ import { querySources } from '../queries/sources.js';
 import { queryTopics } from '../queries/topics.js';
 import { queryStats } from '../queries/stats.js';
 import { buildPack } from '../queries/pack.js';
+import { computeForecast } from '../queries/forecast.js';
 
 const TOOL_DEFINITIONS = [
   {
@@ -101,6 +102,19 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'intel_forecast',
+    description: 'Predict likely next developments from topic co-movement patterns and lifecycle analysis',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        lag_window_days: { type: 'number', description: 'Max days between chain links (default: 7)' },
+        min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 3)' },
+        top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
+        dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
+      },
+    },
+  },
 ];
 
 export async function startMcpServer(dbPath: string): Promise<void> {
@@ -179,6 +193,15 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             since: params.since as string | undefined,
             top: params.top as number | undefined,
             maxEvents: params.max_events as number | undefined,
+          });
+          break;
+
+        case 'intel_forecast':
+          result = computeForecast(db, {
+            lag_window_days: params.lag_window_days as number | undefined,
+            min_support: params.min_support as number | undefined,
+            top_scenarios: params.top_scenarios as number | undefined,
+            dedup: params.dedup as string | undefined,
           });
           break;
 

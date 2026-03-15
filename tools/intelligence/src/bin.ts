@@ -13,6 +13,7 @@ import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
+import { computeForecast } from './queries/forecast.js';
 import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
@@ -329,6 +330,36 @@ program
             since: opts.since,
             top: parseInt(opts.top, 10),
             maxEvents: parseInt(opts.maxEvents, 10),
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+// --- forecast ---
+program
+  .command('forecast')
+  .description('Predict likely next developments from event chain patterns')
+  .option('--lag-window <days>', 'Max days between chain links', '7')
+  .option('--min-support <n>', 'Min co-occurrences for valid chain', '3')
+  .option('--top-scenarios <n>', 'Max scenarios to return', '10')
+  .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          computeForecast(db, {
+            lag_window_days: parseInt(opts.lagWindow, 10),
+            min_support: parseInt(opts.minSupport, 10),
+            top_scenarios: parseInt(opts.topScenarios, 10),
+            dedup: opts.dedup,
           }),
         ),
       );
