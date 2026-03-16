@@ -237,6 +237,12 @@ def _build_cluster_metrics(
     win: defaultdict[int, float] = defaultdict(float)
     wout: defaultdict[int, float] = defaultdict(float)
     cut: defaultdict[int, float] = defaultdict(float)
+    # Directional inbound weight: weight of cross-cluster edges where this cluster is *target*
+    # For undirected co-change/semantic edges we split equally; for directed dep edges
+    # we attribute to both sides.  Here we count each cross-cluster edge toward both
+    # endpoints' inbound tally (since the graph is undirected).  The result measures
+    # "how much do other clusters pull toward me."
+    inbound: defaultdict[int, float] = defaultdict(float)
     for left, right, attrs in graph.edges(data=True):
         weight = float(attrs["weight"])
         cluster_left = cluster_by_path.get(left, -1)
@@ -248,6 +254,8 @@ def _build_cluster_metrics(
             wout[cluster_right] += weight
             cut[cluster_left] += weight
             cut[cluster_right] += weight
+            inbound[cluster_left] += weight
+            inbound[cluster_right] += weight
 
     total_volume = float(sum(weighted_degree.values()))
     cluster_rows = []
@@ -268,6 +276,7 @@ def _build_cluster_metrics(
                 "conductance": conductance,
                 "internal_weight": inner,
                 "external_weight": outer,
+                "external_inbound_weight": inbound[cluster_id],
                 "risk_mean": float(np.mean([risk_by_path[path] for path in paths])) if paths else 0.0,
                 "risk_max": max((risk_by_path[path] for path in paths), default=0.0),
                 "paths": "\n".join(paths[:50]),
@@ -277,7 +286,7 @@ def _build_cluster_metrics(
 
 
 _EMPTY_FILE_COLUMNS = ["path", "cluster_id", "weighted_degree", "degree", "betweenness", "xnbr", "hubness", "volatility", "risk"]
-_EMPTY_CLUSTER_COLUMNS = ["cluster_id", "size", "cohesion", "leakage", "conductance", "internal_weight", "external_weight", "risk_mean", "risk_max", "paths"]
+_EMPTY_CLUSTER_COLUMNS = ["cluster_id", "size", "cohesion", "leakage", "conductance", "internal_weight", "external_weight", "external_inbound_weight", "risk_mean", "risk_max", "paths"]
 
 
 # ---------------------------------------------------------------------------

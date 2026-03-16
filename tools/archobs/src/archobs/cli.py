@@ -231,13 +231,14 @@ def show_risks(
     min_risk: float | None = typer.Option(None, help="Minimum risk score filter."),
     min_xnbr: float | None = typer.Option(None, help="Minimum xnbr filter."),
     min_hubness: float | None = typer.Option(None, help="Minimum hubness filter."),
+    min_volatility: float | None = typer.Option(None, help="Minimum volatility filter."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     from archobs.display import format_risks, read_file_metrics
 
     df = read_file_metrics(out)
-    text = format_risks(df, top=top, fmt=fmt, min_risk=min_risk, min_xnbr=min_xnbr, min_hubness=min_hubness)
+    text = format_risks(df, top=top, fmt=fmt, min_risk=min_risk, min_xnbr=min_xnbr, min_hubness=min_hubness, min_volatility=min_volatility)
     _write_or_print(text, out_path)
 
 
@@ -296,8 +297,19 @@ def show_drift(
 ) -> None:
     from archobs.display import format_drift, read_drift
 
+    # Read configured window count from config if available
+    configured_windows: int | None = None
+    config_path = out / "config.json"
+    if config_path.exists():
+        import json as _json
+        try:
+            cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+            configured_windows = cfg.get("clustering", {}).get("drift_window_count")
+        except (ValueError, KeyError):
+            pass
+
     df = read_drift(out)
-    text = format_drift(df, fmt=fmt)
+    text = format_drift(df, fmt=fmt, configured_windows=configured_windows)
     _write_or_print(text, out_path)
 
 
@@ -359,12 +371,16 @@ def show_all(
     top: int = typer.Option(0, help="Number of top entries per section (0 = all). Shorthand for --top-risks and --top-clusters."),
     top_risks: int | None = typer.Option(None, "--top-risks", help="Number of top-risk files (overrides --top)."),
     top_clusters: int | None = typer.Option(None, "--top-clusters", help="Number of top clusters (overrides --top)."),
+    compact: bool = typer.Option(False, "--compact", help="Agent-friendly compact output: 5 risks, 10 clusters, velocity without added_paths, edges for top-3 clusters only. Target <50KB."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     from archobs.display import format_all
 
-    text = format_all(out, top=top, top_risks=top_risks, top_clusters=top_clusters, fmt=fmt)
+    if compact:
+        top_risks = top_risks if top_risks is not None else 5
+        top_clusters = top_clusters if top_clusters is not None else 10
+    text = format_all(out, top=top, top_risks=top_risks, top_clusters=top_clusters, fmt=fmt, compact=compact)
     _write_or_print(text, out_path)
 
 

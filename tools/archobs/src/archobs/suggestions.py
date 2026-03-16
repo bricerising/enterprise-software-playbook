@@ -209,10 +209,64 @@ def _rule_based_change_suggestions(
             ["leakage", "risk_max"], ascending=[False, False],
         )
         leaky_candidates = leaky_candidates[leaky_candidates["leakage"].astype(float) >= 0.20]
-        for _, leaky in leaky_candidates.head(3).iterrows():
+
+        # Detect convergent leakage: multiple leaky clusters whose top neighbor is the same target
+        top_leaky = leaky_candidates.head(3)
+        neighbor_targets: dict[int, list[tuple[int, float, dict | None]]] = defaultdict(list)
+        for _, leaky in top_leaky.iterrows():
             cluster_id = int(leaky["cluster_id"])
             profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
             neighbor = profile["neighbors"][0] if profile and profile["neighbors"] else None
+            target_id = int(neighbor["cluster_id"]) if neighbor else -1
+            neighbor_targets[target_id].append((cluster_id, float(leaky["leakage"]), profile))
+
+        # Check for convergent hub: 2+ leaky clusters pointing at the same target
+        convergent_hubs: set[int] = set()
+        for target_id, sources in neighbor_targets.items():
+            if target_id >= 0 and len(sources) >= 2:
+                convergent_hubs.add(target_id)
+                source_ids = [s[0] for s in sources]
+                max_leakage = max(s[1] for s in sources)
+                # Build a consolidated "decompose the attractor" suggestion
+                target_profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == target_id), None)
+                target_name = _humanize_area_label(str(target_profile["label"])) if target_profile else f"cluster {target_id}"
+                source_names = []
+                scope_paths: list[str] = []
+                for cid, _, prof in sources:
+                    if prof:
+                        source_names.append(_humanize_area_label(str(prof["label"])))
+                        scope_paths.extend(list(prof["paths"][:2]))
+                    else:
+                        source_names.append(f"cluster {cid}")
+                if target_profile and target_profile.get("paths"):
+                    scope_paths = list(target_profile["paths"][:3]) + scope_paths[:3]
+                source_list = ", ".join(source_names)
+                suggestions.append(
+                    {
+                        "priority": "High" if max_leakage >= 0.40 else "Medium",
+                        "title": f"Decompose {target_name} — it attracts {len(sources)} clusters",
+                        "why": (
+                            f"Clusters {', '.join(str(s) for s in source_ids)} all leak primarily toward {target_name} (cluster {target_id}). "
+                            f"This convergent pull indicates {target_name} is a gravitational center, not {len(sources)} independent boundary problems."
+                        ),
+                        "change": (
+                            f"Break {target_name} into narrower modules so that {source_list} each depend on a focused interface instead of one monolithic area."
+                        ),
+                        "scope": ", ".join(scope_paths[:6]),
+                    }
+                )
+
+        # Emit individual boundary suggestions only for clusters NOT part of a convergent hub
+        for _, leaky in top_leaky.iterrows():
+            cluster_id = int(leaky["cluster_id"])
+            profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
+            neighbor = profile["neighbors"][0] if profile and profile["neighbors"] else None
+            target_id = int(neighbor["cluster_id"]) if neighbor else -1
+
+            # Skip if this cluster's target was already covered by a convergent hub suggestion
+            if target_id in convergent_hubs:
+                continue
+
             if profile and neighbor:
                 source_label = str(profile["label"])
                 target_label = str(neighbor["label"])

@@ -73,22 +73,32 @@ _GENERIC_STEMS = {
 }
 
 
-def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
+def _generate_cluster_label(
+    paths: list[str],
+    max_length: int = 50,
+    weights: dict[str, float] | None = None,
+) -> str:
     """Generate a heuristic label from the dominant path prefixes in a cluster.
 
     Extracts domain keywords from filenames (e.g. "orders", "payments") and
     prepends when dominant stems appear above a threshold. For large clusters
     (>30 files) the threshold is lowered from 40% to 25%, and the top-2 stems
     are used when no single stem dominates.
+
+    When *weights* is provided (mapping path -> significance score such as risk
+    or degree), stems and prefixes are weighted by significance rather than
+    counted by frequency. This prevents large clusters of small files from
+    drowning out the domain-defining high-risk files.
     """
     if not paths:
         return ""
-    from collections import Counter
+    from collections import Counter, defaultdict
     from pathlib import PurePosixPath
 
-    prefixes: list[str] = []
-    stems: list[str] = []
+    prefix_weights: defaultdict[str, float] = defaultdict(float)
+    stem_weights: defaultdict[str, float] = defaultdict(float)
     for p in paths:
+        w = weights.get(p, 1.0) if weights else 1.0
         parts = p.split("/")
         # Skip common root segments like src/, packages/, apps/
         start = 0
@@ -98,32 +108,31 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
         depth = 3 if start > 0 else 2
         segments = parts[start:start + depth]
         if segments:
-            prefixes.append("/".join(segments))
+            prefix_weights["/".join(segments)] += w
         # Extract domain keyword from filename stem
         raw_stem = PurePosixPath(p).stem.split(".")[0]  # orders.service.ts -> orders
         raw_stem = raw_stem.replace("-", "_").split("_")[0]  # order-events -> order
         if raw_stem.lower() not in _GENERIC_STEMS and len(raw_stem) > 1:
-            stems.append(raw_stem.lower())
+            stem_weights[raw_stem.lower()] += w
 
-    if not prefixes:
+    if not prefix_weights:
         return ""
-    prefix_counts = Counter(prefixes)
-    top = prefix_counts.most_common(2)
+    top = sorted(prefix_weights.items(), key=lambda x: -x[1])[:2]
     structural = " + ".join(prefix for prefix, _ in top)
 
     # Check for dominant domain keywords — adaptive threshold for large clusters
+    total_weight = sum(weights.get(p, 1.0) for p in paths) if weights else float(len(paths))
     threshold = 0.25 if len(paths) > 30 else 0.40
-    if stems:
-        stem_counts = Counter(stems)
-        top_stems = stem_counts.most_common(2)
-        dominant_stem, dominant_count = top_stems[0]
-        if dominant_count / len(paths) > threshold:
+    if stem_weights:
+        top_stems = sorted(stem_weights.items(), key=lambda x: -x[1])[:2]
+        dominant_stem, dominant_weight = top_stems[0]
+        if total_weight > 0 and dominant_weight / total_weight > threshold:
             label = f"{dominant_stem} ({structural})"
         elif len(top_stems) >= 2:
             # Use top-2 stems when no single stem dominates
-            s1, c1 = top_stems[0]
-            s2, c2 = top_stems[1]
-            combined_ratio = (c1 + c2) / len(paths)
+            s1, w1 = top_stems[0]
+            s2, w2 = top_stems[1]
+            combined_ratio = (w1 + w2) / total_weight if total_weight > 0 else 0
             if combined_ratio > threshold:
                 label = f"{s1}/{s2} ({structural})"
             else:
@@ -136,6 +145,13 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
     if len(label) > max_length:
         label = label[:max_length - 3] + "..."
     return label
+
+
+def _build_risk_weights(file_metrics_df: pd.DataFrame) -> dict[str, float] | None:
+    """Build a path->risk weight map from file_metrics for label generation."""
+    if file_metrics_df.empty or "risk" not in file_metrics_df.columns:
+        return None
+    return dict(zip(file_metrics_df["path"], file_metrics_df["risk"]))
 
 
 def _truncate_path(p: str, max_segments: int = 4) -> str:
@@ -184,6 +200,7 @@ def format_risks(
     min_risk: float | None = None,
     min_xnbr: float | None = None,
     min_hubness: float | None = None,
+    min_volatility: float | None = None,
 ) -> str:
     filtered = df.copy()
     if min_risk is not None:
@@ -192,6 +209,8 @@ def format_risks(
         filtered = filtered[filtered["xnbr"] >= min_xnbr]
     if min_hubness is not None:
         filtered = filtered[filtered["hubness"] >= min_hubness]
+    if min_volatility is not None and "volatility" in filtered.columns:
+        filtered = filtered[filtered["volatility"] >= min_volatility]
     filtered = filtered.sort_values("risk", ascending=False)
     if top > 0:
         filtered = filtered.head(top)
@@ -215,7 +234,7 @@ def format_risks(
 # ---------------------------------------------------------------------------
 
 _VELOCITY_TABLE_COLS = [
-    "cluster_id", "label", "commit_count", "added_count", "modified_count",
+    "cluster_id", "label", "distinct_commits", "file_change_count", "added_count", "modified_count",
     "deleted_count", "growth_ratio", "churn_ratio",
 ]
 _VELOCITY_JSON_COLS = _VELOCITY_TABLE_COLS  # acceleration added when --compare
@@ -247,11 +266,12 @@ def format_velocity(
 
     def _compute_velocity(df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
-            return pd.DataFrame(columns=["cluster_id", "commit_count", "added_count",
-                                          "modified_count", "deleted_count",
+            return pd.DataFrame(columns=["cluster_id", "distinct_commits", "file_change_count",
+                                          "added_count", "modified_count", "deleted_count",
                                           "growth_ratio", "churn_ratio"])
         grouped = df.groupby("cluster_id").agg(
-            commit_count=("commit_ts", "count"),
+            distinct_commits=("commit_sha", "nunique"),
+            file_change_count=("commit_ts", "count"),
             added_count=("status", lambda s: (s == "A").sum()),
             modified_count=("status", lambda s: (s == "M").sum()),
             deleted_count=("status", lambda s: (s == "D").sum()),
@@ -263,14 +283,15 @@ def format_velocity(
         return grouped
 
     velocity = _compute_velocity(current)
-    velocity = velocity.sort_values("commit_count", ascending=False).reset_index(drop=True)
+    velocity = velocity.sort_values("distinct_commits", ascending=False).reset_index(drop=True)
 
-    # Add cluster labels from cluster_metrics paths
+    # Add cluster labels from cluster_metrics paths, weighted by file risk
+    risk_weights = _build_risk_weights(file_metrics_df)
     if "paths" in cluster_metrics_df.columns:
         label_map = {}
         for _, row in cluster_metrics_df.iterrows():
             all_paths = _extract_paths_list(row.get("paths", ""))
-            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths)
+            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths, weights=risk_weights)
         velocity["label"] = velocity["cluster_id"].map(label_map).fillna("")
     else:
         velocity["label"] = ""
@@ -279,10 +300,10 @@ def format_velocity(
         prior_cutoff = cutoff - (window * 86400)
         prior = merged[(merged["commit_ts"] >= prior_cutoff) & (merged["commit_ts"] < cutoff)]
         prior_velocity = _compute_velocity(prior)
-        prior_map = dict(zip(prior_velocity["cluster_id"], prior_velocity["commit_count"]))
+        prior_map = dict(zip(prior_velocity["cluster_id"], prior_velocity["distinct_commits"]))
         velocity["prior_commit_count"] = velocity["cluster_id"].map(prior_map).fillna(0).astype(int)
         velocity["acceleration"] = velocity.apply(
-            lambda r: round(r["commit_count"] / max(r["prior_commit_count"], 1), 2),
+            lambda r: round(r["distinct_commits"] / max(r["prior_commit_count"], 1), 2),
             axis=1,
         )
 
@@ -388,7 +409,8 @@ def format_edges(
 # ---------------------------------------------------------------------------
 
 _CLUSTER_TABLE_COLS = ["cluster_id", "size", "cohesion", "leakage", "conductance",
-                       "internal_weight", "external_weight", "risk_mean", "risk_max",
+                       "internal_weight", "external_weight", "external_inbound_weight",
+                       "risk_mean", "risk_max",
                        "recent_commits_30d", "recent_commits_90d"]
 _CLUSTER_JSON_COLS = _CLUSTER_TABLE_COLS  # top_paths added separately
 
@@ -408,10 +430,13 @@ def format_clusters(
     sort_by: str = "leakage",
     fmt: str = "table",
     min_size: int = 2,
+    file_metrics_df: pd.DataFrame | None = None,
 ) -> str:
     filtered = df[df["size"] >= min_size].copy() if "size" in df.columns else df.copy()
     if sort_by in filtered.columns:
         filtered = filtered.sort_values(sort_by, ascending=False)
+
+    risk_weights = _build_risk_weights(file_metrics_df) if file_metrics_df is not None else None
 
     if fmt == "json":
         cols = [c for c in _CLUSTER_JSON_COLS if c in filtered.columns]
@@ -422,7 +447,7 @@ def format_clusters(
             for rec, paths_val in zip(records, paths_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
-                rec["label"] = _generate_cluster_label(all_paths)
+                rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
         return json.dumps(records, indent=2)
     if fmt == "csv":
         cols = [c for c in _CLUSTER_TABLE_COLS if c in filtered.columns]
@@ -434,7 +459,7 @@ def format_clusters(
     if "paths" in filtered.columns:
         out = out.copy()
         out["label"] = [
-            _generate_cluster_label(_extract_paths_list(p))
+            _generate_cluster_label(_extract_paths_list(p), weights=risk_weights)
             for p in filtered["paths"].tolist()
         ]
     return _to_table(out)
@@ -477,7 +502,12 @@ def _compute_drift_trend(df: pd.DataFrame) -> str:
     return "stable"
 
 
-def format_drift(df: pd.DataFrame, *, fmt: str = "table") -> str:
+def format_drift(
+    df: pd.DataFrame,
+    *,
+    fmt: str = "table",
+    configured_windows: int | None = None,
+) -> str:
     out = df.copy()
 
     # Convert unix timestamps to ISO 8601
@@ -497,8 +527,20 @@ def format_drift(df: pd.DataFrame, *, fmt: str = "table") -> str:
     cols = [c for c in _DRIFT_COLS if c in out.columns]
     out = out[cols]
 
+    actual_windows = len(out)
+
     if fmt == "json":
-        return _to_json_records(out)
+        records = out.to_dict(orient="records")
+        result: dict[str, object] = {"windows": records}
+        if configured_windows is not None:
+            result["configured_windows"] = configured_windows
+            result["actual_windows"] = actual_windows
+            if actual_windows < configured_windows:
+                result["note"] = (
+                    f"Only {actual_windows} of {configured_windows} configured windows produced — "
+                    f"the repository may lack sufficient history for all windows."
+                )
+        return json.dumps(result, indent=2)
     if fmt == "csv":
         return _to_csv(_round_floats(out))
     return _to_table(_round_floats(out))
@@ -550,6 +592,7 @@ def format_all(
     top_risks: int | None = None,
     top_clusters: int | None = None,
     fmt: str = "table",
+    compact: bool = False,
 ) -> str:
     # Resolve split --top params: explicit overrides win, then --top, then 0 (all)
     effective_risks = top_risks if top_risks is not None else top
@@ -591,12 +634,13 @@ def format_all(
             filtered_clusters = filtered_clusters.head(effective_clusters)
         cluster_records = filtered_clusters[cluster_cols].to_dict(orient="records")
         # Add top_paths and label from the paths column if available (consistent with format_clusters)
+        risk_weights = _build_risk_weights(file_metrics)
         if "paths" in filtered_clusters.columns:
             paths_list = filtered_clusters["paths"].tolist()
             for rec, paths_val in zip(cluster_records, paths_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
-                rec["label"] = _generate_cluster_label(all_paths)
+                rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
 
         drift_out = drift_df.copy()
         if "window_end_ts" in drift_out.columns:
@@ -612,7 +656,7 @@ def format_all(
         if not commits_df.empty and not file_metrics.empty:
             velocity_raw = format_velocity(
                 commits_df, file_metrics, cluster_metrics,
-                window=30, compare=True, fmt="json",
+                window=30, compare=True, include_added_paths=not compact, fmt="json",
             )
             try:
                 velocity_json = json.loads(velocity_raw)
@@ -620,9 +664,10 @@ def format_all(
                 velocity_json = None
 
         # Top-cluster edges (edges for the top-N most active clusters)
+        edge_limit = 3 if compact else 5
         top_cluster_edges: dict[str, object] = {}
         if velocity_json and not graph_edges_df.empty:
-            active_ids = [rec["cluster_id"] for rec in velocity_json[:5]]
+            active_ids = [rec["cluster_id"] for rec in velocity_json[:edge_limit]]
             for cid in active_ids:
                 edge_raw = format_edges(
                     graph_edges_df, cluster_metrics, file_metrics, int(cid), fmt="json",
@@ -656,7 +701,7 @@ def format_all(
     sections.append(format_risks(file_metrics, top=effective_risks, fmt="table"))
     sections.append("")
     sections.append(f"=== {cluster_label} Leaky Clusters ===")
-    sections.append(format_clusters(cluster_metrics, sort_by="leakage", fmt="table"))
+    sections.append(format_clusters(cluster_metrics, sort_by="leakage", fmt="table", file_metrics_df=file_metrics))
     sections.append("")
     sections.append("=== Drift ===")
     sections.append(format_drift(drift_df, fmt="table"))

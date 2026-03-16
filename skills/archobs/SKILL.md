@@ -53,23 +53,35 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    All `show` subcommands read from Parquet artifacts independently — **run them in parallel** when calling from an agent. This avoids sequential round-trips and is 5-6x faster.
 
+   **Recommended for agents** — run individual queries in parallel (avoids output truncation on large repos):
    ```bash
-   # All metrics in one shot (preferred — includes velocity and top-cluster edges):
-   archobs show all --top 0 --format json
-
-   # Or query individual sections (run these in parallel):
+   # Run these in parallel:
    archobs show risks --top 10 --format json
    archobs show clusters --sort leakage --format json
    archobs show drift --format json
    archobs show summary --format json
-   archobs show files --format json            # complete file-to-cluster mapping
-   archobs show cluster-files <id> --format json  # files in a specific cluster
+   archobs show velocity --window 30 --compare --format json
+   archobs show edges <cluster_id> --format json  # for top 2-3 clusters of interest
+   ```
 
-   # Development velocity and cluster relationships:
-   archobs show velocity --window 30 --format json            # per-cluster commit activity
-   archobs show velocity --window 30 --compare --format json  # with acceleration vs prior window
+   **Convenience** — compact all-in-one (agent-friendly, <50KB output):
+   ```bash
+   archobs show all --compact --format json
+   ```
+   The `--compact` flag limits output to 5 risks, 10 clusters, velocity without added_paths, and edges for top-3 clusters only.
+
+   **Full dump** — for human review or when you need everything:
+   ```bash
+   archobs show all --top 5 --format json
+   ```
+   Avoid `--top 0` on large repos — output can exceed context limits.
+
+   Additional queries:
+   ```bash
+   archobs show files --format json                           # complete file-to-cluster mapping
+   archobs show cluster-files <id> --format json              # files in a specific cluster
    archobs show velocity --window 30 --compare --include-added-paths --format json  # with recently added file paths
-   archobs show edges <cluster_id> --format json              # cross-cluster edge relationships
+   archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json  # high-risk AND high-churn files
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
 
@@ -85,7 +97,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | `hubness` | > 0.45 | High fan-in — changes here have wide blast radius |
    | `volatility` | relative | High churn rate compared to peers |
 
-   Filter directly: `archobs show risks --min-risk 0.5 --format json` or `--min-xnbr 0.35` or `--min-hubness 0.45`.
+   Filter directly: `archobs show risks --min-risk 0.5 --format json` or `--min-xnbr 0.35` or `--min-hubness 0.45` or `--min-volatility 0.5`.
 
    **Cluster-level health** (`archobs show clusters`):
    | Signal | Threshold | Meaning |

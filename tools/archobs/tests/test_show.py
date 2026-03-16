@@ -352,10 +352,21 @@ def test_format_drift_table(tmp_path: Path):
 def test_format_drift_json(tmp_path: Path):
     df = _make_drift(tmp_path)
     text = format_drift(df, fmt="json")
-    records = json.loads(text)
+    parsed = json.loads(text)
+    records = parsed["windows"]
     assert len(records) == 4
     assert "window_end" in records[0]
     assert "algorithm" in records[0]
+
+
+def test_format_drift_json_truncated_windows(tmp_path: Path):
+    df = _make_drift(tmp_path)
+    text = format_drift(df, fmt="json", configured_windows=6)
+    parsed = json.loads(text)
+    assert parsed["configured_windows"] == 6
+    assert parsed["actual_windows"] == 4
+    assert "note" in parsed
+    assert "4 of 6" in parsed["note"]
 
 
 def test_format_drift_csv(tmp_path: Path):
@@ -571,7 +582,7 @@ def test_format_velocity_table(tmp_path: Path):
     cm = _make_cluster_metrics(tmp_path)
     text = format_velocity(commits, fm, cm, window=30, fmt="table")
     assert "cluster_id" in text
-    assert "commit_count" in text
+    assert "distinct_commits" in text
 
 
 def test_format_velocity_json(tmp_path: Path):
@@ -581,11 +592,11 @@ def test_format_velocity_json(tmp_path: Path):
     text = format_velocity(commits, fm, cm, window=30, fmt="json")
     records = json.loads(text)
     assert len(records) > 0
-    assert "commit_count" in records[0]
+    assert "distinct_commits" in records[0]
     assert "growth_ratio" in records[0]
     assert "churn_ratio" in records[0]
-    # Should be sorted by commit_count desc
-    counts = [r["commit_count"] for r in records]
+    # Should be sorted by distinct_commits desc
+    counts = [r["distinct_commits"] for r in records]
     assert counts == sorted(counts, reverse=True)
 
 
@@ -595,7 +606,7 @@ def test_format_velocity_csv(tmp_path: Path):
     cm = _make_cluster_metrics(tmp_path)
     text = format_velocity(commits, fm, cm, window=30, fmt="csv")
     lines = text.strip().split("\n")
-    assert "commit_count" in lines[0]
+    assert "distinct_commits" in lines[0]
     assert "growth_ratio" in lines[0]
 
 
@@ -606,8 +617,8 @@ def test_format_velocity_window_filtering(tmp_path: Path):
     # 30-day window should exclude the commit at 50 days ago
     text_30 = format_velocity(commits, fm, cm, window=30, fmt="json")
     records_30 = json.loads(text_30)
-    total_30 = sum(r["commit_count"] for r in records_30)
-    # All 6 commits minus the one outside the window
+    total_30 = sum(r["file_change_count"] for r in records_30)
+    # All 6 file-change rows minus the one outside the window
     assert total_30 == 5
 
 

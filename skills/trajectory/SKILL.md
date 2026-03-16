@@ -51,12 +51,17 @@ When running in the same session as archobs (data already loaded), skip steps 1-
    archobs show edges <cluster_id> --format json
    ```
 
-3. **Get full context** — complete file-to-cluster mappings, risk, drift, velocity, and edges in one call:
+3. **Get full context** — run individual queries in parallel (preferred for large repos to avoid output truncation):
    ```bash
-   archobs show all --top 0 --format json
+   # Run these in parallel:
    archobs show files --format json           # complete file-to-cluster map
    archobs show clusters --format json        # cluster metrics with recent_commits
    archobs show drift --format json           # temporal stability
+   archobs show risks --top 10 --format json  # top risk files
+   ```
+   Or use the compact all-in-one for smaller repos:
+   ```bash
+   archobs show all --compact --format json
    ```
    All `show` subcommands read from Parquet artifacts independently — **run them in parallel** for speed.
 
@@ -82,6 +87,13 @@ When running in the same session as archobs (data already loaded), skip steps 1-
    | Low `acceleration` | Work winding down |
    | High `recent_commits_30d` in cluster | Focused sprint in one area |
    | Cross-cluster edges (show edges) | Feature adjacency — what depends on what |
+   | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
+
+   **Cross-reference velocity with risk**: Files that appear in both `show risks` (risk > 0.5) AND belong to a high-velocity cluster are the highest-urgency items. These are files that are simultaneously architecturally risky and actively being changed — the most dangerous combination. Use `archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json` to find them directly.
+
+   **Convergent hub pattern**: When 3+ clusters leak primarily toward the same target (visible via `show edges` or the `external_inbound_weight` metric on `show clusters`), the finding is about the hub, not the individual boundaries. The actionable insight is "decompose the attractor" rather than "build N separate boundaries." This is the most common pattern in real monoliths.
+
+   **Acceleration context for new clusters**: When `prior_commit_count` is 0 or very low, acceleration will be infinite or very high (e.g. 6.0x). This signals **emergence** (a brand-new area appearing), not **acceleration** (an existing area speeding up). Distinguish "brand new area" from "existing area speeding up" — they require different responses. New areas need architecture review; accelerating areas need capacity planning.
 
 6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
 
