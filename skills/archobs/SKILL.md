@@ -68,6 +68,11 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show edges <cluster_id> --format json
    ```
 
+   Or use `--top-active` to auto-select the most active clusters by file_change_count (eliminates the sequential round-trip):
+   ```bash
+   archobs show edges --top-active 3 --format json
+   ```
+
    Edge JSON output schema (per neighbor):
    ```
    neighbor_cluster, neighbor_label, total_weight, edge_count,
@@ -78,7 +83,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```bash
    archobs show all --compact --format json
    ```
-   The `--compact` flag limits output to 5 risks, 10 clusters, velocity without added_paths, and edges for top-3 clusters only.
+   The `--compact` flag limits output to 5 risks, 10 clusters, and edges for top-3 clusters only. Velocity always includes added_paths in JSON output.
 
    **When to use compact vs parallel queries:**
    - Repos < 500 files: `show all --compact` is sufficient for a quick overview
@@ -213,4 +218,8 @@ When reporting analysis results:
 - **Leakiest clusters** (1-3): cluster ID, leakage %, strongest outward pull, boundary recommendation.
 - **Drift assessment**: stable / degrading / improving (with ARI values).
 - **Suggestions** (if generated): priority-ordered list with scope and evidence.
+- **Trajectory** (when running with trajectory analysis):
+  - Active feature initiatives (grouped by domain, not by cluster)
+  - Feature adjacency predictions with confidence levels
+  - Recommended architectural actions for growing areas
 - **Next skill**: which skill to invoke based on the dominant finding pattern.

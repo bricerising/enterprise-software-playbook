@@ -82,8 +82,12 @@ def _generate_cluster_label(
 
     Extracts domain keywords from filenames (e.g. "orders", "payments") and
     prepends when dominant stems appear above a threshold. For large clusters
-    (>30 files) the threshold is lowered from 40% to 25%, and the top-2 stems
-    are used when no single stem dominates.
+    (>30 files) the threshold is lowered from 40% to 25%, for very large
+    clusters (>100 files) it drops to 15%. The top-2 stems are used when no
+    single stem dominates.
+
+    For clusters with >100 files, *max_length* is automatically raised to 70
+    so the label can convey domain meaning before truncation.
 
     When *weights* is provided (mapping path -> significance score such as risk
     or degree), stems and prefixes are weighted by significance rather than
@@ -94,6 +98,10 @@ def _generate_cluster_label(
         return ""
     from collections import Counter, defaultdict
     from pathlib import PurePosixPath
+
+    # Scale max_length for very large clusters so labels convey domain meaning
+    if len(paths) > 100:
+        max_length = max(max_length, 70)
 
     prefix_weights: defaultdict[str, float] = defaultdict(float)
     stem_weights: defaultdict[str, float] = defaultdict(float)
@@ -122,7 +130,12 @@ def _generate_cluster_label(
 
     # Check for dominant domain keywords — adaptive threshold for large clusters
     total_weight = sum(weights.get(p, 1.0) for p in paths) if weights else float(len(paths))
-    threshold = 0.25 if len(paths) > 30 else 0.40
+    if len(paths) > 100:
+        threshold = 0.15
+    elif len(paths) > 30:
+        threshold = 0.25
+    else:
+        threshold = 0.40
     if stem_weights:
         top_stems = sorted(stem_weights.items(), key=lambda x: -x[1])[:2]
         dominant_stem, dominant_weight = top_stems[0]
@@ -237,7 +250,9 @@ _VELOCITY_TABLE_COLS = [
     "cluster_id", "label", "distinct_commits", "file_change_count", "added_count", "modified_count",
     "deleted_count", "growth_ratio", "churn_ratio",
 ]
-_VELOCITY_JSON_COLS = _VELOCITY_TABLE_COLS  # acceleration added when --compare
+_VELOCITY_JSON_COLS = _VELOCITY_TABLE_COLS + [
+    "external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d",
+]
 
 
 def format_velocity(
@@ -301,6 +316,14 @@ def format_velocity(
     else:
         velocity["label"] = ""
 
+    # Merge cluster-level context from cluster_metrics (eliminates extra show clusters query)
+    _merge_cols = ["external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d"]
+    _available = [c for c in _merge_cols if c in cluster_metrics_df.columns]
+    if _available:
+        _cm_subset = cluster_metrics_df[["cluster_id"] + _available].copy()
+        _cm_subset["cluster_id"] = _cm_subset["cluster_id"].astype(int)
+        velocity = velocity.merge(_cm_subset, on="cluster_id", how="left")
+
     if compare:
         prior_cutoff = cutoff - (window * 86400)
         prior = merged[(merged["commit_ts"] >= prior_cutoff) & (merged["commit_ts"] < cutoff)]
@@ -311,6 +334,7 @@ def format_velocity(
             lambda r: round(r["distinct_commits"] / max(r["prior_commit_count"], 1), 2),
             axis=1,
         )
+        velocity["is_emerging"] = velocity["prior_commit_count"] == 0
 
     # Apply velocity filters
     if min_growth_ratio is not None:
@@ -330,7 +354,7 @@ def format_velocity(
 
     cols = [c for c in _VELOCITY_JSON_COLS if c in velocity.columns]
     if compare:
-        for extra in ("prior_commit_count", "acceleration"):
+        for extra in ("prior_commit_count", "acceleration", "is_emerging"):
             if extra in velocity.columns and extra not in cols:
                 cols = cols + [extra]
 
@@ -475,6 +499,49 @@ def format_edges(
     if fmt == "csv":
         return _to_csv(grouped[cols])
     return _to_table(grouped[cols])
+
+
+def format_edges_top_active(
+    graph_edges_df: pd.DataFrame,
+    cluster_metrics_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    commits_df: pd.DataFrame,
+    *,
+    top_active: int = 3,
+    window: int = 30,
+    fmt: str = "table",
+) -> str:
+    """Show edges for the top-N most active clusters by file_change_count."""
+    if commits_df.empty or file_metrics_df.empty:
+        return "No commit data available to determine active clusters."
+    # Compute velocity to find top-active cluster IDs
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commits_df.merge(path_cluster, on="path", how="inner")
+    if merged.empty:
+        return "No commits match tracked files."
+    max_ts = int(merged["commit_ts"].max())
+    cutoff = max_ts - (window * 86400)
+    current = merged[merged["commit_ts"] >= cutoff]
+    if current.empty:
+        return "No commits in the current window."
+    counts = current.groupby("cluster_id")["commit_ts"].count().reset_index(name="file_change_count")
+    active_ids = counts.sort_values("file_change_count", ascending=False).head(top_active)["cluster_id"].tolist()
+
+    sections: list[str] = []
+    for cid in active_ids:
+        section = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, int(cid), fmt=fmt)
+        if fmt == "json":
+            try:
+                parsed = json.loads(section)
+                sections.append(json.dumps({"cluster_id": int(cid), "edges": parsed}, indent=2))
+            except (json.JSONDecodeError, TypeError):
+                sections.append(section)
+        else:
+            sections.append(f"--- Cluster {cid} ---")
+            sections.append(section)
+    if fmt == "json":
+        return "[" + ",\n".join(sections) + "]"
+    return "\n\n".join(sections)
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +810,7 @@ def format_all(
         if not commits_df.empty and not file_metrics.empty:
             velocity_raw = format_velocity(
                 commits_df, file_metrics, cluster_metrics,
-                window=30, compare=True, include_added_paths=not compact, fmt="json",
+                window=30, compare=True, include_added_paths=True, fmt="json",
             )
             try:
                 velocity_json = json.loads(velocity_raw)

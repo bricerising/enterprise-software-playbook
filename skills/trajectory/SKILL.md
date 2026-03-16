@@ -31,14 +31,13 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
 
 When running in the same session as archobs (data already loaded), use this checklist instead of the full workflow below:
 
-1. `archobs show velocity --window 30 --compare --include-added-paths --format json`
-2. `archobs show clusters --sort leakage --format json` (for `external_inbound_weight` and `recent_file_changes_*` context)
-3. `archobs show edges <cluster_id> --format json` — run for the top 2-3 clusters by `file_change_count` from step 1. Edge data is critical for identifying cross-cutting feature trajectories and convergent hub patterns.
-4. `git branch -r --sort=-committerdate | head -20`
-5. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
-6. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
+1. `archobs show velocity --window 30 --compare --include-added-paths --format json` — now includes `external_inbound_weight`, `recent_file_changes_30d`, `recent_file_changes_90d`, and `is_emerging` (when `--compare` is used)
+2. `archobs show edges --top-active 3 --format json` — auto-selects top-3 clusters by file_change_count, no need to extract cluster IDs first
+3. `git branch -r --sort=-committerdate | head -20`
+4. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
+5. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
 
-Run commands 1-2 in parallel (they read independent artifacts). Then run 3 (depends on cluster IDs from 1-2). Then 4-5 in parallel (independent git queries).
+Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in parallel (independent git queries). The `--top-active` flag on edges eliminates the previous sequential dependency on velocity results.
 
 ### Primary path: archobs-native queries
 
@@ -118,6 +117,8 @@ Run commands 1-2 in parallel (they read independent artifacts). Then run 3 (depe
 
    **Test-only clusters**: A cluster containing predominantly test files (>80% test paths) with high acceleration is a different signal than a production cluster at the same metrics. It means the team is investing in test coverage for a feature — high confidence the feature is real and the team is committed, but boundary decisions live in the production code, not the test code. Identify the production cluster the tests correspond to and direct architectural recommendations there.
 
+   **Cross-cluster initiative detection**: When multiple clusters share domain keywords in their `added_paths` or labels (e.g., "loyalty" appearing in both a production cluster and a test cluster), group them as a single feature initiative. This is especially common with test-only clusters — they indicate commitment to a feature whose boundary decisions live in the production cluster. More generally, any time 2+ clusters share a domain keyword (in labels, added paths, or branch names), treat them as one coordinated initiative for trajectory purposes rather than analyzing each cluster independently. The combined velocity and scope of the initiative is what matters for architectural decisions.
+
 6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
 
    | Observed pattern | Likely next |
@@ -138,6 +139,10 @@ Run commands 1-2 in parallel (they read independent artifacts). Then run 3 (depe
    | Idempotency key additions | Offline mode or distributed operation hardening |
    | CORS configuration changes | Deployment environment changes (new domains, staging environments) |
    | Test coverage push (many test-only commits) | CI pipeline enforcement or pre-release quality gate |
+   | Service decomposed into sub-modules (lock, utils, payloads) | Feature maturing toward production — expect monitoring/alerting additions next |
+   | P0/security fix branches alongside feature branches | Hardening phase — team is stabilizing before or during feature rollout |
+   | Hub/infrastructure changes (CORS, server.ts, env config) | Deployment environment shift (new domains, staging, or architecture change) |
+   | Multiple clusters with same domain keyword in added_paths | Coordinated multi-sprint initiative — treat as single feature for trajectory |
 
 ### Optional enrichment: `intel change-trajectory`
 

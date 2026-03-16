@@ -89,11 +89,17 @@ def _humanize_path_token(token: str) -> str:
 def _humanize_area_label(label: str) -> str:
     # Remove trailing truncation markers from cluster labels (e.g. '(test unit and unit contro...")')
     cleaned_label = re.sub(r"\s*\([^)]*\.\.\.[\"']?\)\s*$", "", label).strip()
+    # Also strip standalone trailing "..." from _generate_cluster_label truncation
+    cleaned_label = re.sub(r"\.{3,}$", "", cleaned_label).strip()
     if not cleaned_label:
         cleaned_label = label
     parts = [part.strip() for part in cleaned_label.split("+") if part.strip()]
     human = [_humanize_path_token(part) for part in parts[:2]]
-    return " and ".join(part for part in human if part).strip() or label
+    result = " and ".join(part for part in human if part).strip()
+    # Guard: if humanization produced an empty or ellipsis-only string, fall back
+    if not result or result.replace(".", "").strip() == "":
+        return label.replace("...", "").strip() or "this area"
+    return result
 
 
 def _collapse_duplicate_words(text: str) -> str:
@@ -209,6 +215,12 @@ def _rule_based_change_suggestions(
             }
         )
 
+    # Build velocity lookup for cross-referencing with structural suggestions
+    _velocity_by_cluster: dict[int, int] = {}
+    if velocity_df is not None and not velocity_df.empty and "file_change_count" in velocity_df.columns:
+        for _, vr in velocity_df.iterrows():
+            _velocity_by_cluster[int(vr["cluster_id"])] = int(vr["file_change_count"])
+
     if not cluster_metrics_df.empty:
         leaky_candidates = cluster_metrics_df.sort_values(
             ["leakage", "risk_max"], ascending=[False, False],
@@ -246,6 +258,12 @@ def _rule_based_change_suggestions(
                 if target_profile and target_profile.get("paths"):
                     scope_paths = list(target_profile["paths"][:3]) + scope_paths[:3]
                 source_list = ", ".join(source_names)
+                # Cross-reference with velocity for urgency context
+                target_changes = _velocity_by_cluster.get(target_id, 0)
+                velocity_note = (
+                    f" This area also had {target_changes} file changes in the last 30 days, making this structurally urgent."
+                    if target_changes > 0 else ""
+                )
                 suggestions.append(
                     {
                         "priority": "High" if max_leakage >= 0.40 else "Medium",
@@ -253,6 +271,7 @@ def _rule_based_change_suggestions(
                         "why": (
                             f"Clusters {', '.join(str(s) for s in source_ids)} all leak primarily toward {target_name} (cluster {target_id}). "
                             f"This convergent pull indicates {target_name} is a gravitational center, not {len(sources)} independent boundary problems."
+                            f"{velocity_note}"
                         ),
                         "change": (
                             f"Break {target_name} into narrower modules so that {source_list} each depend on a focused interface instead of one monolithic area."
@@ -279,9 +298,14 @@ def _rule_based_change_suggestions(
                 target_name = _humanize_area_label(target_label)
                 boundary_scope = ", ".join(list(profile["paths"][:2]) + list(neighbor["paths"][:2]))
                 title = f"Separate {source_name} from {target_name}"
+                cluster_changes = _velocity_by_cluster.get(cluster_id, 0)
+                churn_note = (
+                    f" It also had {cluster_changes} file changes in the last 30 days."
+                    if cluster_changes > 0 else ""
+                )
                 why = (
                     f"Cluster {cluster_id} leaks {float(leaky['leakage']):.0%} of its weighted relationships, and its strongest outward pull is toward "
-                    f"{target_name} (edge weight {float(neighbor['weight']):.2f})."
+                    f"{target_name} (edge weight {float(neighbor['weight']):.2f}).{churn_note}"
                 )
                 change = (
                     f"Create an explicit boundary between {source_name} and {target_name}, so one side consumes a stable contract instead of reaching across the seam directly."

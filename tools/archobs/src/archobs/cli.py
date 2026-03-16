@@ -368,18 +368,31 @@ def show_commits(
 
 @show_app.command("edges")
 def show_edges(
-    cluster_id: int = typer.Argument(help="Cluster ID to inspect edges for."),
+    cluster_id: int | None = typer.Argument(None, help="Cluster ID to inspect edges for. Omit when using --top-active."),
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top_active: int | None = typer.Option(None, "--top-active", help="Auto-select top-N most active clusters by file_change_count (from velocity data)."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     """Show cross-cluster edge relationships for a given cluster."""
-    from archobs.display import format_edges, read_cluster_metrics, read_file_metrics, read_graph_edges
+    from archobs.display import format_edges, format_edges_top_active, read_cluster_metrics, read_commits, read_file_metrics, read_graph_edges
+
+    if cluster_id is None and top_active is None:
+        typer.echo("Error: provide a cluster_id argument or use --top-active N.", err=True)
+        raise typer.Exit(code=1)
 
     graph_edges_df = read_graph_edges(out)
     cluster_metrics_df = read_cluster_metrics(out)
     file_metrics_df = read_file_metrics(out)
-    text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, fmt=fmt)
+
+    if top_active is not None:
+        commits_df = read_commits(out)
+        text = format_edges_top_active(
+            graph_edges_df, cluster_metrics_df, file_metrics_df, commits_df,
+            top_active=top_active, fmt=fmt,
+        )
+    else:
+        text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, fmt=fmt)
     _write_or_print(text, out_path)
 
 
