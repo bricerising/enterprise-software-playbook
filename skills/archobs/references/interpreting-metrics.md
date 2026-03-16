@@ -76,6 +76,10 @@ Ratio of cross-boundary edges to total edges touching the cluster. Related to le
 
 Lower conductance = healthier boundary.
 
+### `recent_file_changes_30d` / `recent_file_changes_90d`
+
+Count of file-change events (rows in `commits.parquet`) within the 30-day or 90-day window, grouped by cluster. These count **file-change events**, not distinct commits — a single commit touching 5 files in a cluster adds 5 to the count. For distinct commit counts per cluster, use `archobs show velocity` which reports `distinct_commits` via `.nunique()` on `commit_sha`.
+
 ### `risk_mean` / `risk_max`
 
 Average and maximum file-level risk within the cluster. Clusters with high `risk_max` contain at least one problematic file.

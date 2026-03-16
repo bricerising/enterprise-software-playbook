@@ -61,7 +61,17 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show drift --format json
    archobs show summary --format json
    archobs show velocity --window 30 --compare --format json
-   archobs show edges <cluster_id> --format json  # for top 2-3 clusters of interest
+   ```
+
+   **Note:** `show edges` requires a `cluster_id` from `show clusters` or `show velocity`. Run it **after** those complete, targeting the top 2-3 leakiest or most active clusters:
+   ```bash
+   archobs show edges <cluster_id> --format json
+   ```
+
+   Edge JSON output schema (per neighbor):
+   ```
+   neighbor_cluster, neighbor_label, total_weight, edge_count,
+   top_pairs: [{path_a, path_b, weight}]
    ```
 
    **Convenience** — compact all-in-one (agent-friendly, <50KB output):
@@ -82,6 +92,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show cluster-files <id> --format json              # files in a specific cluster
    archobs show velocity --window 30 --compare --include-added-paths --format json  # with recently added file paths
    archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json  # high-risk AND high-churn files
+   archobs show commits --since 30 --format json              # commit-level data with cluster annotations
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
 
@@ -121,6 +132,20 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | Modularity declining while ARI rises | New cross-cutting features are landing in a stable structure |
 
    When reporting drift, always examine the ARI trend (last 2+ windows) rather than applying a single threshold. A codebase with ARI 1.0 → 0.38 → 0.58 → 0.77 is stabilizing, not unstable.
+
+   **Velocity** (`archobs show velocity`):
+   | Signal | Suggests |
+   |--------|----------|
+   | High `growth_ratio` | New capability being built — define boundaries early |
+   | High `churn_ratio` | Feature refinement/iteration in progress |
+   | High `acceleration` (with `--compare`) | Active development push |
+   | Low `acceleration` | Work winding down — safe window for refactoring |
+   | High `recent_file_changes_30d` in cluster | Focused sprint in one area |
+   | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
+
+   Filter to active clusters: `archobs show velocity --window 30 --compare --min-acceleration 1.0 --min-growth-ratio 0.1 --format json`
+
+   For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [trajectory skill](../trajectory/SKILL.md).
 
 6. **Route findings to the right skill**:
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)

@@ -29,7 +29,15 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
 
 ### Same-session fast path
 
-When running in the same session as archobs (data already loaded), skip steps 1-3 below — artifacts are already available in `.archobs/`. Start from step 4 (branch signals) and step 4b (commit message themes), then proceed to step 5 (interpretation).
+When running in the same session as archobs (data already loaded), use this checklist instead of the full workflow below:
+
+1. `archobs show velocity --window 30 --compare --include-added-paths --format json`
+2. `archobs show clusters --sort leakage --format json` (for `external_inbound_weight` and `recent_file_changes_*` context)
+3. `git branch -r --sort=-committerdate | head -20`
+4. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
+5. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
+
+Run commands 1-2 in parallel (they read independent artifacts), then 3-4 in parallel (independent git queries).
 
 ### Primary path: archobs-native queries
 
@@ -55,7 +63,7 @@ When running in the same session as archobs (data already loaded), skip steps 1-
    ```bash
    # Run these in parallel:
    archobs show files --format json           # complete file-to-cluster map
-   archobs show clusters --format json        # cluster metrics with recent_commits
+   archobs show clusters --format json        # cluster metrics with recent_file_changes
    archobs show drift --format json           # temporal stability
    archobs show risks --top 10 --format json  # top risk files
    ```
@@ -85,7 +93,7 @@ When running in the same session as archobs (data already loaded), skip steps 1-
    | High `churn_ratio` | Feature refinement/iteration |
    | High `acceleration` (with --compare) | Active development push |
    | Low `acceleration` | Work winding down |
-   | High `recent_commits_30d` in cluster | Focused sprint in one area |
+   | High `recent_file_changes_30d` in cluster | Focused sprint in one area |
    | Cross-cluster edges (show edges) | Feature adjacency — what depends on what |
    | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
 
@@ -116,32 +124,29 @@ When running in the same session as archobs (data already loaded), skip steps 1-
    | CORS configuration changes | Deployment environment changes (new domains, staging environments) |
    | Test coverage push (many test-only commits) | CI pipeline enforcement or pre-release quality gate |
 
-### Enhancement: `intel change-trajectory`
+### Optional enrichment: `intel change-trajectory`
 
-When you need richer analysis (commit message themes, concentration index, recently added/modified/deleted path lists), use the intel CLI:
+The archobs-native queries above (velocity, clusters, edges, commits) plus git branch/log commands provide all the signals needed for trajectory analysis. The `intel change-trajectory` tool is an **optional** enrichment for when you need structured commit message theme extraction or concentration index computation.
+
+In most cases, the primary workflow above is sufficient. Only use `intel` if you specifically need machine-extracted commit themes beyond what `git log --format="%s"` provides.
+
+<details>
+<summary>Intel setup (optional)</summary>
 
 1. **Build the tool**: `cd tools/intelligence && npm install && npm run build`
 
-2. **Extract commit data** (from archobs Parquet, preferred):
+2. **Extract commit data** (from archobs Parquet):
    ```bash
-   python3 -c "
-   import pandas as pd, json, sys
-   df = pd.read_parquet('.archobs/commits.parquet')
-   records = df[['commit_sha','commit_ts','status','path']].to_dict('records')
-   json.dump(records, sys.stdout)
-   " > /tmp/commits.json
+   archobs show commits --since 30 --format json > /tmp/commits.json
    ```
 
 3. **Run trajectory analysis**:
    ```bash
-   intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json
-   ```
-
-   With commit messages:
-   ```bash
    intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json \
      --commit-messages /tmp/commit-messages.json --window-days 30
    ```
+
+</details>
 
 ### Manual fallback (when neither archobs nor intel is available)
 

@@ -249,6 +249,8 @@ def format_velocity(
     compare: bool = False,
     include_added_paths: bool = False,
     fmt: str = "table",
+    min_acceleration: float | None = None,
+    min_growth_ratio: float | None = None,
 ) -> str:
     """Compute per-cluster velocity metrics from commit history."""
     if commits_df.empty or file_metrics_df.empty:
@@ -285,9 +287,12 @@ def format_velocity(
     velocity = _compute_velocity(current)
     velocity = velocity.sort_values("distinct_commits", ascending=False).reset_index(drop=True)
 
-    # Add cluster labels from cluster_metrics paths, weighted by file risk
-    risk_weights = _build_risk_weights(file_metrics_df)
-    if "paths" in cluster_metrics_df.columns:
+    # Use canonical labels from cluster_metrics when available; regenerate as fallback
+    if "label" in cluster_metrics_df.columns and cluster_metrics_df["label"].notna().any():
+        label_map = dict(zip(cluster_metrics_df["cluster_id"].astype(int), cluster_metrics_df["label"]))
+        velocity["label"] = velocity["cluster_id"].map(label_map).fillna("")
+    elif "paths" in cluster_metrics_df.columns:
+        risk_weights = _build_risk_weights(file_metrics_df)
         label_map = {}
         for _, row in cluster_metrics_df.iterrows():
             all_paths = _extract_paths_list(row.get("paths", ""))
@@ -306,6 +311,15 @@ def format_velocity(
             lambda r: round(r["distinct_commits"] / max(r["prior_commit_count"], 1), 2),
             axis=1,
         )
+
+    # Apply velocity filters
+    if min_growth_ratio is not None:
+        velocity = velocity[velocity["growth_ratio"] >= min_growth_ratio]
+    if min_acceleration is not None:
+        if "acceleration" not in velocity.columns:
+            return "Error: --min-acceleration requires --compare."
+        velocity = velocity[velocity["acceleration"] >= min_acceleration]
+    velocity = velocity.reset_index(drop=True)
 
     # Collect recently added file paths per cluster
     added_paths_map: dict[int, list[str]] = {}
@@ -329,6 +343,62 @@ def format_velocity(
     if fmt == "csv":
         return _to_csv(_round_floats(velocity[cols]))
     return _to_table(_round_floats(velocity[cols]))
+
+
+# ---------------------------------------------------------------------------
+# Format: commits
+# ---------------------------------------------------------------------------
+
+_COMMIT_TABLE_COLS = ["commit_sha", "commit_ts", "status", "path", "cluster_id"]
+_COMMIT_JSON_COLS = _COMMIT_TABLE_COLS
+
+
+def format_commits(
+    commits_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    *,
+    since: int | None = None,
+    top: int = 0,
+    fmt: str = "table",
+) -> str:
+    """Show commit-level data with cluster annotations (deduplicated)."""
+    if commits_df.empty:
+        return "No commit data available."
+
+    # Annotate with cluster_id from file_metrics
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commits_df.merge(path_cluster, on="path", how="left")
+    merged["cluster_id"] = merged["cluster_id"].fillna(-1).astype(int)
+
+    # Filter by recency
+    if since is not None and "commit_ts" in merged.columns:
+        max_ts = int(merged["commit_ts"].max())
+        cutoff = max_ts - (since * 86400)
+        merged = merged[merged["commit_ts"] >= cutoff]
+
+    # Deduplicate: one row per (commit_sha, path) pair
+    merged = merged.drop_duplicates(subset=["commit_sha", "path"])
+    merged = merged.sort_values("commit_ts", ascending=False).reset_index(drop=True)
+
+    if top > 0:
+        merged = merged.head(top)
+
+    cols = [c for c in _COMMIT_JSON_COLS if c in merged.columns]
+    if fmt == "json":
+        out = merged[cols].copy()
+        if "commit_ts" in out.columns:
+            out["commit_time"] = out["commit_ts"].apply(_ts_to_iso)
+        return _to_json_records(out)
+    if fmt == "csv":
+        return _to_csv(merged[cols])
+    out = merged[cols].copy()
+    if "commit_sha" in out.columns:
+        out["commit_sha"] = out["commit_sha"].str[:8]
+    if "commit_ts" in out.columns:
+        out["commit_ts"] = out["commit_ts"].apply(_ts_to_iso)
+    if "path" in out.columns:
+        out["path"] = out["path"].apply(_truncate_path)
+    return _to_table(out)
 
 
 # ---------------------------------------------------------------------------
@@ -367,9 +437,12 @@ def format_edges(
         axis=1,
     )
 
-    # Build label map from cluster_metrics paths
+    # Use canonical labels from cluster_metrics when available; regenerate as fallback
     label_map: dict[int, str] = {}
-    if "paths" in cluster_metrics_df.columns:
+    if "label" in cluster_metrics_df.columns and cluster_metrics_df["label"].notna().any():
+        for _, row in cluster_metrics_df.iterrows():
+            label_map[int(row["cluster_id"])] = str(row["label"]) if row["label"] else ""
+    elif "paths" in cluster_metrics_df.columns:
         for _, row in cluster_metrics_df.iterrows():
             all_paths = _extract_paths_list(row.get("paths", ""))
             label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths)
@@ -411,7 +484,7 @@ def format_edges(
 _CLUSTER_TABLE_COLS = ["cluster_id", "size", "cohesion", "leakage", "conductance",
                        "internal_weight", "external_weight", "external_inbound_weight",
                        "risk_mean", "risk_max",
-                       "recent_commits_30d", "recent_commits_90d"]
+                       "recent_file_changes_30d", "recent_file_changes_90d"]
 _CLUSTER_JSON_COLS = _CLUSTER_TABLE_COLS  # top_paths added separately
 
 
@@ -438,25 +511,34 @@ def format_clusters(
 
     risk_weights = _build_risk_weights(file_metrics_df) if file_metrics_df is not None else None
 
+    # Use canonical label from parquet when available; regenerate as fallback
+    has_stored_labels = "label" in filtered.columns and filtered["label"].notna().any()
+
     if fmt == "json":
         cols = [c for c in _CLUSTER_JSON_COLS if c in filtered.columns]
         records = _round_floats(filtered[cols]).to_dict(orient="records")
-        # Add top_paths and label from the paths column if available
         if "paths" in filtered.columns:
             paths_list = filtered["paths"].tolist()
             for rec, paths_val in zip(records, paths_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
-                rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
+                if not has_stored_labels:
+                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
+        if has_stored_labels:
+            for rec, label in zip(records, filtered["label"].tolist()):
+                rec["label"] = str(label) if label else ""
         return json.dumps(records, indent=2)
     if fmt == "csv":
         cols = [c for c in _CLUSTER_TABLE_COLS if c in filtered.columns]
         return _to_csv(_round_floats(filtered[cols]))
 
-    # table — add label column if paths data is available
+    # table — add label column if not already present
     cols = [c for c in _CLUSTER_TABLE_COLS if c in filtered.columns]
     out = _round_floats(filtered[cols])
-    if "paths" in filtered.columns:
+    if has_stored_labels:
+        out = out.copy()
+        out["label"] = filtered["label"].tolist()
+    elif "paths" in filtered.columns:
         out = out.copy()
         out["label"] = [
             _generate_cluster_label(_extract_paths_list(p), weights=risk_weights)
@@ -633,14 +715,19 @@ def format_all(
         if effective_clusters > 0:
             filtered_clusters = filtered_clusters.head(effective_clusters)
         cluster_records = filtered_clusters[cluster_cols].to_dict(orient="records")
-        # Add top_paths and label from the paths column if available (consistent with format_clusters)
+        # Add top_paths and label (prefer canonical labels stored in parquet)
+        has_stored_labels = "label" in filtered_clusters.columns and filtered_clusters["label"].notna().any()
         risk_weights = _build_risk_weights(file_metrics)
         if "paths" in filtered_clusters.columns:
             paths_list = filtered_clusters["paths"].tolist()
-            for rec, paths_val in zip(cluster_records, paths_list):
+            label_list = filtered_clusters["label"].tolist() if has_stored_labels else [None] * len(paths_list)
+            for rec, paths_val, stored_label in zip(cluster_records, paths_list, label_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
-                rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
+                if has_stored_labels and stored_label:
+                    rec["label"] = str(stored_label)
+                else:
+                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
 
         drift_out = drift_df.copy()
         if "window_end_ts" in drift_out.columns:

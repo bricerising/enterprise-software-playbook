@@ -186,6 +186,7 @@ def _rule_based_change_suggestions(
     drift_df: pd.DataFrame,
     boundary_profiles: list[dict[str, object]] | None = None,
     limit: int = 4,
+    velocity_df: pd.DataFrame | None = None,
 ) -> list[dict[str, str]]:
     suggestions: list[dict[str, str]] = []
     node_count = int(summary.get("node_count", 0))
@@ -398,6 +399,52 @@ def _rule_based_change_suggestions(
                     "scope": drift_scope,
                 }
             )
+
+    # Velocity-aware suggestions: high-acceleration clusters need early boundaries
+    if velocity_df is not None and not velocity_df.empty and "acceleration" in velocity_df.columns:
+        for _, vel_row in velocity_df.iterrows():
+            accel = float(vel_row.get("acceleration", 0))
+            growth = float(vel_row.get("growth_ratio", 0))
+            cid = int(vel_row["cluster_id"])
+            label = str(vel_row.get("label", f"cluster {cid}"))
+            if not label or label == "nan":
+                label = f"cluster {cid}"
+            area = _humanize_area_label(label) if label != f"cluster {cid}" else label
+            scope = _cluster_scope_paths(file_metrics_df, cid)
+            if accel >= 1.5 and growth >= 0.3:
+                suggestions.append(
+                    {
+                        "priority": "Medium",
+                        "title": f"Establish boundaries in {area} early — it is actively growing",
+                        "why": (
+                            f"Cluster {cid} has {accel:.1f}x acceleration and {growth:.0%} new files. "
+                            f"This area is actively expanding — defining boundaries now is cheaper than retrofitting later."
+                        ),
+                        "change": (
+                            f"Define explicit module boundaries and public interfaces for {area} before the next wave of additions."
+                        ),
+                        "scope": scope,
+                    }
+                )
+            elif accel <= 0.5 and growth < 0.1:
+                # Stable/declining area — safe for refactoring
+                if not cluster_metrics_df.empty:
+                    cluster_row = cluster_metrics_df[cluster_metrics_df["cluster_id"] == cid]
+                    if not cluster_row.empty and float(cluster_row.iloc[0].get("leakage", 0)) >= 0.20:
+                        suggestions.append(
+                            {
+                                "priority": "Low",
+                                "title": f"Refactor {area} now while it is stable",
+                                "why": (
+                                    f"Cluster {cid} has low acceleration ({accel:.1f}x) and minimal new files — "
+                                    f"development has slowed, making this a safe window for structural cleanup."
+                                ),
+                                "change": (
+                                    f"Address the leaky boundary in {area} while the area is not under active development."
+                                ),
+                                "scope": scope,
+                            }
+                        )
 
     if not suggestions:
         suggestions.append(
@@ -691,6 +738,7 @@ def build_change_suggestions(
     limit: int = 4,
     codex_timeout_seconds: int = 45,
     claude_timeout_seconds: int = 45,
+    velocity_df: pd.DataFrame | None = None,
 ) -> tuple[list[dict[str, str]], str, str | None]:
     normalized = provider.lower().strip()
     if normalized == "off":
@@ -744,6 +792,7 @@ def build_change_suggestions(
                 drift_df,
                 boundary_profiles,
                 limit,
+                velocity_df=velocity_df,
             )
         )
         if normalized == "auto":
@@ -758,6 +807,7 @@ def build_change_suggestions(
             drift_df,
             boundary_profiles,
             limit,
+            velocity_df=velocity_df,
         )
     )
     return suggestions, "rules", None

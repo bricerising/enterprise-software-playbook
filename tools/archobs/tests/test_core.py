@@ -1120,7 +1120,7 @@ def test_xnbr_suggestion_references_specific_neighbor_clusters() -> None:
 
 
 def test_recent_commits_in_cluster_metrics(tmp_path: Path) -> None:
-    """Verify recent_commits_30d and recent_commits_90d are computed in cluster metrics."""
+    """Verify recent_file_changes_30d and recent_file_changes_90d are computed in cluster metrics."""
     from archobs.pipeline import _enrich_cluster_commit_counts
 
     now = 1741694390
@@ -1145,12 +1145,12 @@ def test_recent_commits_in_cluster_metrics(tmp_path: Path) -> None:
         ]
     )
     enriched = _enrich_cluster_commit_counts(cluster_metrics_df, commit_files_df, file_metrics_df)
-    assert "recent_commits_30d" in enriched.columns
-    assert "recent_commits_90d" in enriched.columns
-    # Cluster 0 has 2 commits within 30d, cluster 1 has 0 within 30d
+    assert "recent_file_changes_30d" in enriched.columns
+    assert "recent_file_changes_90d" in enriched.columns
+    # Cluster 0 has 2 file-change events within 30d, cluster 1 has 0 within 30d
     c0 = enriched[enriched["cluster_id"] == 0].iloc[0]
     c1 = enriched[enriched["cluster_id"] == 1].iloc[0]
-    assert c0["recent_commits_30d"] == 2
-    assert c0["recent_commits_90d"] == 2
-    assert c1["recent_commits_30d"] == 0
-    assert c1["recent_commits_90d"] == 1
+    assert c0["recent_file_changes_30d"] == 2
+    assert c0["recent_file_changes_90d"] == 2
+    assert c1["recent_file_changes_30d"] == 0
+    assert c1["recent_file_changes_90d"] == 1

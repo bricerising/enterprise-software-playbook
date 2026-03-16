@@ -34,7 +34,18 @@ def _check_dependencies() -> None:
 
 
 @app.callback(invoke_without_command=True)
-def _app_callback(ctx: typer.Context) -> None:
+def _app_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", help="Show version and exit."),
+) -> None:
+    if version:
+        from importlib.metadata import version as pkg_version
+
+        try:
+            typer.echo(f"archobs {pkg_version('archobs')}")
+        except Exception:
+            typer.echo("archobs (version unknown — not installed as package)")
+        raise typer.Exit()
     if ctx.invoked_subcommand is not None:
         _check_dependencies()
 
@@ -319,6 +330,8 @@ def show_velocity(
     window: int = typer.Option(30, help="Window size in days."),
     compare: bool = typer.Option(False, help="Compare current window to prior window."),
     include_added_paths: bool = typer.Option(False, "--include-added-paths", help="Include recently added file paths per cluster (JSON only)."),
+    min_acceleration: float | None = typer.Option(None, "--min-acceleration", help="Minimum acceleration filter (requires --compare)."),
+    min_growth_ratio: float | None = typer.Option(None, "--min-growth-ratio", help="Minimum growth_ratio filter."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
@@ -331,7 +344,25 @@ def show_velocity(
     text = format_velocity(
         commits_df, file_metrics_df, cluster_metrics_df,
         window=window, compare=compare, include_added_paths=include_added_paths, fmt=fmt,
+        min_acceleration=min_acceleration, min_growth_ratio=min_growth_ratio,
     )
+    _write_or_print(text, out_path)
+
+
+@show_app.command("commits")
+def show_commits(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    since: int | None = typer.Option(None, "--since", help="Only show commits within this many days."),
+    top: int = typer.Option(0, help="Number of commits to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show commit-level data with cluster annotations."""
+    from archobs.display import format_commits, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    text = format_commits(commits_df, file_metrics_df, since=since, top=top, fmt=fmt)
     _write_or_print(text, out_path)
 
 
