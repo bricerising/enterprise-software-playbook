@@ -166,7 +166,20 @@ def _generate_cluster_label(
     if stem_weights:
         top_stems = sorted(stem_weights.items(), key=lambda x: -x[1])[:2]
         dominant_stem, dominant_weight = top_stems[0]
-        if total_weight > 0 and dominant_weight / total_weight > threshold:
+        dominant_ratio = dominant_weight / total_weight if total_weight > 0 else 0
+        # For very large clusters (>100 files), prefer top-2 stems unless one
+        # clearly dominates (>25%).  This prevents a single stem that barely
+        # clears the 15% adaptive threshold from becoming the sole label while
+        # equally important stems (12-14%) are hidden.
+        if effective_size > 100 and len(top_stems) >= 2 and dominant_ratio < 0.25:
+            s1, w1 = top_stems[0]
+            s2, w2 = top_stems[1]
+            combined_ratio = (w1 + w2) / total_weight if total_weight > 0 else 0
+            if combined_ratio > threshold:
+                label = f"{s1}/{s2} ({structural})"
+            else:
+                label = structural
+        elif dominant_ratio > threshold:
             label = f"{dominant_stem} ({structural})"
         elif len(top_stems) >= 2:
             # Use top-2 stems when no single stem dominates
@@ -520,6 +533,19 @@ def format_edges(
     grouped["neighbor_label"] = grouped["neighbor_cluster"].map(label_map).fillna("")
     grouped["total_weight"] = grouped["total_weight"].round(3)
 
+    # Compute leakage_share: what percentage of the queried cluster's external
+    # weight flows to each neighbor.  Eliminates manual cross-referencing.
+    parent_external_weight = 0.0
+    if "external_weight" in cluster_metrics_df.columns:
+        mask = cluster_metrics_df["cluster_id"].astype(int) == cluster_id
+        vals = cluster_metrics_df.loc[mask, "external_weight"]
+        if not vals.empty:
+            parent_external_weight = float(vals.iloc[0])
+    if parent_external_weight > 0:
+        grouped["leakage_share"] = (grouped["total_weight"] / parent_external_weight).round(3)
+    else:
+        grouped["leakage_share"] = 0.0
+
     # Add top connecting file pairs per neighbor
     top_pairs: dict[int, list[dict[str, str]]] = {}
     for nbr_id, nbr_df in cross.groupby("neighbor_cluster"):
@@ -530,7 +556,7 @@ def format_edges(
         ]
         top_pairs[int(nbr_id)] = pairs
 
-    cols = ["neighbor_cluster", "neighbor_label", "total_weight", "edge_count"]
+    cols = ["neighbor_cluster", "neighbor_label", "total_weight", "edge_count", "leakage_share"]
     if fmt == "json":
         records = grouped[cols].to_dict(orient="records")
         for rec in records:
@@ -975,6 +1001,103 @@ def format_files(
     if fmt == "csv":
         return _to_csv(_round_floats(filtered[cols]))
     out = _round_floats(filtered[cols])
+    out["path"] = out["path"].apply(_truncate_path)
+    return _to_table(out)
+
+
+# ---------------------------------------------------------------------------
+# Format: suggestions
+# ---------------------------------------------------------------------------
+
+
+def format_suggestions(
+    data: dict,
+    *,
+    limit: int = 0,
+    fmt: str = "table",
+) -> str:
+    """Format suggestions from suggestions.json."""
+    items = data.get("items", [])
+    if not items:
+        engine = data.get("engine", "unknown")
+        error = data.get("error")
+        msg = f"No suggestions available (engine={engine})"
+        if error:
+            msg += f": {error}"
+        return msg
+
+    if limit > 0:
+        items = items[:limit]
+
+    if fmt == "json":
+        return json.dumps({"engine": data.get("engine", "unknown"), "items": items}, indent=2)
+
+    if fmt == "csv":
+        rows = pd.DataFrame(items)
+        return _to_csv(rows)
+
+    # table
+    lines: list[str] = []
+    lines.append(f"Suggestion engine: {data.get('engine', 'unknown')}")
+    lines.append("")
+    for i, item in enumerate(items, 1):
+        lines.append(f"[{item.get('priority', '?')}] {i}. {item.get('title', '(no title)')}")
+        if item.get("why"):
+            lines.append(f"  Why: {item['why']}")
+        if item.get("change"):
+            lines.append(f"  Change: {item['change']}")
+        if item.get("scope"):
+            lines.append(f"  Scope: {item['scope']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Format: hot-files
+# ---------------------------------------------------------------------------
+
+_HOT_FILES_COLS = ["path", "commit_count", "cluster_id", "risk"]
+_HOT_FILES_TABLE_COLS = ["path", "commit_count", "cluster_id", "risk"]
+
+
+def format_hot_files(
+    commits_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    *,
+    window: int = 30,
+    top: int = 10,
+    fmt: str = "table",
+) -> str:
+    """Return files sorted by raw commit count in the window, with cluster assignments."""
+    if commits_df.empty or file_metrics_df.empty:
+        return "No commit data available for hot-files analysis."
+
+    max_ts = int(commits_df["commit_ts"].max())
+    cutoff = max_ts - (window * 86400)
+    current = commits_df[commits_df["commit_ts"] >= cutoff]
+    if current.empty:
+        return "No commits in the current window."
+
+    # Count commits per file path
+    counts = current.groupby("path").agg(
+        commit_count=("commit_sha", "nunique"),
+    ).reset_index()
+    counts = counts.sort_values("commit_count", ascending=False).reset_index(drop=True)
+
+    # Join cluster assignments and risk from file_metrics
+    path_info = file_metrics_df[["path", "cluster_id", "risk"]].drop_duplicates("path")
+    result = counts.merge(path_info, on="path", how="left")
+    result["cluster_id"] = result["cluster_id"].fillna(-1).astype(int)
+
+    if top > 0:
+        result = result.head(top)
+
+    cols = [c for c in _HOT_FILES_COLS if c in result.columns]
+    if fmt == "json":
+        return _to_json_records(_round_floats(result[cols]))
+    if fmt == "csv":
+        return _to_csv(_round_floats(result[cols]))
+    out = _round_floats(result[cols])
     out["path"] = out["path"].apply(_truncate_path)
     return _to_table(out)
 

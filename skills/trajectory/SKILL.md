@@ -80,6 +80,8 @@ Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in para
 
    **Ticket ID extraction**: Extract ticket ID prefixes (e.g. `OIQ-516`, `CR-02`) from branch names and cross-reference with commit message prefixes (e.g. `feat(loyalty):`, `chore(db):`) to group related branches into feature initiatives. Multiple branches sharing the same prefix or ticket series (e.g. `OIQ-515`, `OIQ-516`, `OIQ-523`) likely represent coordinated work on one feature area.
 
+   **Ticket series grouping heuristic**: When 3+ branches share a numeric prefix series (e.g., `OIQ-515`, `OIQ-516`, `OIQ-523`) **or** a domain keyword appears in both branch names and commit messages (e.g., "loyalty" in `OIQ-515-loyalty-points`, `OIQ-516-auto-earn-and-reversals`, and `feat(loyalty):` commits), group them as a single initiative. Report the initiative name (derived from the shared keyword), the branch count, and the combined cluster footprint. This is important because individual branches may each touch only a small area, but the combined initiative may span multiple clusters and warrant architectural attention as a coordinated effort.
+
 4b. **Collect commit message themes** — what the team is describing:
    ```bash
    git log --since="30 days ago" --format="%s" --no-merges | head -40
@@ -116,6 +118,8 @@ Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in para
    **Cross-reference velocity with risk**: Files that appear in both `show risks` (risk > 0.5) AND belong to a high-velocity cluster are the highest-urgency items. These are files that are simultaneously architecturally risky and actively being changed — the most dangerous combination. Use `archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json` to find them directly.
 
    **Convergent hub pattern**: When 3+ clusters leak primarily toward the same target (visible via `show edges` or the `external_inbound_weight` metric on `show clusters`), the finding is about the hub, not the individual boundaries. The actionable insight is "decompose the attractor" rather than "build N separate boundaries." This is the most common pattern in real monoliths.
+
+   **`is_emerging` flag**: `is_emerging` is `true` when a cluster had zero commits in the prior window but has commits in the current window. This signals a brand-new area of development, not acceleration of existing work. Emerging clusters need early boundary definition; accelerating clusters need capacity planning.
 
    **Acceleration context for new clusters**: When `prior_commit_count` is 0 or very low, acceleration will be infinite or very high (e.g. 6.0x). This signals **emergence** (a brand-new area appearing), not **acceleration** (an existing area speeding up). Distinguish "brand new area" from "existing area speeding up" — they require different responses. New areas need architecture review; accelerating areas need capacity planning.
 
@@ -213,6 +217,7 @@ When running both archobs and trajectory in the same session (the most common ca
    archobs show summary --format json
    archobs show velocity --window 30 --compare --format json
    archobs show edges --top-active 3 --max-neighbors 10 --format json
+   archobs show suggestions --format json
    # Git queries (parallel with above):
    git branch -r --sort=-committerdate | head -20
    git log --since="30 days ago" --format="%s" --no-merges | head -40

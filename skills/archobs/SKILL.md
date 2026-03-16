@@ -61,6 +61,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show drift --format json
    archobs show summary --format json
    archobs show velocity --window 30 --compare --format json
+   archobs show suggestions --format json
    ```
 
    **Note:** `show edges` requires a `cluster_id` from `show clusters` or `show velocity`. Run it **after** those complete, targeting the top 2-3 leakiest or most active clusters:
@@ -80,9 +81,10 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    Edge JSON output schema (per neighbor):
    ```
-   neighbor_cluster, neighbor_label, total_weight, edge_count,
+   neighbor_cluster, neighbor_label, total_weight, edge_count, leakage_share,
    top_pairs: [{path_a, path_b, weight}]
    ```
+   `leakage_share` = `total_weight / parent_cluster.external_weight` — the fraction of the queried cluster's leakage flowing to this neighbor (e.g., 0.62 means 62% of the cluster's external coupling goes to this neighbor).
 
    **Convenience** — compact all-in-one (agent-friendly, <50KB output):
    ```bash
@@ -108,6 +110,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show velocity --window 30 --compare --format json  # added_paths included by default in JSON
    archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json  # high-risk AND high-churn files
    archobs show commits --since 30 --format json              # commit-level data with cluster annotations
+   archobs show hot-files --window 30 --top 10 --format json  # hottest files by commit count with clusters
+   archobs show suggestions --format json                     # structured suggestions (reads suggestions.json)
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
 
@@ -160,6 +164,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | High `recent_file_changes_30d` in cluster | Focused sprint in one area |
    | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
 
+   **`--compare` flag**: Use `--compare` to enable acceleration metrics (compares current window to prior window of the same length). Without it, only absolute velocity is shown. With it, you get `prior_commit_count`, `acceleration` (current/prior ratio), and `is_emerging` (true when a cluster had zero commits in the prior window).
+
    **Velocity sort order**: `show velocity` sorts by `distinct_commits` by default. Use `--sort file_change_count` or `--sort acceleration` (requires `--compare`) for alternative orderings. Note that `show edges --top-active` sorts by `file_change_count`, which can produce a different ranking than the default velocity output.
 
    **Known limitation — deleted files**: Velocity uses an inner join between commits and the current file inventory. Files deleted during the analysis window have no cluster assignment, so their commits are silently dropped. The `deleted_count` column reflects only deletions of files that still exist in the inventory (renamed/moved), not files fully removed from the codebase.
@@ -179,34 +185,19 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
 7. **Read suggestions** (if generated):
    If you already ran `archobs show all --format json` in step 4, suggestions are included under the `"suggestions"` key — no additional command needed.
-   Otherwise, use:
+
+   **When using individual parallel queries (step 4)**, add `archobs show suggestions --format json` to your parallel batch — this reads `suggestions.json` directly with no extra computation:
    ```bash
-   archobs prompts --out .archobs
+   archobs show suggestions --format json
    ```
+
+   Alternatively, use `archobs prompts --out .archobs` for markdown-formatted output.
+
    Each suggestion includes: priority, title, why (evidence), change (action), scope (affected files).
 
 ## Combined Archobs + Trajectory Workflow
 
-When running both archobs and trajectory analysis in the same session, use this optimized sequence:
-
-1. **`archobs report`** (blocking — wait for completion)
-2. **Parallel archobs queries**:
-   ```bash
-   archobs show risks --top 10 --format json
-   archobs show clusters --sort leakage --format json
-   archobs show drift --format json
-   archobs show summary --format json
-   archobs show velocity --window 30 --compare --format json
-   archobs show edges --top-active 3 --max-neighbors 10 --format json
-   ```
-3. **Parallel git queries** (trajectory signals):
-   ```bash
-   git branch -r --sort=-committerdate | head -20
-   git log --since="30 days ago" --format="%s" --no-merges | head -40
-   ```
-4. **Synthesize** both outputs into a combined report using both the archobs output template (summary, risks, leakiest clusters, drift, suggestions) and the trajectory output template (active areas, feature adjacency reasoning, confidence notes).
-
-Steps 2 and 3 can run in parallel with each other. All `show` subcommands within step 2 read independent Parquet artifacts and can also run in parallel.
+For the combined archobs + trajectory workflow, see the [trajectory skill](../trajectory/SKILL.md#combined-archobs--trajectory-workflow). That version includes `archobs show suggestions --format json` in the parallel batch and is the canonical reference.
 
 ## Clarifying Questions
 

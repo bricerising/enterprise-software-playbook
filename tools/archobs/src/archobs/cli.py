@@ -413,6 +413,38 @@ def show_summary(
     _write_or_print(text, out_path)
 
 
+@show_app.command("suggestions")
+def show_suggestions(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    limit: int = typer.Option(0, help="Max suggestions to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show suggestions from suggestions.json."""
+    from archobs.display import format_suggestions, read_suggestions
+
+    data = read_suggestions(out)
+    text = format_suggestions(data, limit=limit, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("hot-files")
+def show_hot_files(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    window: int = typer.Option(30, help="Window size in days."),
+    top: int = typer.Option(10, help="Number of hottest files to show."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show hottest files by raw commit count in the window, with cluster assignments."""
+    from archobs.display import format_hot_files, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    text = format_hot_files(commits_df, file_metrics_df, window=window, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("all")
 def show_all(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
