@@ -77,7 +77,9 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
     """Generate a heuristic label from the dominant path prefixes in a cluster.
 
     Extracts domain keywords from filenames (e.g. "orders", "payments") and
-    prepends when a single dominant stem appears in >40% of files.
+    prepends when dominant stems appear above a threshold. For large clusters
+    (>30 files) the threshold is lowered from 40% to 25%, and the top-2 stems
+    are used when no single stem dominates.
     """
     if not paths:
         return ""
@@ -92,7 +94,9 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
         start = 0
         if parts and parts[0] in {"src", "packages", "apps", "lib"}:
             start = 1
-        segments = parts[start:start + 2]
+        # Use deeper prefix (3 segments) when root is skipped for richer context
+        depth = 3 if start > 0 else 2
+        segments = parts[start:start + depth]
         if segments:
             prefixes.append("/".join(segments))
         # Extract domain keyword from filename stem
@@ -107,12 +111,23 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
     top = prefix_counts.most_common(2)
     structural = " + ".join(prefix for prefix, _ in top)
 
-    # Check for dominant domain keyword
+    # Check for dominant domain keywords — adaptive threshold for large clusters
+    threshold = 0.25 if len(paths) > 30 else 0.40
     if stems:
         stem_counts = Counter(stems)
-        dominant_stem, dominant_count = stem_counts.most_common(1)[0]
-        if dominant_count / len(paths) > 0.40:
+        top_stems = stem_counts.most_common(2)
+        dominant_stem, dominant_count = top_stems[0]
+        if dominant_count / len(paths) > threshold:
             label = f"{dominant_stem} ({structural})"
+        elif len(top_stems) >= 2:
+            # Use top-2 stems when no single stem dominates
+            s1, c1 = top_stems[0]
+            s2, c2 = top_stems[1]
+            combined_ratio = (c1 + c2) / len(paths)
+            if combined_ratio > threshold:
+                label = f"{s1}/{s2} ({structural})"
+            else:
+                label = structural
         else:
             label = structural
     else:
@@ -213,6 +228,7 @@ def format_velocity(
     *,
     window: int = 30,
     compare: bool = False,
+    include_added_paths: bool = False,
     fmt: str = "table",
 ) -> str:
     """Compute per-cluster velocity metrics from commit history."""
@@ -264,17 +280,31 @@ def format_velocity(
         prior = merged[(merged["commit_ts"] >= prior_cutoff) & (merged["commit_ts"] < cutoff)]
         prior_velocity = _compute_velocity(prior)
         prior_map = dict(zip(prior_velocity["cluster_id"], prior_velocity["commit_count"]))
+        velocity["prior_commit_count"] = velocity["cluster_id"].map(prior_map).fillna(0).astype(int)
         velocity["acceleration"] = velocity.apply(
-            lambda r: round(r["commit_count"] / max(prior_map.get(r["cluster_id"], 0), 1), 2),
+            lambda r: round(r["commit_count"] / max(r["prior_commit_count"], 1), 2),
             axis=1,
         )
 
+    # Collect recently added file paths per cluster
+    added_paths_map: dict[int, list[str]] = {}
+    if include_added_paths and "status" in current.columns:
+        added = current[current["status"] == "A"]
+        for cid, grp in added.groupby("cluster_id"):
+            added_paths_map[int(cid)] = grp["path"].unique().tolist()
+
     cols = [c for c in _VELOCITY_JSON_COLS if c in velocity.columns]
-    if compare and "acceleration" in velocity.columns:
-        cols = cols + ["acceleration"]
+    if compare:
+        for extra in ("prior_commit_count", "acceleration"):
+            if extra in velocity.columns and extra not in cols:
+                cols = cols + [extra]
 
     if fmt == "json":
-        return _to_json_records(_round_floats(velocity[cols]))
+        records = _round_floats(velocity[cols]).to_dict(orient="records")
+        if include_added_paths:
+            for rec in records:
+                rec["added_paths"] = added_paths_map.get(int(rec["cluster_id"]), [])
+        return json.dumps(records, indent=2)
     if fmt == "csv":
         return _to_csv(_round_floats(velocity[cols]))
     return _to_table(_round_floats(velocity[cols]))
@@ -414,7 +444,37 @@ def format_clusters(
 # Format: drift
 # ---------------------------------------------------------------------------
 
-_DRIFT_COLS = ["window_end", "cluster_count", "modularity", "ari_prev", "algorithm"]
+_DRIFT_COLS = ["window_end", "cluster_count", "modularity", "ari_prev", "algorithm", "trend"]
+
+
+def _compute_drift_trend(df: pd.DataFrame) -> str:
+    """Compute an overall drift trend label from ARI values.
+
+    Returns one of: ``"stabilizing"``, ``"degrading"``, ``"volatile"``, ``"stable"``.
+    """
+    ari_col = "ari_prev" if "ari_prev" in df.columns else ("ari" if "ari" in df.columns else None)
+    if ari_col is None or df.empty:
+        return "stable"
+    values = df[ari_col].dropna().tolist()
+    if len(values) < 2:
+        if values and float(values[0]) >= 0.80:
+            return "stable"
+        return "stable"
+    recent = float(values[-1])
+    prev = float(values[-2])
+    # Check for oscillation (volatile) — direction flips across 3+ windows
+    if len(values) >= 3:
+        deltas = [float(values[i]) - float(values[i - 1]) for i in range(1, len(values))]
+        sign_changes = sum(1 for i in range(1, len(deltas)) if deltas[i] * deltas[i - 1] < 0)
+        if sign_changes >= 2:
+            return "volatile"
+    if recent > prev and recent >= 0.60:
+        return "stabilizing"
+    if recent < prev:
+        return "degrading"
+    if recent >= 0.80:
+        return "stable"
+    return "stable"
 
 
 def format_drift(df: pd.DataFrame, *, fmt: str = "table") -> str:
@@ -429,6 +489,10 @@ def format_drift(df: pd.DataFrame, *, fmt: str = "table") -> str:
     # Normalise algorithm column name
     if "algorithm_used" in out.columns and "algorithm" not in out.columns:
         out = out.rename(columns={"algorithm_used": "algorithm"})
+
+    # Compute and attach trend
+    trend = _compute_drift_trend(df)
+    out["trend"] = trend
 
     cols = [c for c in _DRIFT_COLS if c in out.columns]
     out = out[cols]
@@ -497,6 +561,16 @@ def format_all(
     drift_df = read_drift(out)
 
     try:
+        commits_df = read_commits(out)
+    except SystemExit:
+        commits_df = pd.DataFrame()
+
+    try:
+        graph_edges_df = read_graph_edges(out)
+    except SystemExit:
+        graph_edges_df = pd.DataFrame()
+
+    try:
         suggestions_data = read_suggestions(out)
     except SystemExit:
         suggestions_data = {"engine": "none", "items": [], "error": "not found"}
@@ -529,16 +603,46 @@ def format_all(
             drift_out.insert(0, "window_end", drift_out["window_end_ts"].apply(_ts_to_iso))
         if "algorithm_used" in drift_out.columns:
             drift_out = drift_out.rename(columns={"algorithm_used": "algorithm"})
+        drift_out["trend"] = _compute_drift_trend(drift_df)
         drift_cols = [c for c in _DRIFT_COLS if c in drift_out.columns]
         drift_records = drift_out[drift_cols].to_dict(orient="records")
 
-        combined = {
+        # Velocity data (compare enabled by default in show all)
+        velocity_json = None
+        if not commits_df.empty and not file_metrics.empty:
+            velocity_raw = format_velocity(
+                commits_df, file_metrics, cluster_metrics,
+                window=30, compare=True, fmt="json",
+            )
+            try:
+                velocity_json = json.loads(velocity_raw)
+            except (json.JSONDecodeError, TypeError):
+                velocity_json = None
+
+        # Top-cluster edges (edges for the top-N most active clusters)
+        top_cluster_edges: dict[str, object] = {}
+        if velocity_json and not graph_edges_df.empty:
+            active_ids = [rec["cluster_id"] for rec in velocity_json[:5]]
+            for cid in active_ids:
+                edge_raw = format_edges(
+                    graph_edges_df, cluster_metrics, file_metrics, int(cid), fmt="json",
+                )
+                try:
+                    top_cluster_edges[str(cid)] = json.loads(edge_raw)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        combined: dict[str, object] = {
             "summary": summary_data,
             "risks": risk_records,
             "clusters": cluster_records,
             "drift": drift_records,
             "suggestions": suggestions_data.get("items", []),
         }
+        if velocity_json is not None:
+            combined["velocity"] = velocity_json
+        if top_cluster_edges:
+            combined["top_cluster_edges"] = top_cluster_edges
         return json.dumps(combined, indent=2, default=str)
 
     # table format — sections with headers
@@ -556,6 +660,13 @@ def format_all(
     sections.append("")
     sections.append("=== Drift ===")
     sections.append(format_drift(drift_df, fmt="table"))
+    if not commits_df.empty and not file_metrics.empty:
+        sections.append("")
+        sections.append("=== Velocity (30d, compare) ===")
+        sections.append(format_velocity(
+            commits_df, file_metrics, cluster_metrics,
+            window=30, compare=True, fmt="table",
+        ))
     return "\n".join(sections)
 
 

@@ -306,6 +306,7 @@ def show_velocity(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
     window: int = typer.Option(30, help="Window size in days."),
     compare: bool = typer.Option(False, help="Compare current window to prior window."),
+    include_added_paths: bool = typer.Option(False, "--include-added-paths", help="Include recently added file paths per cluster (JSON only)."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
@@ -317,7 +318,7 @@ def show_velocity(
     cluster_metrics_df = read_cluster_metrics(out)
     text = format_velocity(
         commits_df, file_metrics_df, cluster_metrics_df,
-        window=window, compare=compare, fmt=fmt,
+        window=window, compare=compare, include_added_paths=include_added_paths, fmt=fmt,
     )
     _write_or_print(text, out_path)
 

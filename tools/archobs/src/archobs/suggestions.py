@@ -205,8 +205,11 @@ def _rule_based_change_suggestions(
         )
 
     if not cluster_metrics_df.empty:
-        leaky = cluster_metrics_df.sort_values(["leakage", "risk_max"], ascending=[False, False]).iloc[0]
-        if float(leaky["leakage"]) >= 0.20:
+        leaky_candidates = cluster_metrics_df.sort_values(
+            ["leakage", "risk_max"], ascending=[False, False],
+        )
+        leaky_candidates = leaky_candidates[leaky_candidates["leakage"].astype(float) >= 0.20]
+        for _, leaky in leaky_candidates.head(3).iterrows():
             cluster_id = int(leaky["cluster_id"])
             profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
             neighbor = profile["neighbors"][0] if profile and profile["neighbors"] else None

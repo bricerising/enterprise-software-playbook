@@ -27,6 +27,10 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
 
 ## Workflow
 
+### Same-session fast path
+
+When running in the same session as archobs (data already loaded), skip steps 1-3 below — artifacts are already available in `.archobs/`. Start from step 4 (branch signals) and step 4b (commit message themes), then proceed to step 5 (interpretation).
+
 ### Primary path: archobs-native queries
 
 1. **Get velocity data** — per-cluster commit activity with growth/churn ratios:
@@ -37,25 +41,36 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
    ```bash
    archobs show velocity --window 30 --compare --format json
    ```
+   With recently added file paths (highest-signal data for feature prediction):
+   ```bash
+   archobs show velocity --window 30 --compare --include-added-paths --format json
+   ```
 
 2. **Inspect cluster relationships** — which clusters are connected and how strongly:
    ```bash
    archobs show edges <cluster_id> --format json
    ```
 
-3. **Get full context** — complete file-to-cluster mappings, risk, drift:
+3. **Get full context** — complete file-to-cluster mappings, risk, drift, velocity, and edges in one call:
    ```bash
    archobs show all --top 0 --format json
    archobs show files --format json           # complete file-to-cluster map
    archobs show clusters --format json        # cluster metrics with recent_commits
    archobs show drift --format json           # temporal stability
    ```
+   All `show` subcommands read from Parquet artifacts independently — **run them in parallel** for speed.
 
 4. **Collect branch signals** — active branches are the highest-confidence trajectory signal:
    ```bash
    git branch -r --sort=-committerdate | head -20
    ```
    Branch names are direct feature declarations — they tell you what the team is building, not what you infer from file changes. Include these in your analysis with the highest confidence level.
+
+4b. **Collect commit message themes** — what the team is describing:
+   ```bash
+   git log --since="30 days ago" --format="%s" --no-merges | head -40
+   ```
+   Commit message prefixes (e.g. `feat(loyalty):`, `chore(db):`, `fix(tests):`) are often the single highest-confidence signal for identifying active feature work. Parse conventional commit prefixes to identify which domains are receiving feature work vs maintenance.
 
 5. **Interpret the velocity signals**:
 
@@ -83,6 +98,11 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
    | Test file additions in a cluster | Committed feature work (the team is investing) |
    | Configuration/settings additions | Feature flags, admin controls |
    | Event/webhook infrastructure | Notification and integration features |
+   | Migration file recreation/renumbering | Schema stabilization before ship — feature is close to merge |
+   | Multiple "review cleaning" commits | Code review in progress — approaching merge |
+   | Idempotency key additions | Offline mode or distributed operation hardening |
+   | CORS configuration changes | Deployment environment changes (new domains, staging environments) |
+   | Test coverage push (many test-only commits) | CI pipeline enforcement or pre-release quality gate |
 
 ### Enhancement: `intel change-trajectory`
 
@@ -128,7 +148,7 @@ git log --since="30 days ago" --name-only --format="" | sort | sed '/^$/d' \
 git log --since="60 days ago" --until="30 days ago" --name-only --format="" | sort | sed '/^$/d' \
   | xargs -I{} dirname {} | sort | uniq -c | sort -rn | head -20
 
-# 3. Commit message themes — what the team is talking about
+# 3. Commit message themes (also in primary workflow step 4b — repeat here for standalone use)
 git log --since="30 days ago" --format="%s" | tr '[:upper:]' '[:lower:]' \
   | tr -cs '[:alpha:]' '\n' | sort | uniq -c | sort -rn | head -20
 

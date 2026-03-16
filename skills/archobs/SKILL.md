@@ -49,12 +49,15 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    **Do not proceed to step 4 until the report command has finished.** Steps 4–6 depend on the artifacts produced by this command. If the command is run in the background, wait for it to complete before continuing.
 
-4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed):
+4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed).
+
+   All `show` subcommands read from Parquet artifacts independently — **run them in parallel** when calling from an agent. This avoids sequential round-trips and is 5-6x faster.
+
    ```bash
-   # All metrics in one shot (preferred for agents — use --top 0 for complete data):
+   # All metrics in one shot (preferred — includes velocity and top-cluster edges):
    archobs show all --top 0 --format json
 
-   # Or query individual sections:
+   # Or query individual sections (run these in parallel):
    archobs show risks --top 10 --format json
    archobs show clusters --sort leakage --format json
    archobs show drift --format json
@@ -65,6 +68,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    # Development velocity and cluster relationships:
    archobs show velocity --window 30 --format json            # per-cluster commit activity
    archobs show velocity --window 30 --compare --format json  # with acceleration vs prior window
+   archobs show velocity --window 30 --compare --include-added-paths --format json  # with recently added file paths
    archobs show edges <cluster_id> --format json              # cross-cluster edge relationships
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
@@ -111,6 +115,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
    - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction.
+     **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --include-added-paths --format json`, check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the trajectory skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `trajectory` skill.
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
