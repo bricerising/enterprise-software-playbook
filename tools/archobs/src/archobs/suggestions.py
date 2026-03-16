@@ -245,22 +245,30 @@ def _rule_based_change_suggestions(
         path = str(top_file["path"])
         cluster_id = int(top_file.get("cluster_id", -1))
         area_name = _humanize_path_token(path)
+        has_high_volatility = "volatility" in top_file.index and float(top_file.get("volatility", 0)) >= 0.8
         if float(top_file["xnbr"]) >= 0.35:
+            # Boost to High if also highly volatile (being changed constantly AND risky)
+            base_priority = "High" if float(top_file["xnbr"]) >= 0.50 else "Medium"
+            if has_high_volatility and base_priority == "Medium":
+                base_priority = "High"
+            volatility_note = " It also has very high volatility, meaning it is being changed constantly." if has_high_volatility else ""
             suggestions.append(
                 {
-                    "priority": "High" if float(top_file["xnbr"]) >= 0.50 else "Medium",
+                    "priority": base_priority,
                     "title": f"Break apart mixed responsibilities in {area_name}",
-                    "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.",
+                    "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.{volatility_note}",
                     "change": "Separate orchestration and shared boundary logic from the domain logic so this file stops acting as a conceptual bridge between subsystems.",
                     "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3)}",
                 }
             )
         elif float(top_file["hubness"]) >= 0.45:
+            hub_priority = "High" if has_high_volatility else "Medium"
+            volatility_note = " It is also highly volatile, compounding the blast radius." if has_high_volatility else ""
             suggestions.append(
                 {
-                    "priority": "Medium",
+                    "priority": hub_priority,
                     "title": f"Reduce direct fan-in around {area_name}",
-                    "why": "This area is currently one of the strongest hubs in the graph, which increases blast radius when it changes.",
+                    "why": f"This area is currently one of the strongest hubs in the graph, which increases blast radius when it changes.{volatility_note}",
                     "change": "Extract leaf helpers or add a narrower entrypoint so downstream files depend on one stable surface instead of this file's full implementation.",
                     "scope": path,
                 }
@@ -287,11 +295,21 @@ def _rule_based_change_suggestions(
     if not drift_df.empty and drift_ari_column is not None:
         lowest = drift_df.sort_values(drift_ari_column, ascending=True).iloc[0]
         if float(lowest[drift_ari_column]) < 0.50:
+            # Check the ARI trend (last 2 windows) to determine if architecture is stabilizing
+            ari_values = drift_df[drift_ari_column].tolist()
+            trend_rising = len(ari_values) >= 2 and ari_values[-1] > ari_values[-2]
+            if trend_rising and ari_values[-1] >= 0.60:
+                # ARI is rising and recent value is reasonable — downgrade to Low
+                drift_priority = "Low"
+                trend_note = f" However, the trend is stabilizing (recent ARI {float(ari_values[-1]):.2f})."
+            else:
+                drift_priority = "Medium"
+                trend_note = ""
             suggestions.append(
                 {
-                    "priority": "Medium",
+                    "priority": drift_priority,
                     "title": "Stabilize cluster naming and ownership before the next large move",
-                    "why": f"The weakest drift window has ARI {float(lowest[drift_ari_column]):.2f}, which suggests the subsystem map is changing quickly over time.",
+                    "why": f"The weakest drift window has ARI {float(lowest[drift_ari_column]):.2f}, which suggests the subsystem map is changing quickly over time.{trend_note}",
                     "change": "Avoid broad package moves until the unstable area has a clearer owner and a narrower boundary, otherwise future changes will continue to reshuffle the same files.",
                     "scope": "the lowest-stability cluster window in the drift table",
                 }

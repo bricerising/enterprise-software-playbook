@@ -49,14 +49,16 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
 4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed):
    ```bash
-   # All metrics in one shot (preferred for agents):
-   archobs show all --format json
+   # All metrics in one shot (preferred for agents — use --top 0 for complete data):
+   archobs show all --top 0 --format json
 
    # Or query individual sections:
    archobs show risks --top 10 --format json
    archobs show clusters --sort leakage --format json
    archobs show drift --format json
    archobs show summary --format json
+   archobs show files --format json            # complete file-to-cluster mapping
+   archobs show cluster-files <id> --format json  # files in a specific cluster
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
 
@@ -87,11 +89,21 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | `ari_prev` | < 0.50 | Architecture is unstable — subsystem map is reshuffling |
    | `modularity` | declining | Boundaries are weakening over time |
 
+   **Drift trend interpretation** — the trend across windows matters more than any single value:
+   | Pattern | Interpretation |
+   |---------|---------------|
+   | ARI rising toward 1.0 | Stabilizing — architecture is settling after upheaval |
+   | ARI falling across windows | Degrading — boundaries are being broken |
+   | ARI oscillating | Volatile — team is experimenting with structure |
+   | Modularity declining while ARI rises | New cross-cutting features are landing in a stable structure |
+
+   When reporting drift, always examine the ARI trend (last 2+ windows) rather than applying a single threshold. A codebase with ARI 1.0 → 0.38 → 0.58 → 0.77 is stabilizing, not unstable.
+
 6. **Route findings to the right skill**:
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
-   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next)
+   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction.
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 

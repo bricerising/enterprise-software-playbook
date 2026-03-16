@@ -92,7 +92,7 @@ archobs show all --top 0 --format json > /tmp/archobs.json  # complete
 
 **Caveat**: Labels are heuristic — they reflect path distribution, not semantic meaning. The label should be presented as a hint, not a name.
 
-### D. Momentum-aware suggestion prioritization (Low — Finding #10)
+### D. Momentum-aware suggestion prioritization (Medium — Finding #10)
 
 **Problem**: The suggestions engine knows about risk and leakage but not development momentum. A cluster that's leaky AND accelerating is more urgent to refactor than one that's leaky but dormant.
 
@@ -131,7 +131,7 @@ archobs show all --top 0 --format json > /tmp/archobs.json  # complete
 | **1 (highest)** | B: Full file-to-cluster JSON | Unblocks trajectory tool from getting complete cluster mappings — highest-impact single change |
 | **2** | A: Cluster file inspection | Unblocks agents from understanding cluster composition — meaningless IDs become interpretable |
 | **3** | C: Cluster labels | Reduces cognitive load — works well with A but independent |
-| **4** | D: Momentum-aware suggestions | Improves prioritization quality but existing suggestions still work |
+| **4** | D: Momentum-aware suggestions | Field-validated: drift suggestions use worst-case ARI not trend; risk suggestions ignore volatility correlation |
 | **5** | E: Path truncation | Cosmetic improvement for table output |
 
 Changes A-C can be implemented together. D and E are independent.

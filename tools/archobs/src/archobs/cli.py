@@ -256,6 +256,38 @@ def show_clusters(
     _write_or_print(text, out_path)
 
 
+@show_app.command("cluster-files")
+def show_cluster_files(
+    cluster_id: int = typer.Argument(help="Cluster ID to inspect."),
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(20, "--top-paths", help="Number of files to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show files belonging to a specific cluster, sorted by risk."""
+    from archobs.display import format_cluster_files, read_file_metrics
+
+    df = read_file_metrics(out)
+    text = format_cluster_files(df, cluster_id, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("files")
+def show_files(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(0, help="Number of top files to show (0 = all)."),
+    min_risk: float | None = typer.Option(None, help="Minimum risk score filter."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Dump all file metrics with cluster assignments."""
+    from archobs.display import format_files, read_file_metrics
+
+    df = read_file_metrics(out)
+    text = format_files(df, top=top, fmt=fmt, min_risk=min_risk)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("drift")
 def show_drift(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),

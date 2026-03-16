@@ -24,7 +24,7 @@ The tool produces deterministic, structured data. Feature adjacency reasoning ("
 
 1. **archobs data**: Run `archobs` first to get cluster assignments, file risks, and drift data
 2. **Commit data**: Extract from `.archobs/commits.parquet` or `git log`
-3. **Build the tool**: `cd tools/intelligence && npm install && npm run build`
+3. **Build the tool** (if using `intel` CLI): `cd tools/intelligence && npm install && npm run build`
 
 ### Extracting commit data
 
@@ -70,6 +70,44 @@ json.dump(msgs, sys.stdout)
 " > /tmp/commit-messages.json
 ```
 
+### Manual fallback (when `intel` CLI is not built)
+
+When the `intel` tool is not available (not built, not installed, or not on PATH), you can extract the same trajectory signals directly from git. These four commands can run in parallel:
+
+```bash
+# 1. Active directories — where development is concentrated (last 90 days)
+git log --since="90 days ago" --name-only --format="" | sort | sed '/^$/d' \
+  | xargs -I{} dirname {} | sort | uniq -c | sort -rn | head -30
+
+# 2. Acceleration — compare recent vs older activity
+# Last 30 days:
+git log --since="30 days ago" --name-only --format="" | sort | sed '/^$/d' \
+  | xargs -I{} dirname {} | sort | uniq -c | sort -rn | head -20
+# Previous 30–60 days:
+git log --since="60 days ago" --until="30 days ago" --name-only --format="" | sort | sed '/^$/d' \
+  | xargs -I{} dirname {} | sort | uniq -c | sort -rn | head -20
+
+# 3. Commit message themes — what the team is talking about
+git log --since="30 days ago" --format="%s" | tr '[:upper:]' '[:lower:]' \
+  | tr -cs '[:alpha:]' '\n' | sort | uniq -c | sort -rn | head -20
+
+# 4. Branch signals — direct feature declarations (highest confidence)
+git branch -r --sort=-committerdate | head -20
+```
+
+Compare directory counts between the two 30-day windows to identify acceleration (growing) vs deceleration (shrinking). Directories that appear only in the recent window are new areas of focus.
+
+Branch names are often the highest-confidence trajectory signal — they are direct feature declarations, not inferences. Prioritize them in your analysis.
+
+### Combined analysis (archobs + trajectory in one session)
+
+When running trajectory immediately after archobs in the same session, archobs artifacts are already available — skip re-extraction and read directly from `.archobs/`:
+```bash
+archobs show all --top 0 --format json > /tmp/archobs.json
+archobs show files --format json > /tmp/files.json  # complete file-to-cluster map
+```
+The archobs skill's step 6 routes to trajectory — when following that route, you already have the data you need.
+
 ## Chooser (When to Use)
 
 | Situation | Use |
@@ -109,7 +147,13 @@ json.dump(msgs, sys.stdout)
 
    Or via MCP tool `intel_change_trajectory` with the same inputs.
 
-4. **Interpret the trajectory signals**:
+4. **Collect branch signals** — active branches are the highest-confidence trajectory signal:
+   ```bash
+   git branch -r --sort=-committerdate | head -20
+   ```
+   Branch names are direct feature declarations — they tell you what the team is building, not what you infer from file changes. Include these in your analysis with the highest confidence level.
+
+5. **Interpret the trajectory signals**:
 
    | Signal | Suggests |
    |--------|----------|
@@ -124,10 +168,14 @@ json.dump(msgs, sys.stdout)
    | `recently_added_paths` patterns | File naming reveals feature intent |
    | `subject_patterns.top_tokens` | Thematic focus of recent commits |
 
-5. **Reason about feature adjacency** using the patterns below and your domain knowledge:
+6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
 
    | Observed pattern | Likely next |
    |-----------------|-------------|
+   | Active feature branches not yet merged | Direct feature signal — the roadmap in code (highest confidence) |
+   | New database migrations creating tables | CRUD endpoints, API, then UI for the new entities |
+   | Schema field additions to existing entities | Feature enrichment using those fields in the UI |
+   | Test factory additions for new entities | Team is committed to shipping the feature (high confidence) |
    | Export features (CSV, PDF, data transforms) | Reporting features (aggregates, charts, dashboards) |
    | CRUD operations for new entities | Search, filter, and sort capabilities |
    | Data model additions | API endpoints exposing the data |
@@ -135,9 +183,8 @@ json.dump(msgs, sys.stdout)
    | Test file additions in a cluster | Committed feature work (the team is investing) |
    | Configuration/settings additions | Feature flags, admin controls |
    | Event/webhook infrastructure | Notification and integration features |
-   | Schema migrations | Data import/migration tooling |
 
-6. **Cross-reference with other tools** (optional):
+7. **Cross-reference with other tools** (optional):
    - Run `forecast` to check if external signals align with internal trajectory
    - Run `risk-overlay` to check if high-momentum clusters have compound risks
    - Read code in active clusters for deeper context

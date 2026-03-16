@@ -57,6 +57,31 @@ def read_suggestions(out: Path) -> dict:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
+    """Generate a heuristic label from the dominant path prefixes in a cluster."""
+    if not paths:
+        return ""
+    from collections import Counter
+    prefixes: list[str] = []
+    for p in paths:
+        parts = p.split("/")
+        # Skip common root segments like src/, packages/, apps/
+        start = 0
+        if parts and parts[0] in {"src", "packages", "apps", "lib"}:
+            start = 1
+        segments = parts[start:start + 2]
+        if segments:
+            prefixes.append("/".join(segments))
+    if not prefixes:
+        return ""
+    counts = Counter(prefixes)
+    top = counts.most_common(2)
+    label = " + ".join(prefix for prefix, _ in top)
+    if len(label) > max_length:
+        label = label[:max_length - 3] + "..."
+    return label
+
+
 def _truncate_path(p: str, max_segments: int = 4) -> str:
     """Shorten long paths for table display by keeping last *max_segments* parts."""
     parts = p.split("/")
@@ -138,6 +163,15 @@ _CLUSTER_TABLE_COLS = ["cluster_id", "size", "cohesion", "leakage", "conductance
 _CLUSTER_JSON_COLS = _CLUSTER_TABLE_COLS  # top_paths added separately
 
 
+def _extract_paths_list(paths_val: object) -> list[str]:
+    """Normalise a paths column value to a list of strings."""
+    if isinstance(paths_val, str):
+        return paths_val.strip().split("\n")
+    if isinstance(paths_val, list):
+        return paths_val
+    return []
+
+
 def format_clusters(
     df: pd.DataFrame,
     *,
@@ -152,24 +186,28 @@ def format_clusters(
     if fmt == "json":
         cols = [c for c in _CLUSTER_JSON_COLS if c in filtered.columns]
         records = _round_floats(filtered[cols]).to_dict(orient="records")
-        # Add top_paths from the paths column if available
+        # Add top_paths and label from the paths column if available
         if "paths" in filtered.columns:
             paths_list = filtered["paths"].tolist()
             for rec, paths_val in zip(records, paths_list):
-                if isinstance(paths_val, str):
-                    rec["top_paths"] = paths_val.strip().split("\n")[:5]
-                elif isinstance(paths_val, list):
-                    rec["top_paths"] = paths_val[:5]
-                else:
-                    rec["top_paths"] = []
+                all_paths = _extract_paths_list(paths_val)
+                rec["top_paths"] = all_paths[:5]
+                rec["label"] = _generate_cluster_label(all_paths)
         return json.dumps(records, indent=2)
     if fmt == "csv":
         cols = [c for c in _CLUSTER_TABLE_COLS if c in filtered.columns]
         return _to_csv(_round_floats(filtered[cols]))
 
-    # table — exclude paths column (too wide)
+    # table — add label column if paths data is available
     cols = [c for c in _CLUSTER_TABLE_COLS if c in filtered.columns]
-    return _to_table(_round_floats(filtered[cols]))
+    out = _round_floats(filtered[cols])
+    if "paths" in filtered.columns:
+        out = out.copy()
+        out["label"] = [
+            _generate_cluster_label(_extract_paths_list(p))
+            for p in filtered["paths"].tolist()
+        ]
+    return _to_table(out)
 
 
 # ---------------------------------------------------------------------------
@@ -259,19 +297,26 @@ def format_all(
 
     if fmt == "json":
         cols = [c for c in _RISK_COLS if c in file_metrics.columns]
-        risk_records = (
-            file_metrics.sort_values("risk", ascending=False)
-            .head(top)[cols]
-            .to_dict(orient="records")
-        )
+        sorted_risks = file_metrics.sort_values("risk", ascending=False)
+        if top > 0:
+            sorted_risks = sorted_risks.head(top)
+        risk_records = sorted_risks[cols].to_dict(orient="records")
 
         cluster_cols = [c for c in _CLUSTER_JSON_COLS if c in cluster_metrics.columns]
-        cluster_records = (
+        filtered_clusters = (
             cluster_metrics[cluster_metrics["size"] >= 2]
             .sort_values("leakage", ascending=False)
-            .head(top)[cluster_cols]
-            .to_dict(orient="records")
-        ) if "size" in cluster_metrics.columns else cluster_metrics.head(top)[cluster_cols].to_dict(orient="records")
+        ) if "size" in cluster_metrics.columns else cluster_metrics.copy()
+        if top > 0:
+            filtered_clusters = filtered_clusters.head(top)
+        cluster_records = filtered_clusters[cluster_cols].to_dict(orient="records")
+        # Add top_paths and label from the paths column if available (consistent with format_clusters)
+        if "paths" in filtered_clusters.columns:
+            paths_list = filtered_clusters["paths"].tolist()
+            for rec, paths_val in zip(cluster_records, paths_list):
+                all_paths = _extract_paths_list(paths_val)
+                rec["top_paths"] = all_paths[:5]
+                rec["label"] = _generate_cluster_label(all_paths)
 
         drift_out = drift_df.copy()
         if "window_end_ts" in drift_out.columns:
@@ -304,6 +349,72 @@ def format_all(
     sections.append("=== Drift ===")
     sections.append(format_drift(drift_df, fmt="table"))
     return "\n".join(sections)
+
+
+# ---------------------------------------------------------------------------
+# Format: cluster-files
+# ---------------------------------------------------------------------------
+
+_CLUSTER_FILES_COLS = ["path", "risk", "xnbr", "hubness", "volatility"]
+
+
+def format_cluster_files(
+    file_metrics: pd.DataFrame,
+    cluster_id: int,
+    *,
+    top: int = 20,
+    fmt: str = "table",
+) -> str:
+    """Show files belonging to a specific cluster, sorted by risk."""
+    if "cluster_id" not in file_metrics.columns:
+        return "Error: cluster_id column not found in file_metrics."
+    filtered = file_metrics[file_metrics["cluster_id"] == cluster_id].copy()
+    if filtered.empty:
+        return f"No files found in cluster {cluster_id}."
+    filtered = filtered.sort_values("risk", ascending=False)
+    if top > 0:
+        filtered = filtered.head(top)
+
+    cols = [c for c in _CLUSTER_FILES_COLS if c in filtered.columns]
+    if fmt == "json":
+        return _to_json_records(filtered[cols])
+    if fmt == "csv":
+        return _to_csv(_round_floats(filtered[cols]))
+    out = _round_floats(filtered[cols])
+    out["path"] = out["path"].apply(_truncate_path)
+    return _to_table(out)
+
+
+# ---------------------------------------------------------------------------
+# Format: files
+# ---------------------------------------------------------------------------
+
+_FILES_COLS = ["path", "risk", "xnbr", "hubness", "volatility", "cluster_id"]
+
+
+def format_files(
+    df: pd.DataFrame,
+    *,
+    top: int = 0,
+    fmt: str = "table",
+    min_risk: float | None = None,
+) -> str:
+    """Dump file metrics with cluster assignments. Default: all files."""
+    filtered = df.copy()
+    if min_risk is not None:
+        filtered = filtered[filtered["risk"] >= min_risk]
+    filtered = filtered.sort_values("risk", ascending=False)
+    if top > 0:
+        filtered = filtered.head(top)
+
+    cols = [c for c in _FILES_COLS if c in filtered.columns]
+    if fmt == "json":
+        return _to_json_records(filtered[cols])
+    if fmt == "csv":
+        return _to_csv(_round_floats(filtered[cols]))
+    out = _round_floats(filtered[cols])
+    out["path"] = out["path"].apply(_truncate_path)
+    return _to_table(out)
 
 
 # ---------------------------------------------------------------------------
