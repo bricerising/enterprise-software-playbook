@@ -282,11 +282,18 @@ def _build_cluster_metrics(
                 "paths": "\n".join(paths[:50]),
             }
         )
-    return pd.DataFrame(cluster_rows).sort_values(["leakage", "cluster_id"], ascending=[False, True]).reset_index(drop=True)
+    result = pd.DataFrame(cluster_rows).sort_values(["leakage", "cluster_id"], ascending=[False, True]).reset_index(drop=True)
+    # Compute percentile rank (0-1) for external_inbound_weight so the suggestion
+    # engine can detect gravitational centers without relying on absolute values.
+    if not result.empty and "external_inbound_weight" in result.columns:
+        result["external_inbound_rank"] = result["external_inbound_weight"].rank(pct=True)
+    else:
+        result["external_inbound_rank"] = 0.0
+    return result
 
 
 _EMPTY_FILE_COLUMNS = ["path", "cluster_id", "weighted_degree", "degree", "betweenness", "xnbr", "hubness", "volatility", "risk"]
-_EMPTY_CLUSTER_COLUMNS = ["cluster_id", "size", "cohesion", "leakage", "conductance", "internal_weight", "external_weight", "external_inbound_weight", "risk_mean", "risk_max", "paths"]
+_EMPTY_CLUSTER_COLUMNS = ["cluster_id", "size", "cohesion", "leakage", "conductance", "internal_weight", "external_weight", "external_inbound_weight", "external_inbound_rank", "risk_mean", "risk_max", "paths"]
 
 
 # ---------------------------------------------------------------------------

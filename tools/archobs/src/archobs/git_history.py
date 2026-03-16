@@ -12,7 +12,9 @@ import pandas as pd
 from archobs.config.graph import GraphConfig
 
 
-LOG_FORMAT = ["git", "log", "--date-order", "--reverse", "--pretty=format:--COMMIT--%n%H%n%ct", "--name-status", "--no-renames", "--", "."]
+LOG_FORMAT = ["git", "log", "--date-order", "--reverse", "--pretty=format:--COMMIT--%n%H%n%ct%n%s", "--name-status", "--no-renames", "--", "."]
+
+_MESSAGE_MAX_LEN = 80
 
 
 def extract_git_history(repo_path: str | Path, tracked_paths: set[str]) -> pd.DataFrame:
@@ -20,19 +22,22 @@ def extract_git_history(repo_path: str | Path, tracked_paths: set[str]) -> pd.Da
         proc = run(LOG_FORMAT, cwd=repo_path, check=True, capture_output=True, text=True)
     except CalledProcessError as exc:
         if exc.returncode == 128:
-            return pd.DataFrame(columns=["commit_sha", "commit_ts", "status", "path"])
+            return pd.DataFrame(columns=["commit_sha", "commit_ts", "message", "status", "path"])
         raise
     rows: list[dict[str, object]] = []
     commit_sha: str | None = None
     commit_ts: int | None = None
+    commit_msg: str = ""
     awaiting_sha = False
     awaiting_ts = False
+    awaiting_msg = False
 
     for raw_line in proc.stdout.splitlines():
         line = raw_line.strip("\n")
         if line == "--COMMIT--":
             awaiting_sha = True
             awaiting_ts = False
+            awaiting_msg = False
             continue
         if awaiting_sha:
             commit_sha = line.strip()
@@ -42,6 +47,11 @@ def extract_git_history(repo_path: str | Path, tracked_paths: set[str]) -> pd.Da
         if awaiting_ts:
             commit_ts = int(line.strip())
             awaiting_ts = False
+            awaiting_msg = True
+            continue
+        if awaiting_msg:
+            commit_msg = line.strip()[:_MESSAGE_MAX_LEN]
+            awaiting_msg = False
             continue
         if not line or commit_sha is None or commit_ts is None:
             continue
@@ -56,13 +66,14 @@ def extract_git_history(repo_path: str | Path, tracked_paths: set[str]) -> pd.Da
             {
                 "commit_sha": commit_sha,
                 "commit_ts": commit_ts,
+                "message": commit_msg,
                 "status": status,
                 "path": rel_path,
             }
         )
 
     if not rows:
-        return pd.DataFrame(columns=["commit_sha", "commit_ts", "status", "path"])
+        return pd.DataFrame(columns=["commit_sha", "commit_ts", "message", "status", "path"])
     return pd.DataFrame(rows).sort_values(["commit_ts", "commit_sha", "path"]).reset_index(drop=True)
 
 

@@ -31,8 +31,8 @@ The data is deterministic and structured. Feature adjacency reasoning ("export f
 
 When running in the same session as archobs (data already loaded), use this checklist instead of the full workflow below:
 
-1. `archobs show velocity --window 30 --compare --include-added-paths --format json` — now includes `external_inbound_weight`, `recent_file_changes_30d`, `recent_file_changes_90d`, and `is_emerging` (when `--compare` is used)
-2. `archobs show edges --top-active 3 --format json` — auto-selects top-3 clusters by file_change_count, no need to extract cluster IDs first
+1. `archobs show velocity --window 30 --compare --format json` — `added_paths` are included by default in JSON output. Also includes `external_inbound_weight`, `recent_file_changes_30d`, `recent_file_changes_90d`, and `is_emerging` (when `--compare` is used). Use `--no-added-paths` to exclude them.
+2. `archobs show edges --top-active 3 --max-neighbors 10 --format json` — auto-selects top-3 clusters by file_change_count, no need to extract cluster IDs first. `--max-neighbors 10` prevents output explosion for large hub clusters.
 3. `git branch -r --sort=-committerdate | head -20`
 4. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
 5. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
@@ -43,9 +43,9 @@ Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in para
 
 1. **Get velocity data** — per-cluster commit activity with growth/churn ratios:
    ```bash
-   archobs show velocity --window 30 --compare --include-added-paths --format json
+   archobs show velocity --window 30 --compare --format json
    ```
-   Always use `--include-added-paths` for trajectory analysis — recently added file paths are the highest-signal data for feature prediction. Use `--compare` to get acceleration relative to the prior window.
+   Recently added file paths (`added_paths`) are included by default in JSON output — they are the highest-signal data for feature prediction. Use `--compare` to get acceleration relative to the prior window. Use `--no-added-paths` to exclude them if output size is a concern.
 
    Simpler variants (when you only need a quick check, not full trajectory):
    ```bash
@@ -85,6 +85,8 @@ Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in para
    git log --since="30 days ago" --format="%s" --no-merges | head -40
    ```
    Commit message prefixes (e.g. `feat(loyalty):`, `chore(db):`, `fix(tests):`) are often the single highest-confidence signal for identifying active feature work. Parse conventional commit prefixes to identify which domains are receiving feature work vs maintenance.
+
+   **Note**: `commits.parquet` now includes a `message` column (first 80 chars of the subject line), so `archobs show commits --since 30 --format json` can provide commit messages directly without a separate `git log` call. However, `git log` remains useful for accessing the full untruncated subject and for `--no-merges` filtering.
 
 5. **Interpret the velocity signals**:
 
@@ -194,6 +196,28 @@ git branch -r --sort=-committerdate | head -20
 ```
 
 Compare directory counts between the two 30-day windows to identify acceleration (growing) vs deceleration (shrinking).
+
+## Combined Archobs + Trajectory Workflow
+
+When running both archobs and trajectory in the same session (the most common case), use this optimized combined sequence instead of the individual workflows:
+
+1. **`archobs report`** (blocking — wait for completion)
+2. **Parallel**: all archobs `show` commands + trajectory git commands:
+   ```bash
+   # Archobs queries (parallel):
+   archobs show risks --top 10 --format json
+   archobs show clusters --sort leakage --format json
+   archobs show drift --format json
+   archobs show summary --format json
+   archobs show velocity --window 30 --compare --format json
+   archobs show edges --top-active 3 --max-neighbors 10 --format json
+   # Git queries (parallel with above):
+   git branch -r --sort=-committerdate | head -20
+   git log --since="30 days ago" --format="%s" --no-merges | head -40
+   ```
+3. **Synthesize** into a combined report using both output templates.
+
+This eliminates the sequential fast-path steps and runs everything in one parallel batch after the report completes.
 
 ## Chooser (When to Use)
 

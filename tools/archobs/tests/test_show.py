@@ -633,7 +633,7 @@ def test_format_velocity_compare(tmp_path: Path):
 
 
 def test_format_velocity_empty(tmp_path: Path):
-    empty = pd.DataFrame(columns=["commit_sha", "commit_ts", "status", "path"])
+    empty = pd.DataFrame(columns=["commit_sha", "commit_ts", "message", "status", "path"])
     fm = _make_file_metrics(tmp_path)
     cm = _make_cluster_metrics(tmp_path)
     text = format_velocity(empty, fm, cm, window=30, fmt="table")

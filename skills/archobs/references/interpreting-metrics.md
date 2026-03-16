@@ -80,6 +80,14 @@ Lower conductance = healthier boundary.
 
 Count of file-change events (rows in `commits.parquet`) within the 30-day or 90-day window, grouped by cluster. These count **file-change events**, not distinct commits — a single commit touching 5 files in a cluster adds 5 to the count. For distinct commit counts per cluster, use `archobs show velocity` which reports `distinct_commits` via `.nunique()` on `commit_sha`.
 
+### `external_inbound_rank` (0.0 - 1.0)
+
+Percentile rank of `external_inbound_weight` across all clusters. A rank of 0.95 means this cluster has higher inbound coupling than 95% of other clusters — it is a gravitational center.
+
+- **> 0.90**: Strong gravitational center — other clusters are pulled toward this one. Consider decomposition.
+- **> 0.75**: Moderate hub — acceptable if the cluster has clear ownership and a stable interface.
+- **< 0.50**: Normal coupling — not a structural attractor.
+
 ### `risk_mean` / `risk_max`
 
 Average and maximum file-level risk within the cluster. Clusters with high `risk_max` contain at least one problematic file.
@@ -115,12 +123,14 @@ Global graph modularity for the time-windowed snapshot. Declining modularity ove
 
 Number of detected clusters per time window. Significant fluctuation suggests the architecture is not converging on stable subsystems.
 
+**Declining cluster_count in young repos**: For repos with less than ~12 months of history, cluster_count often drops dramatically across drift windows (e.g. 593 → 384 → 148 → 66). This is **not** architectural consolidation — it is an artifact of increasing co-change signal density. Early windows have sparse commit history, producing weak co-change edges where Leiden creates many tiny clusters. As more history accumulates, edges strengthen and clusters consolidate naturally. In these cases, the ARI trend is the reliable structural signal; cluster_count in early windows is noise.
+
 ## Artifacts Reference
 
 | Artifact | Format | Contents |
 |----------|--------|----------|
 | `files.parquet` | Parquet | File inventory: path, language, loc, size |
-| `commits.parquet` | Parquet | Git commit-file edges with timestamps |
+| `commits.parquet` | Parquet | Git commit-file edges with timestamps and message (first 80 chars of subject line) |
 | `git_stats.parquet` | Parquet | Per-file: commit count, last commit timestamp |
 | `imports.parquet` | Parquet | Resolved dependency edges: source, target |
 | `co_edges.parquet` | Parquet | Co-change edges with decay-weighted strength |

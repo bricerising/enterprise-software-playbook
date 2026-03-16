@@ -86,6 +86,25 @@ def _humanize_path_token(token: str) -> str:
     return " ".join(cleaned[-2:])
 
 
+_GENERIC_DOMAIN_STEMS = frozenset({
+    "src", "lib", "test", "tests", "spec", "utils", "helpers", "common", "shared",
+    "index", "main", "app", "config", "setup", "fixtures", "mocks", "stubs",
+    "types", "interfaces", "models", "schemas", "dto", "entities",
+})
+
+
+def _extract_domain_keywords(paths: list[str]) -> set[str]:
+    """Extract domain keywords from file paths for cross-cluster matching."""
+    keywords: set[str] = set()
+    for p in paths:
+        parts = Path(p).parts
+        for part in parts:
+            stem = part.split(".")[0].replace("-", "_").split("_")[0].lower()
+            if stem and len(stem) > 2 and stem not in _GENERIC_DOMAIN_STEMS:
+                keywords.add(stem)
+    return keywords
+
+
 def _humanize_area_label(label: str) -> str:
     # Remove trailing truncation markers from cluster labels (e.g. '(test unit and unit contro...")')
     cleaned_label = re.sub(r"\s*\([^)]*\.\.\.[\"']?\)\s*$", "", label).strip()
@@ -440,7 +459,11 @@ def _rule_based_change_suggestions(
             area = _humanize_area_label(label) if label != f"cluster {cid}" else label
             scope = _cluster_scope_paths(file_metrics_df, cid)
 
-            # Skip test-only clusters — boundary suggestions aren't actionable for test infrastructure
+            # Skip test-only clusters — boundary suggestions aren't actionable for
+            # test infrastructure. But cross-reference with production clusters: if a
+            # test-only cluster shares domain keywords with a production cluster's
+            # added_paths, emit a boundary suggestion targeting the production cluster.
+            is_test_only = False
             if not file_metrics_df.empty and "cluster_id" in file_metrics_df.columns:
                 cluster_paths = file_metrics_df[file_metrics_df["cluster_id"] == cid]["path"].tolist()
                 if cluster_paths:
@@ -449,7 +472,55 @@ def _rule_based_change_suggestions(
                         if "/test/" in str(p) or "/tests/" in str(p) or ".test." in str(p) or ".spec." in str(p)
                     ) / len(cluster_paths)
                     if test_ratio > 0.8:
-                        continue
+                        is_test_only = True
+
+            if is_test_only:
+                # Extract domain keywords from this test cluster's paths
+                test_keywords = _extract_domain_keywords(cluster_paths)
+                if test_keywords:
+                    # Find a production cluster whose added_paths share domain keywords
+                    for _, other_row in velocity_df.iterrows():
+                        other_cid = int(other_row["cluster_id"])
+                        if other_cid == cid:
+                            continue
+                        other_paths = file_metrics_df[file_metrics_df["cluster_id"] == other_cid]["path"].tolist()
+                        if not other_paths:
+                            continue
+                        other_test_ratio = sum(
+                            1 for p in other_paths
+                            if "/test/" in str(p) or "/tests/" in str(p) or ".test." in str(p) or ".spec." in str(p)
+                        ) / len(other_paths)
+                        if other_test_ratio > 0.8:
+                            continue  # skip other test clusters
+                        other_keywords = _extract_domain_keywords(other_paths)
+                        shared = test_keywords & other_keywords
+                        if shared:
+                            other_label = str(other_row.get("label", f"cluster {other_cid}"))
+                            if not other_label or other_label == "nan":
+                                other_label = f"cluster {other_cid}"
+                            other_area = _humanize_area_label(other_label) if other_label != f"cluster {other_cid}" else other_label
+                            other_scope = _cluster_scope_paths(file_metrics_df, other_cid)
+                            domain = ", ".join(sorted(shared)[:3])
+                            suggestions.append(
+                                {
+                                    "priority": "Medium",
+                                    "title": f"Define boundary for {domain} domain in {other_area}",
+                                    "why": (
+                                        f"Test cluster {cid} (test-only, {accel:.1f}x acceleration) shares the {domain} domain with "
+                                        f"production cluster {other_cid}. The test investment signals committed feature work — "
+                                        f"define boundaries in the production code now."
+                                    ),
+                                    "change": (
+                                        f"Define explicit module boundaries and public interfaces for {domain} in {other_area} "
+                                        f"before the test-backed feature ships."
+                                    ),
+                                    "scope": other_scope,
+                                }
+                            )
+                            break  # one suggestion per test cluster
+                continue
+
+            added_count = int(vel_row.get("added_count", 0))
 
             if accel >= 1.5 and growth >= 0.3:
                 suggestions.append(
@@ -462,6 +533,24 @@ def _rule_based_change_suggestions(
                         ),
                         "change": (
                             f"Define explicit module boundaries and public interfaces for {area} before the next wave of additions."
+                        ),
+                        "scope": scope,
+                    }
+                )
+            elif added_count >= 20 and growth < 0.3:
+                # Absolute added_count threshold: 20+ new files is significant even
+                # if growth_ratio is below 30% (happens in large clusters).
+                suggestions.append(
+                    {
+                        "priority": "Medium",
+                        "title": f"Establish boundaries in {area} — {added_count} new files added",
+                        "why": (
+                            f"Cluster {cid} added {added_count} files in the last window. "
+                            f"The growth ratio ({growth:.0%}) is diluted by cluster size, but the absolute volume of new code "
+                            f"warrants boundary definition before it becomes entangled."
+                        ),
+                        "change": (
+                            f"Define explicit module boundaries and public interfaces for {area} before the new additions become tightly coupled."
                         ),
                         "scope": scope,
                     }

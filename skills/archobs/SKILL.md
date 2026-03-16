@@ -73,6 +73,11 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show edges --top-active 3 --format json
    ```
 
+   **Large repos warning**: `--top-active` output scales with cluster size. Hub clusters (100+ files) can have 15+ neighbors, producing output that exceeds context limits. Use `--max-neighbors 10` to cap neighbor count per cluster:
+   ```bash
+   archobs show edges --top-active 3 --max-neighbors 10 --format json
+   ```
+
    Edge JSON output schema (per neighbor):
    ```
    neighbor_cluster, neighbor_label, total_weight, edge_count,
@@ -100,7 +105,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```bash
    archobs show files --format json                           # complete file-to-cluster mapping
    archobs show cluster-files <id> --format json              # files in a specific cluster
-   archobs show velocity --window 30 --compare --include-added-paths --format json  # with recently added file paths
+   archobs show velocity --window 30 --compare --format json  # added_paths included by default in JSON
    archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json  # high-risk AND high-churn files
    archobs show commits --since 30 --format json              # commit-level data with cluster annotations
    ```
@@ -155,6 +160,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    | High `recent_file_changes_30d` in cluster | Focused sprint in one area |
    | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
 
+   **Velocity sort order**: `show velocity` sorts by `distinct_commits` by default. Use `--sort file_change_count` or `--sort acceleration` (requires `--compare`) for alternative orderings. Note that `show edges --top-active` sorts by `file_change_count`, which can produce a different ranking than the default velocity output.
+
    Filter to active clusters: `archobs show velocity --window 30 --compare --min-acceleration 1.0 --min-growth-ratio 0.1 --format json`
 
    For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [trajectory skill](../trajectory/SKILL.md).
@@ -163,8 +170,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
-   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction. **Always pass `--include-added-paths`** for trajectory analysis — it surfaces exactly which new files are being built in each cluster.
-     **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --include-added-paths --format json`, check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the trajectory skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `trajectory` skill.
+   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction. `added_paths` are included by default in JSON output, surfacing exactly which new files are being built in each cluster.
+     **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --format json` (added_paths included by default), check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the trajectory skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `trajectory` skill.
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
@@ -174,6 +181,29 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```
    Each suggestion includes: priority, title, why (evidence), change (action), scope (affected files).
    Suggestions are also included in `archobs show all --format json` under the `"suggestions"` key.
+
+## Combined Archobs + Trajectory Workflow
+
+When running both archobs and trajectory analysis in the same session, use this optimized sequence:
+
+1. **`archobs report`** (blocking — wait for completion)
+2. **Parallel archobs queries**:
+   ```bash
+   archobs show risks --top 10 --format json
+   archobs show clusters --sort leakage --format json
+   archobs show drift --format json
+   archobs show summary --format json
+   archobs show velocity --window 30 --compare --format json
+   archobs show edges --top-active 3 --max-neighbors 10 --format json
+   ```
+3. **Parallel git queries** (trajectory signals):
+   ```bash
+   git branch -r --sort=-committerdate | head -20
+   git log --since="30 days ago" --format="%s" --no-merges | head -40
+   ```
+4. **Synthesize** both outputs into a combined report using both the archobs output template (summary, risks, leakiest clusters, drift, suggestions) and the trajectory output template (active areas, feature adjacency reasoning, confidence notes).
+
+Steps 2 and 3 can run in parallel with each other. All `show` subcommands within step 2 read independent Parquet artifacts and can also run in parallel.
 
 ## Clarifying Questions
 

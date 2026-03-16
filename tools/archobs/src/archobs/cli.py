@@ -329,9 +329,10 @@ def show_velocity(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
     window: int = typer.Option(30, help="Window size in days."),
     compare: bool = typer.Option(False, help="Compare current window to prior window."),
-    include_added_paths: bool = typer.Option(False, "--include-added-paths", help="Include recently added file paths per cluster (JSON only)."),
+    include_added_paths: bool | None = typer.Option(None, "--include-added-paths/--no-added-paths", help="Include recently added file paths per cluster. Defaults to True for JSON output, False for table/csv."),
     min_acceleration: float | None = typer.Option(None, "--min-acceleration", help="Minimum acceleration filter (requires --compare)."),
     min_growth_ratio: float | None = typer.Option(None, "--min-growth-ratio", help="Minimum growth_ratio filter."),
+    sort_by: str = typer.Option("distinct_commits", "--sort", help="Sort column: distinct_commits, file_change_count, acceleration, growth_ratio."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
@@ -341,10 +342,12 @@ def show_velocity(
     commits_df = read_commits(out)
     file_metrics_df = read_file_metrics(out)
     cluster_metrics_df = read_cluster_metrics(out)
+    resolved_added_paths = include_added_paths if include_added_paths is not None else (fmt == "json")
     text = format_velocity(
         commits_df, file_metrics_df, cluster_metrics_df,
-        window=window, compare=compare, include_added_paths=include_added_paths, fmt=fmt,
+        window=window, compare=compare, include_added_paths=resolved_added_paths, fmt=fmt,
         min_acceleration=min_acceleration, min_growth_ratio=min_growth_ratio,
+        sort_by=sort_by,
     )
     _write_or_print(text, out_path)
 
@@ -371,6 +374,7 @@ def show_edges(
     cluster_id: int | None = typer.Argument(None, help="Cluster ID to inspect edges for. Omit when using --top-active."),
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
     top_active: int | None = typer.Option(None, "--top-active", help="Auto-select top-N most active clusters by file_change_count (from velocity data)."),
+    max_neighbors: int = typer.Option(0, "--max-neighbors", help="Limit neighbor clusters returned per queried cluster (0 = unlimited). Useful for large hub clusters with 15+ neighbors."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
@@ -389,10 +393,10 @@ def show_edges(
         commits_df = read_commits(out)
         text = format_edges_top_active(
             graph_edges_df, cluster_metrics_df, file_metrics_df, commits_df,
-            top_active=top_active, fmt=fmt,
+            top_active=top_active, max_neighbors=max_neighbors, fmt=fmt,
         )
     else:
-        text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, fmt=fmt)
+        text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, max_neighbors=max_neighbors, fmt=fmt)
     _write_or_print(text, out_path)
 
 

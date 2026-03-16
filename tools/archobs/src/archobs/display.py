@@ -136,6 +136,25 @@ def _generate_cluster_label(
         threshold = 0.25
     else:
         threshold = 0.40
+
+    # For large risk-concentrated clusters, force the top-risk file's stem into the
+    # label when risk_max >> risk_mean.  The normal threshold math fails here because
+    # a single 0.95-risk file is diluted by 200 files with risk 0.02.
+    if weights and len(paths) > 100 and stem_weights:
+        weight_values = [weights.get(p, 1.0) for p in paths]
+        w_max = max(weight_values)
+        w_mean = total_weight / len(paths)
+        if w_mean > 0 and w_max > 3 * w_mean:
+            # Find the stem of the highest-weighted file and force it to dominate
+            top_path = max(paths, key=lambda p: weights.get(p, 0.0))
+            top_raw = PurePosixPath(top_path).stem.split(".")[0]
+            top_raw = top_raw.replace("-", "_").split("_")[0]
+            if top_raw.lower() not in _GENERIC_STEMS and len(top_raw) > 1:
+                label = f"{top_raw.lower()} ({structural})"
+                if len(label) > max_length:
+                    label = label[:max_length - 3] + "..."
+                return label
+
     if stem_weights:
         top_stems = sorted(stem_weights.items(), key=lambda x: -x[1])[:2]
         dominant_stem, dominant_weight = top_stems[0]
@@ -266,6 +285,7 @@ def format_velocity(
     fmt: str = "table",
     min_acceleration: float | None = None,
     min_growth_ratio: float | None = None,
+    sort_by: str = "distinct_commits",
 ) -> str:
     """Compute per-cluster velocity metrics from commit history."""
     if commits_df.empty or file_metrics_df.empty:
@@ -300,7 +320,8 @@ def format_velocity(
         return grouped
 
     velocity = _compute_velocity(current)
-    velocity = velocity.sort_values("distinct_commits", ascending=False).reset_index(drop=True)
+    _sort_col = sort_by if sort_by in velocity.columns else "distinct_commits"
+    velocity = velocity.sort_values(_sort_col, ascending=False).reset_index(drop=True)
 
     # Use canonical labels from cluster_metrics when available; regenerate as fallback
     if "label" in cluster_metrics_df.columns and cluster_metrics_df["label"].notna().any():
@@ -335,6 +356,9 @@ def format_velocity(
             axis=1,
         )
         velocity["is_emerging"] = velocity["prior_commit_count"] == 0
+        # Re-sort if the requested sort column was just created by --compare
+        if sort_by in ("acceleration", "prior_commit_count") and sort_by in velocity.columns:
+            velocity = velocity.sort_values(sort_by, ascending=False).reset_index(drop=True)
 
     # Apply velocity filters
     if min_growth_ratio is not None:
@@ -373,7 +397,7 @@ def format_velocity(
 # Format: commits
 # ---------------------------------------------------------------------------
 
-_COMMIT_TABLE_COLS = ["commit_sha", "commit_ts", "status", "path", "cluster_id"]
+_COMMIT_TABLE_COLS = ["commit_sha", "commit_ts", "message", "status", "path", "cluster_id"]
 _COMMIT_JSON_COLS = _COMMIT_TABLE_COLS
 
 
@@ -436,6 +460,7 @@ def format_edges(
     file_metrics_df: pd.DataFrame,
     cluster_id: int,
     *,
+    max_neighbors: int = 0,
     fmt: str = "table",
 ) -> str:
     """Show cross-cluster edge relationships for a given cluster."""
@@ -477,6 +502,8 @@ def format_edges(
         edge_count=("weight", "count"),
     ).reset_index()
     grouped = grouped.sort_values("total_weight", ascending=False).reset_index(drop=True)
+    if max_neighbors > 0:
+        grouped = grouped.head(max_neighbors).reset_index(drop=True)
     grouped["neighbor_label"] = grouped["neighbor_cluster"].map(label_map).fillna("")
     grouped["total_weight"] = grouped["total_weight"].round(3)
 
@@ -508,6 +535,7 @@ def format_edges_top_active(
     commits_df: pd.DataFrame,
     *,
     top_active: int = 3,
+    max_neighbors: int = 0,
     window: int = 30,
     fmt: str = "table",
 ) -> str:
@@ -529,7 +557,7 @@ def format_edges_top_active(
 
     sections: list[str] = []
     for cid in active_ids:
-        section = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, int(cid), fmt=fmt)
+        section = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, int(cid), max_neighbors=max_neighbors, fmt=fmt)
         if fmt == "json":
             try:
                 parsed = json.loads(section)
