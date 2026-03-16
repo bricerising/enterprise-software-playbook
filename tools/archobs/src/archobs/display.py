@@ -77,6 +77,7 @@ def _generate_cluster_label(
     paths: list[str],
     max_length: int = 50,
     weights: dict[str, float] | None = None,
+    cluster_size: int | None = None,
 ) -> str:
     """Generate a heuristic label from the dominant path prefixes in a cluster.
 
@@ -93,14 +94,21 @@ def _generate_cluster_label(
     or degree), stems and prefixes are weighted by significance rather than
     counted by frequency. This prevents large clusters of small files from
     drowning out the domain-defining high-risk files.
+
+    When *cluster_size* is provided, it is used for threshold calculations
+    instead of ``len(paths)``.  This is important because the stored paths
+    column may be capped (e.g. at 50 entries) while the actual cluster can
+    be much larger.
     """
     if not paths:
         return ""
     from collections import Counter, defaultdict
     from pathlib import PurePosixPath
 
+    effective_size = cluster_size if cluster_size is not None else len(paths)
+
     # Scale max_length for very large clusters so labels convey domain meaning
-    if len(paths) > 100:
+    if effective_size > 100:
         max_length = max(max_length, 70)
 
     prefix_weights: defaultdict[str, float] = defaultdict(float)
@@ -130,9 +138,9 @@ def _generate_cluster_label(
 
     # Check for dominant domain keywords — adaptive threshold for large clusters
     total_weight = sum(weights.get(p, 1.0) for p in paths) if weights else float(len(paths))
-    if len(paths) > 100:
+    if effective_size > 100:
         threshold = 0.15
-    elif len(paths) > 30:
+    elif effective_size > 30:
         threshold = 0.25
     else:
         threshold = 0.40
@@ -140,7 +148,7 @@ def _generate_cluster_label(
     # For large risk-concentrated clusters, force the top-risk file's stem into the
     # label when risk_max >> risk_mean.  The normal threshold math fails here because
     # a single 0.95-risk file is diluted by 200 files with risk 0.02.
-    if weights and len(paths) > 100 and stem_weights:
+    if weights and effective_size > 100 and stem_weights:
         weight_values = [weights.get(p, 1.0) for p in paths]
         w_max = max(weight_values)
         w_mean = total_weight / len(paths)
@@ -270,7 +278,7 @@ _VELOCITY_TABLE_COLS = [
     "deleted_count", "growth_ratio", "churn_ratio",
 ]
 _VELOCITY_JSON_COLS = _VELOCITY_TABLE_COLS + [
-    "external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d",
+    "external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d", "size",
 ]
 
 
@@ -291,7 +299,10 @@ def format_velocity(
     if commits_df.empty or file_metrics_df.empty:
         return "No commit data available for velocity analysis."
 
-    # Map commits to clusters via file_metrics path -> cluster_id
+    # Map commits to clusters via file_metrics path -> cluster_id.
+    # NOTE: inner join drops commits for files deleted during the analysis window
+    # because deleted files have no cluster assignment.  This means deleted_count
+    # in the output will be 0 for files no longer in the inventory.
     path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
     merged = commits_df.merge(path_cluster, on="path", how="inner")
     if merged.empty:
@@ -332,13 +343,14 @@ def format_velocity(
         label_map = {}
         for _, row in cluster_metrics_df.iterrows():
             all_paths = _extract_paths_list(row.get("paths", ""))
-            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths, weights=risk_weights)
+            csize = int(row["size"]) if "size" in row.index else None
+            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths, weights=risk_weights, cluster_size=csize)
         velocity["label"] = velocity["cluster_id"].map(label_map).fillna("")
     else:
         velocity["label"] = ""
 
     # Merge cluster-level context from cluster_metrics (eliminates extra show clusters query)
-    _merge_cols = ["external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d"]
+    _merge_cols = ["external_inbound_weight", "recent_file_changes_30d", "recent_file_changes_90d", "size"]
     _available = [c for c in _merge_cols if c in cluster_metrics_df.columns]
     if _available:
         _cm_subset = cluster_metrics_df[["cluster_id"] + _available].copy()
@@ -494,7 +506,8 @@ def format_edges(
     elif "paths" in cluster_metrics_df.columns:
         for _, row in cluster_metrics_df.iterrows():
             all_paths = _extract_paths_list(row.get("paths", ""))
-            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths)
+            csize = int(row["size"]) if "size" in row.index else None
+            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths, cluster_size=csize)
 
     # Group by neighbor cluster
     grouped = cross.groupby("neighbor_cluster").agg(
@@ -614,11 +627,12 @@ def format_clusters(
         records = _round_floats(filtered[cols]).to_dict(orient="records")
         if "paths" in filtered.columns:
             paths_list = filtered["paths"].tolist()
-            for rec, paths_val in zip(records, paths_list):
+            sizes_list = filtered["size"].tolist() if "size" in filtered.columns else [None] * len(paths_list)
+            for rec, paths_val, csize in zip(records, paths_list, sizes_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
                 if not has_stored_labels:
-                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
+                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights, cluster_size=int(csize) if csize is not None else None)
         if has_stored_labels:
             for rec, label in zip(records, filtered["label"].tolist()):
                 rec["label"] = str(label) if label else ""
@@ -635,9 +649,10 @@ def format_clusters(
         out["label"] = filtered["label"].tolist()
     elif "paths" in filtered.columns:
         out = out.copy()
+        sizes = filtered["size"].tolist() if "size" in filtered.columns else [None] * len(filtered)
         out["label"] = [
-            _generate_cluster_label(_extract_paths_list(p), weights=risk_weights)
-            for p in filtered["paths"].tolist()
+            _generate_cluster_label(_extract_paths_list(p), weights=risk_weights, cluster_size=int(s) if s is not None else None)
+            for p, s in zip(filtered["paths"].tolist(), sizes)
         ]
     return _to_table(out)
 
@@ -816,13 +831,14 @@ def format_all(
         if "paths" in filtered_clusters.columns:
             paths_list = filtered_clusters["paths"].tolist()
             label_list = filtered_clusters["label"].tolist() if has_stored_labels else [None] * len(paths_list)
-            for rec, paths_val, stored_label in zip(cluster_records, paths_list, label_list):
+            sizes_list = filtered_clusters["size"].tolist() if "size" in filtered_clusters.columns else [None] * len(paths_list)
+            for rec, paths_val, stored_label, csize in zip(cluster_records, paths_list, label_list, sizes_list):
                 all_paths = _extract_paths_list(paths_val)
                 rec["top_paths"] = all_paths[:5]
                 if has_stored_labels and stored_label:
                     rec["label"] = str(stored_label)
                 else:
-                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights)
+                    rec["label"] = _generate_cluster_label(all_paths, weights=risk_weights, cluster_size=int(csize) if csize is not None else None)
 
         drift_out = drift_df.copy()
         if "window_end_ts" in drift_out.columns:

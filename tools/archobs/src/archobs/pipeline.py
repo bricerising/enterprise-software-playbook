@@ -590,7 +590,8 @@ def _attach_canonical_labels(
     labels: list[str] = []
     for _, row in cluster_metrics_df.iterrows():
         all_paths = _extract_paths_list(row.get("paths", ""))
-        labels.append(_generate_cluster_label(all_paths, weights=risk_weights))
+        csize = int(row["size"]) if "size" in row.index else None
+        labels.append(_generate_cluster_label(all_paths, weights=risk_weights, cluster_size=csize))
 
     result = cluster_metrics_df.copy()
     result["label"] = labels

@@ -162,6 +162,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    **Velocity sort order**: `show velocity` sorts by `distinct_commits` by default. Use `--sort file_change_count` or `--sort acceleration` (requires `--compare`) for alternative orderings. Note that `show edges --top-active` sorts by `file_change_count`, which can produce a different ranking than the default velocity output.
 
+   **Known limitation — deleted files**: Velocity uses an inner join between commits and the current file inventory. Files deleted during the analysis window have no cluster assignment, so their commits are silently dropped. The `deleted_count` column reflects only deletions of files that still exist in the inventory (renamed/moved), not files fully removed from the codebase.
+
    Filter to active clusters: `archobs show velocity --window 30 --compare --min-acceleration 1.0 --min-growth-ratio 0.1 --format json`
 
    For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [trajectory skill](../trajectory/SKILL.md).
@@ -176,11 +178,12 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - Thorough assessment of structural findings: `review` (type: architecture)
 
 7. **Read suggestions** (if generated):
+   If you already ran `archobs show all --format json` in step 4, suggestions are included under the `"suggestions"` key — no additional command needed.
+   Otherwise, use:
    ```bash
    archobs prompts --out .archobs
    ```
    Each suggestion includes: priority, title, why (evidence), change (action), scope (affected files).
-   Suggestions are also included in `archobs show all --format json` under the `"suggestions"` key.
 
 ## Combined Archobs + Trajectory Workflow
 

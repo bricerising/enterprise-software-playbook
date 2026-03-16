@@ -111,6 +111,8 @@ Run commands 1-2 in parallel (they read independent artifacts). Then 3-4 in para
    | Low (<0.5x) | Zero | Dormant — safe for structural cleanup if leaky |
    | Test-only cluster with high growth | — | Feature commitment signal — team is writing tests before/alongside production code. Look at the production cluster this maps to for architectural decisions. |
 
+   **Interpret file_change_count relative to cluster size**: Absolute file_change_count is misleading without size context. A cluster with 202 changes and 203 files has ~1 change/file (broad shallow touch — migration or bulk rename), while one with 30 changes and 5 files has 6 changes/file (deep iteration on a focused area). The velocity JSON output includes a `size` field for this purpose. Use `file_change_count / size` as the per-file change intensity when comparing clusters of different sizes.
+
    **Cross-reference velocity with risk**: Files that appear in both `show risks` (risk > 0.5) AND belong to a high-velocity cluster are the highest-urgency items. These are files that are simultaneously architecturally risky and actively being changed — the most dangerous combination. Use `archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json` to find them directly.
 
    **Convergent hub pattern**: When 3+ clusters leak primarily toward the same target (visible via `show edges` or the `external_inbound_weight` metric on `show clusters`), the finding is about the hub, not the individual boundaries. The actionable insight is "decompose the attractor" rather than "build N separate boundaries." This is the most common pattern in real monoliths.

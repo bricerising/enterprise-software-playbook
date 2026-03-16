@@ -27,10 +27,13 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _cluster_scope_paths(file_metrics_df: pd.DataFrame, cluster_id: int, limit: int = 4) -> str:
+def _cluster_scope_paths(file_metrics_df: pd.DataFrame, cluster_id: int, limit: int = 4, exclude: str | None = None) -> str:
     if file_metrics_df.empty or "cluster_id" not in file_metrics_df:
         return f"cluster {cluster_id}"
-    scoped = file_metrics_df[file_metrics_df["cluster_id"] == cluster_id].sort_values(
+    scoped = file_metrics_df[file_metrics_df["cluster_id"] == cluster_id]
+    if exclude is not None:
+        scoped = scoped[scoped["path"] != exclude]
+    scoped = scoped.sort_values(
         ["risk", "xnbr", "hubness"],
         ascending=[False, False, False],
     )
@@ -87,9 +90,16 @@ def _humanize_path_token(token: str) -> str:
 
 
 _GENERIC_DOMAIN_STEMS = frozenset({
+    # Directory structure
     "src", "lib", "test", "tests", "spec", "utils", "helpers", "common", "shared",
-    "index", "main", "app", "config", "setup", "fixtures", "mocks", "stubs",
+    "index", "main", "app", "apps", "config", "setup", "fixtures", "mocks", "stubs",
+    # Type/schema layers
     "types", "interfaces", "models", "schemas", "dto", "entities",
+    # Framework-structural (must match _GENERIC_STEMS in display.py)
+    "controllers", "services", "routes", "middleware", "modules", "core",
+    "packages", "init", "__init__",
+    # Test subdirectories
+    "unit", "integration", "factories",
 })
 
 
@@ -383,7 +393,7 @@ def _rule_based_change_suggestions(
                     "title": f"Break apart mixed responsibilities in {area_name}",
                     "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.{volatility_note}",
                     "change": change_text,
-                    "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3)}",
+                    "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3, exclude=path)}",
                 }
             )
         elif float(top_file["hubness"]) >= 0.45:
