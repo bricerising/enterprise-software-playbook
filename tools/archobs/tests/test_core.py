@@ -1033,3 +1033,124 @@ def test_prompts_empty_suggestions(tmp_path: Path) -> None:
     result = runner.invoke(app, ["prompts", "--out", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "No prompts to generate" in result.output
+
+
+def test_drift_suggestion_scope_contains_actual_file_paths() -> None:
+    """Drift suggestion scope should reference actual high-xnbr file paths, not a static string."""
+    file_metrics_df = pd.DataFrame(
+        [
+            {"path": "src/orders.ts", "cluster_id": 0, "risk": 0.8, "xnbr": 0.9, "hubness": 0.2, "volatility": 0.1},
+            {"path": "src/payments.ts", "cluster_id": 0, "risk": 0.6, "xnbr": 0.7, "hubness": 0.1, "volatility": 0.1},
+            {"path": "src/utils.ts", "cluster_id": 1, "risk": 0.2, "xnbr": 0.1, "hubness": 0.1, "volatility": 0.1},
+        ]
+    )
+    drift_df = pd.DataFrame(
+        [
+            {"window_end_ts": 1_700_000_000, "cluster_count": 2, "modularity": 0.2, "ari_prev": 1.0, "algorithm_used": "leiden"},
+            {"window_end_ts": 1_700_086_400, "cluster_count": 2, "modularity": 0.1, "ari_prev": 0.25, "algorithm_used": "leiden"},
+        ]
+    )
+    suggestions, engine, error = suggestions_module.build_change_suggestions(
+        Path("."),
+        {"node_count": 3, "cluster_count": 2},
+        pd.DataFrame(columns=["cluster_id", "size", "cohesion", "leakage", "conductance", "risk_mean", "risk_max"]),
+        file_metrics_df,
+        pd.DataFrame(columns=["source_path", "raw_specifier", "count"]),
+        drift_df,
+        provider="rules",
+        limit=4,
+    )
+    drift_suggestions = [s for s in suggestions if "Stabilize" in s["title"]]
+    assert drift_suggestions, "Expected a drift suggestion"
+    scope = drift_suggestions[0]["scope"]
+    # Scope should contain actual file paths, not the old static string
+    assert "lowest-stability" not in scope
+    assert "src/orders.ts" in scope  # highest xnbr file
+
+
+def test_xnbr_suggestion_references_specific_neighbor_clusters() -> None:
+    """xnbr suggestion change text should name specific neighbor clusters when boundary_profiles exist."""
+    file_metrics_df = pd.DataFrame(
+        [
+            {"path": "src/services/orders/orders.service.ts", "cluster_id": 0, "risk": 0.9, "xnbr": 0.8, "hubness": 0.4, "volatility": 0.2},
+            {"path": "src/controllers/orders/orders.controller.ts", "cluster_id": 0, "risk": 0.5, "xnbr": 0.3, "hubness": 0.1, "volatility": 0.1},
+            {"path": "src/lib/events/order-events.ts", "cluster_id": 1, "risk": 0.4, "xnbr": 0.2, "hubness": 0.2, "volatility": 0.1},
+            {"path": "src/services/events/publisher.ts", "cluster_id": 1, "risk": 0.3, "xnbr": 0.1, "hubness": 0.2, "volatility": 0.1},
+        ]
+    )
+    cluster_metrics_df = pd.DataFrame(
+        [
+            {"cluster_id": 0, "size": 2, "cohesion": 0.4, "leakage": 0.6, "conductance": 0.4, "risk_mean": 0.7, "risk_max": 0.9},
+            {"cluster_id": 1, "size": 2, "cohesion": 0.7, "leakage": 0.3, "conductance": 0.2, "risk_mean": 0.35, "risk_max": 0.4},
+        ]
+    )
+    fused_df = pd.DataFrame(
+        [
+            {"path_a": "src/services/orders/orders.service.ts", "path_b": "src/lib/events/order-events.ts", "weight": 0.9, "w_sem": 0.6, "w_co": 0.2, "w_dep": 0.1},
+        ]
+    )
+    clusters_df = pd.DataFrame(
+        [
+            {"path": "src/services/orders/orders.service.ts", "cluster_id": 0},
+            {"path": "src/controllers/orders/orders.controller.ts", "cluster_id": 0},
+            {"path": "src/lib/events/order-events.ts", "cluster_id": 1},
+            {"path": "src/services/events/publisher.ts", "cluster_id": 1},
+        ]
+    )
+    files_df = pd.DataFrame([{"path": path} for path in clusters_df["path"].tolist()])
+    graph_snapshot = build_report_graph_snapshot(files_df, fused_df, clusters_df, file_metrics_df, cluster_metrics_df)
+
+    suggestions, engine, error = suggestions_module.build_change_suggestions(
+        Path("."),
+        {"node_count": 4, "cluster_count": 2},
+        cluster_metrics_df,
+        file_metrics_df,
+        pd.DataFrame(columns=["source_path", "raw_specifier", "count"]),
+        pd.DataFrame(),
+        graph_snapshot=graph_snapshot,
+        provider="rules",
+        limit=4,
+    )
+
+    xnbr_suggestions = [s for s in suggestions if "Break apart" in s["title"]]
+    assert xnbr_suggestions, "Expected an xnbr suggestion"
+    change = xnbr_suggestions[0]["change"]
+    # Should reference specific concerns, not the generic fallback
+    assert "cluster" in change.lower() or "Extract logic linked to" in change
+
+
+def test_recent_commits_in_cluster_metrics(tmp_path: Path) -> None:
+    """Verify recent_commits_30d and recent_commits_90d are computed in cluster metrics."""
+    from archobs.pipeline import _enrich_cluster_commit_counts
+
+    now = 1741694390
+    cluster_metrics_df = pd.DataFrame(
+        [
+            {"cluster_id": 0, "size": 3, "leakage": 0.5},
+            {"cluster_id": 1, "size": 2, "leakage": 0.2},
+        ]
+    )
+    file_metrics_df = pd.DataFrame(
+        [
+            {"path": "a.py", "cluster_id": 0},
+            {"path": "b.py", "cluster_id": 0},
+            {"path": "c.py", "cluster_id": 1},
+        ]
+    )
+    commit_files_df = pd.DataFrame(
+        [
+            {"commit_sha": "x", "commit_ts": now - 10 * 86400, "status": "M", "path": "a.py"},
+            {"commit_sha": "y", "commit_ts": now - 20 * 86400, "status": "M", "path": "a.py"},
+            {"commit_sha": "z", "commit_ts": now - 60 * 86400, "status": "M", "path": "c.py"},
+        ]
+    )
+    enriched = _enrich_cluster_commit_counts(cluster_metrics_df, commit_files_df, file_metrics_df)
+    assert "recent_commits_30d" in enriched.columns
+    assert "recent_commits_90d" in enriched.columns
+    # Cluster 0 has 2 commits within 30d, cluster 1 has 0 within 30d
+    c0 = enriched[enriched["cluster_id"] == 0].iloc[0]
+    c1 = enriched[enriched["cluster_id"] == 1].iloc[0]
+    assert c0["recent_commits_30d"] == 2
+    assert c0["recent_commits_90d"] == 2
+    assert c1["recent_commits_30d"] == 0
+    assert c1["recent_commits_90d"] == 1

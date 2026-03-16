@@ -341,11 +341,20 @@ class AnalysisRun:
             "top_leaky_clusters": self.config.reporting.top_leaky_clusters,
         }
 
+        # Enrich cluster_metrics with recent commit counts
+        cluster_metrics_df = _enrich_cluster_commit_counts(
+            cluster_metrics_df, commit_files_df, file_metrics_df,
+        )
+
         # Build graph snapshot
         graph_snapshot = build_report_graph_snapshot(
             files_df, fused_df, clusters_df, file_metrics_df, cluster_metrics_df,
         )
         unresolved_df = deps_result.unresolved_imports()
+
+        # Persist graph edges with cluster annotations (cluster_a/cluster_b)
+        if not graph_snapshot.edges_df.empty:
+            write_parquet(graph_snapshot.edges_df, self.store.base_path, "graph_edges")
 
         # Build a prepared analysis view for report rendering
         prepared = _PreparedAnalysisView(
@@ -423,6 +432,58 @@ class _PreparedAnalysisView:
             "cluster_count": int(self.summary_base.get("cluster_count", 0)),
             "modularity": float(self.summary_base.get("modularity", 0.0)),
         }
+
+
+# ---------------------------------------------------------------------------
+# Cluster commit enrichment
+# ---------------------------------------------------------------------------
+
+
+def _enrich_cluster_commit_counts(
+    cluster_metrics_df: pd.DataFrame,
+    commit_files_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Add recent_commits_30d and recent_commits_90d to cluster metrics."""
+    if commit_files_df.empty or file_metrics_df.empty or cluster_metrics_df.empty:
+        cluster_metrics_df = cluster_metrics_df.copy()
+        cluster_metrics_df["recent_commits_30d"] = 0
+        cluster_metrics_df["recent_commits_90d"] = 0
+        return cluster_metrics_df
+
+    # Build path-to-cluster mapping from file_metrics
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commit_files_df.merge(path_cluster, on="path", how="inner")
+
+    if merged.empty:
+        cluster_metrics_df = cluster_metrics_df.copy()
+        cluster_metrics_df["recent_commits_30d"] = 0
+        cluster_metrics_df["recent_commits_90d"] = 0
+        return cluster_metrics_df
+
+    max_ts = int(merged["commit_ts"].max())
+    cutoff_30 = max_ts - (30 * 86400)
+    cutoff_90 = max_ts - (90 * 86400)
+
+    counts_30 = (
+        merged[merged["commit_ts"] >= cutoff_30]
+        .groupby("cluster_id")["commit_ts"]
+        .count()
+        .rename("recent_commits_30d")
+    )
+    counts_90 = (
+        merged[merged["commit_ts"] >= cutoff_90]
+        .groupby("cluster_id")["commit_ts"]
+        .count()
+        .rename("recent_commits_90d")
+    )
+
+    result = cluster_metrics_df.copy()
+    result = result.merge(counts_30, on="cluster_id", how="left")
+    result = result.merge(counts_90, on="cluster_id", how="left")
+    result["recent_commits_30d"] = result["recent_commits_30d"].fillna(0).astype(int)
+    result["recent_commits_90d"] = result["recent_commits_90d"].fillna(0).astype(int)
+    return result
 
 
 # ---------------------------------------------------------------------------

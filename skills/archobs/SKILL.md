@@ -32,6 +32,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```bash
    archobs init --repo <path> --out .archobs
    ```
+   Skip if running `report` directly — it initializes the workspace automatically. Only run `init` separately if you need to edit `config.json` before the first analysis.
+
    Then ensure archobs-related paths are in the project's `.gitignore` — these are generated artifacts, caches, and bundled assets that should not be committed:
    ```bash
    for entry in .archobs/ .codanna/ .codannaignore .fastembed_cache lib/; do
@@ -59,6 +61,11 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show summary --format json
    archobs show files --format json            # complete file-to-cluster mapping
    archobs show cluster-files <id> --format json  # files in a specific cluster
+
+   # Development velocity and cluster relationships:
+   archobs show velocity --window 30 --format json            # per-cluster commit activity
+   archobs show velocity --window 30 --compare --format json  # with acceleration vs prior window
+   archobs show edges <cluster_id> --format json              # cross-cluster edge relationships
    ```
    Use `--format table` (default) for human-readable output, `--format json` for structured agent consumption, or `--format csv` for piping.
 

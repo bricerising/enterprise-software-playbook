@@ -8,9 +8,9 @@ metadata: {"stage":"Define","tags":["trajectory","momentum","velocity","feature-
 
 ## Overview
 
-Predict likely next features from recent development patterns. The `intel_change_trajectory` tool analyzes git history through archobs cluster assignments to surface where development momentum is concentrated, what kinds of changes are happening (additions vs modifications vs deletions), and which areas are accelerating.
+Predict likely next features from recent development patterns. Archobs exposes per-cluster velocity, edge relationships, and commit activity natively — use these as the primary data source. The `intel change-trajectory` tool provides additional enrichment (commit message themes, concentration index) when available.
 
-The tool produces deterministic, structured data. Feature adjacency reasoning ("export features suggest reports are coming next") is your job as the LLM — the tool gives you the evidence.
+The data is deterministic and structured. Feature adjacency reasoning ("export features suggest reports are coming next") is your job as the LLM — the tools give you the evidence.
 
 ### Signal sources compared
 
@@ -22,57 +22,98 @@ The tool produces deterministic, structured data. Feature adjacency reasoning ("
 
 ## Prerequisites
 
-1. **archobs data**: Run `archobs` first to get cluster assignments, file risks, and drift data
-2. **Commit data**: Extract from `.archobs/commits.parquet` or `git log`
-3. **Build the tool** (if using `intel` CLI): `cd tools/intelligence && npm install && npm run build`
+1. **archobs data**: Run `archobs report` first to get cluster assignments, file risks, drift data, and commit history
+2. **archobs CLI**: `pip install -e 'tools/archobs[full]'`
 
-### Extracting commit data
+## Workflow
 
-**From archobs Parquet** (preferred, if Python/pandas available):
-```bash
-python3 -c "
-import pandas as pd, json, sys
-df = pd.read_parquet('.archobs/commits.parquet')
-records = df[['commit_sha','commit_ts','status','path']].to_dict('records')
-json.dump(records, sys.stdout)
-" > /tmp/commits.json
-```
+### Primary path: archobs-native queries
 
-**From git log** (fallback):
-```bash
-git log --date-order --reverse --pretty=format:'--COMMIT--%n%H%n%ct' --name-status --no-renames \
-  | python3 -c "
-import sys, json
-commits = []
-sha = ts = None
-for line in sys.stdin:
-    line = line.strip()
-    if line == '--COMMIT--':
-        sha = next(sys.stdin).strip()
-        ts = int(next(sys.stdin).strip())
-    elif line and sha and '\t' in line:
-        status, path = line.split('\t', 1)
-        if status in ('A','M','D'):
-            commits.append({'commit_sha': sha, 'commit_ts': ts, 'status': status, 'path': path})
-json.dump(commits, sys.stdout)
-" > /tmp/commits.json
-```
+1. **Get velocity data** — per-cluster commit activity with growth/churn ratios:
+   ```bash
+   archobs show velocity --window 30 --format json
+   ```
+   With acceleration comparison to the prior 30-day window:
+   ```bash
+   archobs show velocity --window 30 --compare --format json
+   ```
 
-**Extracting commit messages** (optional):
-```bash
-git log --format='%H%x00%s' | python3 -c "
-import sys, json
-msgs = []
-for line in sys.stdin:
-    sha, subject = line.strip().split('\x00', 1)
-    msgs.append({'commit_sha': sha, 'subject': subject})
-json.dump(msgs, sys.stdout)
-" > /tmp/commit-messages.json
-```
+2. **Inspect cluster relationships** — which clusters are connected and how strongly:
+   ```bash
+   archobs show edges <cluster_id> --format json
+   ```
 
-### Manual fallback (when `intel` CLI is not built)
+3. **Get full context** — complete file-to-cluster mappings, risk, drift:
+   ```bash
+   archobs show all --top 0 --format json
+   archobs show files --format json           # complete file-to-cluster map
+   archobs show clusters --format json        # cluster metrics with recent_commits
+   archobs show drift --format json           # temporal stability
+   ```
 
-When the `intel` tool is not available (not built, not installed, or not on PATH), you can extract the same trajectory signals directly from git. These four commands can run in parallel:
+4. **Collect branch signals** — active branches are the highest-confidence trajectory signal:
+   ```bash
+   git branch -r --sort=-committerdate | head -20
+   ```
+   Branch names are direct feature declarations — they tell you what the team is building, not what you infer from file changes. Include these in your analysis with the highest confidence level.
+
+5. **Interpret the velocity signals**:
+
+   | Signal | Suggests |
+   |--------|----------|
+   | High `growth_ratio` | New capability being built |
+   | High `churn_ratio` | Feature refinement/iteration |
+   | High `acceleration` (with --compare) | Active development push |
+   | Low `acceleration` | Work winding down |
+   | High `recent_commits_30d` in cluster | Focused sprint in one area |
+   | Cross-cluster edges (show edges) | Feature adjacency — what depends on what |
+
+6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
+
+   | Observed pattern | Likely next |
+   |-----------------|-------------|
+   | Active feature branches not yet merged | Direct feature signal — the roadmap in code (highest confidence) |
+   | New database migrations creating tables | CRUD endpoints, API, then UI for the new entities |
+   | Schema field additions to existing entities | Feature enrichment using those fields in the UI |
+   | Test factory additions for new entities | Team is committed to shipping the feature (high confidence) |
+   | Export features (CSV, PDF, data transforms) | Reporting features (aggregates, charts, dashboards) |
+   | CRUD operations for new entities | Search, filter, and sort capabilities |
+   | Data model additions | API endpoints exposing the data |
+   | Authentication/authorization scaffolding | User management, roles, permissions UI |
+   | Test file additions in a cluster | Committed feature work (the team is investing) |
+   | Configuration/settings additions | Feature flags, admin controls |
+   | Event/webhook infrastructure | Notification and integration features |
+
+### Enhancement: `intel change-trajectory`
+
+When you need richer analysis (commit message themes, concentration index, recently added/modified/deleted path lists), use the intel CLI:
+
+1. **Build the tool**: `cd tools/intelligence && npm install && npm run build`
+
+2. **Extract commit data** (from archobs Parquet, preferred):
+   ```bash
+   python3 -c "
+   import pandas as pd, json, sys
+   df = pd.read_parquet('.archobs/commits.parquet')
+   records = df[['commit_sha','commit_ts','status','path']].to_dict('records')
+   json.dump(records, sys.stdout)
+   " > /tmp/commits.json
+   ```
+
+3. **Run trajectory analysis**:
+   ```bash
+   intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json
+   ```
+
+   With commit messages:
+   ```bash
+   intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json \
+     --commit-messages /tmp/commit-messages.json --window-days 30
+   ```
+
+### Manual fallback (when neither archobs nor intel is available)
+
+When archobs artifacts are not available, extract trajectory signals directly from git:
 
 ```bash
 # 1. Active directories — where development is concentrated (last 90 days)
@@ -95,18 +136,7 @@ git log --since="30 days ago" --format="%s" | tr '[:upper:]' '[:lower:]' \
 git branch -r --sort=-committerdate | head -20
 ```
 
-Compare directory counts between the two 30-day windows to identify acceleration (growing) vs deceleration (shrinking). Directories that appear only in the recent window are new areas of focus.
-
-Branch names are often the highest-confidence trajectory signal — they are direct feature declarations, not inferences. Prioritize them in your analysis.
-
-### Combined analysis (archobs + trajectory in one session)
-
-When running trajectory immediately after archobs in the same session, archobs artifacts are already available — skip re-extraction and read directly from `.archobs/`:
-```bash
-archobs show all --top 0 --format json > /tmp/archobs.json
-archobs show files --format json > /tmp/files.json  # complete file-to-cluster map
-```
-The archobs skill's step 6 routes to trajectory — when following that route, you already have the data you need.
+Compare directory counts between the two 30-day windows to identify acceleration (growing) vs deceleration (shrinking).
 
 ## Chooser (When to Use)
 
@@ -118,82 +148,11 @@ The archobs skill's step 6 routes to trajectory — when following that route, y
 | "Where are compound architectural risks?" | `risk-overlay` |
 | "How is our codebase structured?" | `archobs` |
 
-## Workflow
-
-1. **Run archobs** to get cluster assignments. Use `--top 0` to get complete file-to-cluster mappings (default `--top 10` only returns 10 risk files, causing most commits to map to cluster -1 as unassigned):
-   ```bash
-   archobs show all --top 0 --format json > /tmp/archobs.json
-   ```
-
-   If `--top 0` is not supported in your version, extract separately to get complete data:
-   ```bash
-   archobs show risks --top 0 --format json > /tmp/risks.json
-   archobs show clusters --format json > /tmp/clusters.json
-   archobs show drift --format json > /tmp/drift.json
-   ```
-
-2. **Extract commit data** using one of the methods above
-
-3. **Run trajectory analysis**:
-   ```bash
-   intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json
-   ```
-
-   With commit messages:
-   ```bash
-   intel change-trajectory --commits /tmp/commits.json --archobs /tmp/archobs.json \
-     --commit-messages /tmp/commit-messages.json --window-days 30
-   ```
-
-   Or via MCP tool `intel_change_trajectory` with the same inputs.
-
-4. **Collect branch signals** — active branches are the highest-confidence trajectory signal:
-   ```bash
-   git branch -r --sort=-committerdate | head -20
-   ```
-   Branch names are direct feature declarations — they tell you what the team is building, not what you infer from file changes. Include these in your analysis with the highest confidence level.
-
-5. **Interpret the trajectory signals**:
-
-   | Signal | Suggests |
-   |--------|----------|
-   | High `growth_ratio` + many `recently_added_paths` | New capability being built |
-   | High `churn_ratio` + many `most_modified_paths` | Feature refinement/iteration |
-   | High `contraction_ratio` + `recently_deleted_paths` | Area being deprecated or replaced |
-   | High `concentration_index` (near 1.0) | Focused sprint in one area |
-   | Low `concentration_index` (near 1/N) | Scattered work across many areas |
-   | `velocity_trend: accelerating` | Active development push |
-   | `velocity_trend: decelerating` | Work winding down |
-   | `velocity_trend: dormant` | Minimal recent activity |
-   | `recently_added_paths` patterns | File naming reveals feature intent |
-   | `subject_patterns.top_tokens` | Thematic focus of recent commits |
-
-6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
-
-   | Observed pattern | Likely next |
-   |-----------------|-------------|
-   | Active feature branches not yet merged | Direct feature signal — the roadmap in code (highest confidence) |
-   | New database migrations creating tables | CRUD endpoints, API, then UI for the new entities |
-   | Schema field additions to existing entities | Feature enrichment using those fields in the UI |
-   | Test factory additions for new entities | Team is committed to shipping the feature (high confidence) |
-   | Export features (CSV, PDF, data transforms) | Reporting features (aggregates, charts, dashboards) |
-   | CRUD operations for new entities | Search, filter, and sort capabilities |
-   | Data model additions | API endpoints exposing the data |
-   | Authentication/authorization scaffolding | User management, roles, permissions UI |
-   | Test file additions in a cluster | Committed feature work (the team is investing) |
-   | Configuration/settings additions | Feature flags, admin controls |
-   | Event/webhook infrastructure | Notification and integration features |
-
-7. **Cross-reference with other tools** (optional):
-   - Run `forecast` to check if external signals align with internal trajectory
-   - Run `risk-overlay` to check if high-momentum clusters have compound risks
-   - Read code in active clusters for deeper context
-
 ## Guardrails
 
 - **Trajectory is evidence, not prediction** — always present trajectory data as "evidence suggests" or "development patterns indicate," not as certainty.
 - **Feature adjacency is heuristic** — the adjacency table above reflects common patterns, not rules. Domain context matters.
-- **Cluster assignments may be stale** — if `drift.ari_prev` is low, cluster boundaries are shifting. Path-based analysis (recently_added, most_modified) is still valid even when clusters are unstable.
+- **Cluster assignments may be stale** — if `drift.ari_prev` is low, cluster boundaries are shifting. Path-based analysis is still valid even when clusters are unstable.
 - **Commit messages are noisy** — subject_patterns extracts tokens, but "wip" and "misc" are common. Path patterns are often more reliable.
 - **Window size affects signal** — 30 days is the default, but a 7-day window for sprint planning or 90-day window for roadmap planning may be more appropriate.
 - **Concentration is not quality** — high concentration means focused work, not necessarily good architecture. Cross-reference with archobs risk metrics.
@@ -204,12 +163,13 @@ The archobs skill's step 6 routes to trajectory — when following that route, y
 When delivering trajectory analysis:
 
 - **Analysis window**: date range, total commits, total file changes
-- **Development focus**: which clusters are most active (momentum ranking), concentration index interpretation
+- **Development focus**: which clusters are most active (momentum ranking), concentration interpretation
 - **Active areas** (top 2-3 clusters):
-  - **Cluster**: ID, top paths, archobs metrics
-  - **Change profile**: growth/churn/contraction ratios — what kind of work is happening
-  - **Velocity**: accelerating/steady/decelerating/dormant
+  - **Cluster**: ID, label, top paths, archobs metrics
+  - **Change profile**: growth/churn ratios — what kind of work is happening
+  - **Velocity**: accelerating/steady/decelerating (from --compare)
   - **Key paths**: recently added (what's new), most modified (what's being iterated)
+  - **Edge relationships**: which other clusters this one connects to (from show edges)
 - **Thematic patterns** (if commit messages available): frequent tokens, recent subjects
 - **Feature adjacency reasoning**: based on observed patterns, what features are logically next
 - **Confidence notes**: window size, cluster stability (drift), concentration level

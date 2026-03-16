@@ -252,12 +252,32 @@ def _rule_based_change_suggestions(
             if has_high_volatility and base_priority == "Medium":
                 base_priority = "High"
             volatility_note = " It also has very high volatility, meaning it is being changed constantly." if has_high_volatility else ""
+
+            # Try to identify specific concerns from boundary_profiles
+            change_text = "Separate orchestration and shared boundary logic from the domain logic so this file stops acting as a conceptual bridge between subsystems."
+            if boundary_profiles and cluster_id >= 0:
+                profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
+                if profile and profile.get("neighbors"):
+                    neighbor_descriptions = []
+                    for neighbor in profile["neighbors"][:3]:
+                        neighbor_label = _humanize_area_label(str(neighbor.get("label", "")))
+                        if neighbor_label:
+                            neighbor_descriptions.append(
+                                f"{neighbor_label} (cluster {int(neighbor['cluster_id'])})"
+                            )
+                    if neighbor_descriptions:
+                        concerns = " and ".join(neighbor_descriptions)
+                        change_text = (
+                            f"Extract logic linked to {concerns} into separate modules "
+                            f"so this file stops acting as a conceptual bridge between subsystems."
+                        )
+
             suggestions.append(
                 {
                     "priority": base_priority,
                     "title": f"Break apart mixed responsibilities in {area_name}",
                     "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.{volatility_note}",
-                    "change": "Separate orchestration and shared boundary logic from the domain logic so this file stops acting as a conceptual bridge between subsystems.",
+                    "change": change_text,
                     "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3)}",
                 }
             )
@@ -305,13 +325,20 @@ def _rule_based_change_suggestions(
             else:
                 drift_priority = "Medium"
                 trend_note = ""
+            # Identify likely migrating files: top xnbr files are the best
+            # proxy for files that bridge clusters and may be reshuffling.
+            drift_scope_paths: list[str] = []
+            if not file_metrics_df.empty and "xnbr" in file_metrics_df.columns:
+                top_xnbr = file_metrics_df.sort_values("xnbr", ascending=False).head(4)
+                drift_scope_paths = [str(p) for p in top_xnbr["path"].tolist()]
+            drift_scope = ", ".join(drift_scope_paths) if drift_scope_paths else "the highest-xnbr files in the codebase"
             suggestions.append(
                 {
                     "priority": drift_priority,
                     "title": "Stabilize cluster naming and ownership before the next large move",
                     "why": f"The weakest drift window has ARI {float(lowest[drift_ari_column]):.2f}, which suggests the subsystem map is changing quickly over time.{trend_note}",
                     "change": "Avoid broad package moves until the unstable area has a clearer owner and a narrower boundary, otherwise future changes will continue to reshuffle the same files.",
-                    "scope": "the lowest-stability cluster window in the drift table",
+                    "scope": drift_scope,
                 }
             )
 

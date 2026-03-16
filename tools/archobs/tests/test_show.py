@@ -13,14 +13,17 @@ from archobs.display import (
     format_all,
     format_clusters,
     format_drift,
+    format_edges,
     format_risks,
     format_schema,
     format_summary,
+    format_velocity,
     read_cluster_metrics,
     read_drift,
     read_file_metrics,
     read_suggestions,
     read_summary,
+    _generate_cluster_label,
     _truncate_path,
 )
 
@@ -499,3 +502,263 @@ def test_cli_show_risks_with_out_file(tmp_path: Path):
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
     assert "orders.service.ts" in content
+
+
+# ---------------------------------------------------------------------------
+# Velocity fixtures
+# ---------------------------------------------------------------------------
+
+def _make_commits(tmp_path: Path) -> pd.DataFrame:
+    now = 1741694390
+    df = pd.DataFrame(
+        {
+            "commit_sha": ["a1", "a2", "a3", "b1", "b2", "c1"],
+            "commit_ts": [
+                now - 10 * 86400,  # within 30d window
+                now - 15 * 86400,
+                now - 20 * 86400,
+                now - 5 * 86400,
+                now - 25 * 86400,
+                now - 50 * 86400,  # outside 30d window
+            ],
+            "status": ["A", "M", "M", "A", "D", "M"],
+            "path": [
+                "src/services/orders/orders.service.ts",
+                "src/services/orders/orders.service.ts",
+                "src/controllers/settings/settings.controller.ts",
+                "src/services/payments/payments.service.ts",
+                "src/utils/helpers.ts",
+                "src/services/orders/orders.service.ts",
+            ],
+        }
+    )
+    df.to_parquet(tmp_path / "commits.parquet", index=False)
+    return df
+
+
+def _make_graph_edges(tmp_path: Path) -> pd.DataFrame:
+    df = pd.DataFrame(
+        {
+            "path_a": [
+                "src/services/orders/orders.service.ts",
+                "src/services/orders/orders.service.ts",
+                "src/utils/helpers.ts",
+            ],
+            "path_b": [
+                "src/utils/helpers.ts",
+                "src/services/payments/payments.service.ts",
+                "src/controllers/settings/settings.controller.ts",
+            ],
+            "weight": [0.8, 0.6, 0.3],
+            "w_sem": [0.5, 0.4, 0.2],
+            "w_co": [0.2, 0.1, 0.05],
+            "w_dep": [0.1, 0.1, 0.05],
+            "cluster_a": [0, 0, 1],
+            "cluster_b": [1, 0, 0],
+        }
+    )
+    df.to_parquet(tmp_path / "graph_edges.parquet", index=False)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# format_velocity
+# ---------------------------------------------------------------------------
+
+def test_format_velocity_table(tmp_path: Path):
+    commits = _make_commits(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_velocity(commits, fm, cm, window=30, fmt="table")
+    assert "cluster_id" in text
+    assert "commit_count" in text
+
+
+def test_format_velocity_json(tmp_path: Path):
+    commits = _make_commits(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_velocity(commits, fm, cm, window=30, fmt="json")
+    records = json.loads(text)
+    assert len(records) > 0
+    assert "commit_count" in records[0]
+    assert "growth_ratio" in records[0]
+    assert "churn_ratio" in records[0]
+    # Should be sorted by commit_count desc
+    counts = [r["commit_count"] for r in records]
+    assert counts == sorted(counts, reverse=True)
+
+
+def test_format_velocity_csv(tmp_path: Path):
+    commits = _make_commits(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_velocity(commits, fm, cm, window=30, fmt="csv")
+    lines = text.strip().split("\n")
+    assert "commit_count" in lines[0]
+    assert "growth_ratio" in lines[0]
+
+
+def test_format_velocity_window_filtering(tmp_path: Path):
+    commits = _make_commits(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    # 30-day window should exclude the commit at 50 days ago
+    text_30 = format_velocity(commits, fm, cm, window=30, fmt="json")
+    records_30 = json.loads(text_30)
+    total_30 = sum(r["commit_count"] for r in records_30)
+    # All 6 commits minus the one outside the window
+    assert total_30 == 5
+
+
+def test_format_velocity_compare(tmp_path: Path):
+    commits = _make_commits(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_velocity(commits, fm, cm, window=30, compare=True, fmt="json")
+    records = json.loads(text)
+    assert len(records) > 0
+    assert "acceleration" in records[0]
+
+
+def test_format_velocity_empty(tmp_path: Path):
+    empty = pd.DataFrame(columns=["commit_sha", "commit_ts", "status", "path"])
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_velocity(empty, fm, cm, window=30, fmt="table")
+    assert "No commit data" in text
+
+
+# ---------------------------------------------------------------------------
+# format_edges
+# ---------------------------------------------------------------------------
+
+def test_format_edges_table(tmp_path: Path):
+    edges = _make_graph_edges(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_edges(edges, cm, fm, cluster_id=0, fmt="table")
+    assert "neighbor_cluster" in text
+    assert "total_weight" in text
+
+
+def test_format_edges_json(tmp_path: Path):
+    edges = _make_graph_edges(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_edges(edges, cm, fm, cluster_id=0, fmt="json")
+    records = json.loads(text)
+    assert len(records) >= 1
+    assert "neighbor_cluster" in records[0]
+    assert "total_weight" in records[0]
+    assert "top_pairs" in records[0]
+
+
+def test_format_edges_missing_cluster(tmp_path: Path):
+    edges = _make_graph_edges(tmp_path)
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_edges(edges, cm, fm, cluster_id=999, fmt="table")
+    assert "No edges" in text
+
+
+def test_format_edges_empty(tmp_path: Path):
+    empty = pd.DataFrame(columns=["path_a", "path_b", "weight", "w_sem", "w_co", "w_dep", "cluster_a", "cluster_b"])
+    fm = _make_file_metrics(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    text = format_edges(empty, cm, fm, cluster_id=0, fmt="table")
+    assert "No graph edges" in text
+
+
+# ---------------------------------------------------------------------------
+# _generate_cluster_label with domain keywords
+# ---------------------------------------------------------------------------
+
+def test_cluster_label_domain_keyword():
+    paths = [
+        "src/services/orders/orders.service.ts",
+        "src/services/orders/orders.controller.ts",
+        "src/services/orders/orders.schema.ts",
+        "src/services/orders/orders.routes.ts",
+        "src/services/payments/payments.service.ts",
+    ]
+    label = _generate_cluster_label(paths)
+    # "orders" appears in 4/5 (80%) of files, above the 40% threshold
+    assert "orders" in label.lower()
+
+
+def test_cluster_label_no_dominant_keyword():
+    paths = [
+        "src/services/alpha/service.ts",
+        "src/services/beta/service.ts",
+        "src/services/gamma/service.ts",
+    ]
+    label = _generate_cluster_label(paths)
+    # No single stem dominates — should fall back to structural prefix
+    assert "services" in label.lower() or "/" in label
+
+
+def test_cluster_label_empty():
+    assert _generate_cluster_label([]) == ""
+
+
+# ---------------------------------------------------------------------------
+# show all — split --top
+# ---------------------------------------------------------------------------
+
+def test_format_all_top_risks_split(tmp_path: Path):
+    _make_all_artifacts(tmp_path)
+    text = format_all(tmp_path, top_risks=2, top_clusters=1, fmt="json")
+    parsed = json.loads(text)
+    assert len(parsed["risks"]) <= 2
+    assert len(parsed["clusters"]) <= 1
+
+
+def test_format_all_defaults_to_all(tmp_path: Path):
+    _make_all_artifacts(tmp_path)
+    text = format_all(tmp_path, fmt="json")
+    parsed = json.loads(text)
+    # Default top=0 means all records
+    assert len(parsed["risks"]) == 5  # all 5 files
+
+
+# ---------------------------------------------------------------------------
+# CLI: velocity and edges
+# ---------------------------------------------------------------------------
+
+def test_cli_show_velocity(tmp_path: Path):
+    _make_commits(tmp_path)
+    _make_file_metrics(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    result = runner.invoke(app, ["show", "velocity", "--out", str(tmp_path), "--format", "json"])
+    assert result.exit_code == 0
+    records = json.loads(result.stdout)
+    assert len(records) > 0
+
+
+def test_cli_show_velocity_compare(tmp_path: Path):
+    _make_commits(tmp_path)
+    _make_file_metrics(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    result = runner.invoke(app, ["show", "velocity", "--out", str(tmp_path), "--compare", "--format", "json"])
+    assert result.exit_code == 0
+    records = json.loads(result.stdout)
+    assert "acceleration" in records[0]
+
+
+def test_cli_show_edges(tmp_path: Path):
+    _make_graph_edges(tmp_path)
+    _make_file_metrics(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    result = runner.invoke(app, ["show", "edges", "0", "--out", str(tmp_path), "--format", "json"])
+    assert result.exit_code == 0
+    records = json.loads(result.stdout)
+    assert len(records) >= 1
+
+
+def test_cli_show_all_split_top(tmp_path: Path):
+    _make_all_artifacts(tmp_path)
+    result = runner.invoke(app, ["show", "all", "--out", str(tmp_path), "--top-risks", "2", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert len(parsed["risks"]) <= 2

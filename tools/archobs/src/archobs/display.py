@@ -53,16 +53,39 @@ def read_suggestions(out: Path) -> dict:
     return _require_json(out, "suggestions")
 
 
+def read_commits(out: Path) -> pd.DataFrame:
+    return _require_parquet(out, "commits")
+
+
+def read_graph_edges(out: Path) -> pd.DataFrame:
+    return _require_parquet(out, "graph_edges")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+_GENERIC_STEMS = {
+    "src", "services", "controllers", "routes", "schemas", "packages",
+    "lib", "test", "tests", "utils", "helpers", "common", "shared",
+    "middleware", "config", "types", "interfaces", "models", "modules",
+    "core", "app", "apps", "index", "main", "init", "__init__",
+}
+
+
 def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
-    """Generate a heuristic label from the dominant path prefixes in a cluster."""
+    """Generate a heuristic label from the dominant path prefixes in a cluster.
+
+    Extracts domain keywords from filenames (e.g. "orders", "payments") and
+    prepends when a single dominant stem appears in >40% of files.
+    """
     if not paths:
         return ""
     from collections import Counter
+    from pathlib import PurePosixPath
+
     prefixes: list[str] = []
+    stems: list[str] = []
     for p in paths:
         parts = p.split("/")
         # Skip common root segments like src/, packages/, apps/
@@ -72,11 +95,29 @@ def _generate_cluster_label(paths: list[str], max_length: int = 50) -> str:
         segments = parts[start:start + 2]
         if segments:
             prefixes.append("/".join(segments))
+        # Extract domain keyword from filename stem
+        raw_stem = PurePosixPath(p).stem.split(".")[0]  # orders.service.ts -> orders
+        raw_stem = raw_stem.replace("-", "_").split("_")[0]  # order-events -> order
+        if raw_stem.lower() not in _GENERIC_STEMS and len(raw_stem) > 1:
+            stems.append(raw_stem.lower())
+
     if not prefixes:
         return ""
-    counts = Counter(prefixes)
-    top = counts.most_common(2)
-    label = " + ".join(prefix for prefix, _ in top)
+    prefix_counts = Counter(prefixes)
+    top = prefix_counts.most_common(2)
+    structural = " + ".join(prefix for prefix, _ in top)
+
+    # Check for dominant domain keyword
+    if stems:
+        stem_counts = Counter(stems)
+        dominant_stem, dominant_count = stem_counts.most_common(1)[0]
+        if dominant_count / len(paths) > 0.40:
+            label = f"{dominant_stem} ({structural})"
+        else:
+            label = structural
+    else:
+        label = structural
+
     if len(label) > max_length:
         label = label[:max_length - 3] + "..."
     return label
@@ -155,11 +196,170 @@ def format_risks(
 
 
 # ---------------------------------------------------------------------------
+# Format: velocity
+# ---------------------------------------------------------------------------
+
+_VELOCITY_TABLE_COLS = [
+    "cluster_id", "label", "commit_count", "added_count", "modified_count",
+    "deleted_count", "growth_ratio", "churn_ratio",
+]
+_VELOCITY_JSON_COLS = _VELOCITY_TABLE_COLS  # acceleration added when --compare
+
+
+def format_velocity(
+    commits_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    cluster_metrics_df: pd.DataFrame,
+    *,
+    window: int = 30,
+    compare: bool = False,
+    fmt: str = "table",
+) -> str:
+    """Compute per-cluster velocity metrics from commit history."""
+    if commits_df.empty or file_metrics_df.empty:
+        return "No commit data available for velocity analysis."
+
+    # Map commits to clusters via file_metrics path -> cluster_id
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commits_df.merge(path_cluster, on="path", how="inner")
+    if merged.empty:
+        return "No commits match tracked files."
+
+    max_ts = int(merged["commit_ts"].max())
+    cutoff = max_ts - (window * 86400)
+    current = merged[merged["commit_ts"] >= cutoff]
+
+    def _compute_velocity(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return pd.DataFrame(columns=["cluster_id", "commit_count", "added_count",
+                                          "modified_count", "deleted_count",
+                                          "growth_ratio", "churn_ratio"])
+        grouped = df.groupby("cluster_id").agg(
+            commit_count=("commit_ts", "count"),
+            added_count=("status", lambda s: (s == "A").sum()),
+            modified_count=("status", lambda s: (s == "M").sum()),
+            deleted_count=("status", lambda s: (s == "D").sum()),
+        ).reset_index()
+        total = grouped["added_count"] + grouped["modified_count"] + grouped["deleted_count"]
+        total = total.replace(0, 1)  # avoid division by zero
+        grouped["growth_ratio"] = grouped["added_count"] / total
+        grouped["churn_ratio"] = grouped["modified_count"] / total
+        return grouped
+
+    velocity = _compute_velocity(current)
+    velocity = velocity.sort_values("commit_count", ascending=False).reset_index(drop=True)
+
+    # Add cluster labels from cluster_metrics paths
+    if "paths" in cluster_metrics_df.columns:
+        label_map = {}
+        for _, row in cluster_metrics_df.iterrows():
+            all_paths = _extract_paths_list(row.get("paths", ""))
+            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths)
+        velocity["label"] = velocity["cluster_id"].map(label_map).fillna("")
+    else:
+        velocity["label"] = ""
+
+    if compare:
+        prior_cutoff = cutoff - (window * 86400)
+        prior = merged[(merged["commit_ts"] >= prior_cutoff) & (merged["commit_ts"] < cutoff)]
+        prior_velocity = _compute_velocity(prior)
+        prior_map = dict(zip(prior_velocity["cluster_id"], prior_velocity["commit_count"]))
+        velocity["acceleration"] = velocity.apply(
+            lambda r: round(r["commit_count"] / max(prior_map.get(r["cluster_id"], 0), 1), 2),
+            axis=1,
+        )
+
+    cols = [c for c in _VELOCITY_JSON_COLS if c in velocity.columns]
+    if compare and "acceleration" in velocity.columns:
+        cols = cols + ["acceleration"]
+
+    if fmt == "json":
+        return _to_json_records(_round_floats(velocity[cols]))
+    if fmt == "csv":
+        return _to_csv(_round_floats(velocity[cols]))
+    return _to_table(_round_floats(velocity[cols]))
+
+
+# ---------------------------------------------------------------------------
+# Format: edges
+# ---------------------------------------------------------------------------
+
+
+def format_edges(
+    graph_edges_df: pd.DataFrame,
+    cluster_metrics_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    cluster_id: int,
+    *,
+    fmt: str = "table",
+) -> str:
+    """Show cross-cluster edge relationships for a given cluster."""
+    if graph_edges_df.empty:
+        return "No graph edges available."
+    if "cluster_a" not in graph_edges_df.columns or "cluster_b" not in graph_edges_df.columns:
+        return "Graph edges missing cluster annotations. Re-run `archobs report`."
+
+    # Filter edges touching the given cluster
+    mask = (graph_edges_df["cluster_a"] == cluster_id) | (graph_edges_df["cluster_b"] == cluster_id)
+    relevant = graph_edges_df[mask].copy()
+    if relevant.empty:
+        return f"No edges found for cluster {cluster_id}."
+
+    # Only keep cross-cluster edges
+    cross = relevant[relevant["cluster_a"] != relevant["cluster_b"]].copy()
+    if cross.empty:
+        return f"Cluster {cluster_id} has no cross-cluster edges."
+
+    # Determine the neighbor cluster for each edge
+    cross["neighbor_cluster"] = cross.apply(
+        lambda r: int(r["cluster_b"]) if int(r["cluster_a"]) == cluster_id else int(r["cluster_a"]),
+        axis=1,
+    )
+
+    # Build label map from cluster_metrics paths
+    label_map: dict[int, str] = {}
+    if "paths" in cluster_metrics_df.columns:
+        for _, row in cluster_metrics_df.iterrows():
+            all_paths = _extract_paths_list(row.get("paths", ""))
+            label_map[int(row["cluster_id"])] = _generate_cluster_label(all_paths)
+
+    # Group by neighbor cluster
+    grouped = cross.groupby("neighbor_cluster").agg(
+        total_weight=("weight", "sum"),
+        edge_count=("weight", "count"),
+    ).reset_index()
+    grouped = grouped.sort_values("total_weight", ascending=False).reset_index(drop=True)
+    grouped["neighbor_label"] = grouped["neighbor_cluster"].map(label_map).fillna("")
+    grouped["total_weight"] = grouped["total_weight"].round(3)
+
+    # Add top connecting file pairs per neighbor
+    top_pairs: dict[int, list[dict[str, str]]] = {}
+    for nbr_id, nbr_df in cross.groupby("neighbor_cluster"):
+        sorted_edges = nbr_df.sort_values("weight", ascending=False).head(3)
+        pairs = [
+            {"path_a": str(r["path_a"]), "path_b": str(r["path_b"]), "weight": round(float(r["weight"]), 3)}
+            for _, r in sorted_edges.iterrows()
+        ]
+        top_pairs[int(nbr_id)] = pairs
+
+    cols = ["neighbor_cluster", "neighbor_label", "total_weight", "edge_count"]
+    if fmt == "json":
+        records = grouped[cols].to_dict(orient="records")
+        for rec in records:
+            rec["top_pairs"] = top_pairs.get(int(rec["neighbor_cluster"]), [])
+        return json.dumps(records, indent=2)
+    if fmt == "csv":
+        return _to_csv(grouped[cols])
+    return _to_table(grouped[cols])
+
+
+# ---------------------------------------------------------------------------
 # Format: clusters
 # ---------------------------------------------------------------------------
 
 _CLUSTER_TABLE_COLS = ["cluster_id", "size", "cohesion", "leakage", "conductance",
-                       "internal_weight", "external_weight", "risk_mean", "risk_max"]
+                       "internal_weight", "external_weight", "risk_mean", "risk_max",
+                       "recent_commits_30d", "recent_commits_90d"]
 _CLUSTER_JSON_COLS = _CLUSTER_TABLE_COLS  # top_paths added separately
 
 
@@ -282,9 +482,15 @@ def format_summary(data: dict, *, fmt: str = "table") -> str:
 def format_all(
     out: Path,
     *,
-    top: int = 10,
+    top: int = 0,
+    top_risks: int | None = None,
+    top_clusters: int | None = None,
     fmt: str = "table",
 ) -> str:
+    # Resolve split --top params: explicit overrides win, then --top, then 0 (all)
+    effective_risks = top_risks if top_risks is not None else top
+    effective_clusters = top_clusters if top_clusters is not None else top
+
     summary_data = read_summary(out)
     file_metrics = read_file_metrics(out)
     cluster_metrics = read_cluster_metrics(out)
@@ -298,8 +504,8 @@ def format_all(
     if fmt == "json":
         cols = [c for c in _RISK_COLS if c in file_metrics.columns]
         sorted_risks = file_metrics.sort_values("risk", ascending=False)
-        if top > 0:
-            sorted_risks = sorted_risks.head(top)
+        if effective_risks > 0:
+            sorted_risks = sorted_risks.head(effective_risks)
         risk_records = sorted_risks[cols].to_dict(orient="records")
 
         cluster_cols = [c for c in _CLUSTER_JSON_COLS if c in cluster_metrics.columns]
@@ -307,8 +513,8 @@ def format_all(
             cluster_metrics[cluster_metrics["size"] >= 2]
             .sort_values("leakage", ascending=False)
         ) if "size" in cluster_metrics.columns else cluster_metrics.copy()
-        if top > 0:
-            filtered_clusters = filtered_clusters.head(top)
+        if effective_clusters > 0:
+            filtered_clusters = filtered_clusters.head(effective_clusters)
         cluster_records = filtered_clusters[cluster_cols].to_dict(orient="records")
         # Add top_paths and label from the paths column if available (consistent with format_clusters)
         if "paths" in filtered_clusters.columns:
@@ -336,14 +542,16 @@ def format_all(
         return json.dumps(combined, indent=2, default=str)
 
     # table format — sections with headers
+    risk_label = f"Top {effective_risks}" if effective_risks > 0 else "All"
+    cluster_label = f"Top {effective_clusters}" if effective_clusters > 0 else "All"
     sections = []
     sections.append("=== Summary ===")
     sections.append(format_summary(summary_data, fmt="table"))
     sections.append("")
-    sections.append(f"=== Top {top} Risk Files ===")
-    sections.append(format_risks(file_metrics, top=top, fmt="table"))
+    sections.append(f"=== {risk_label} Risk Files ===")
+    sections.append(format_risks(file_metrics, top=effective_risks, fmt="table"))
     sections.append("")
-    sections.append(f"=== Top {top} Leaky Clusters ===")
+    sections.append(f"=== {cluster_label} Leaky Clusters ===")
     sections.append(format_clusters(cluster_metrics, sort_by="leakage", fmt="table"))
     sections.append("")
     sections.append("=== Drift ===")

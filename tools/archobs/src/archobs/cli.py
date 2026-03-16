@@ -301,6 +301,44 @@ def show_drift(
     _write_or_print(text, out_path)
 
 
+@show_app.command("velocity")
+def show_velocity(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    window: int = typer.Option(30, help="Window size in days."),
+    compare: bool = typer.Option(False, help="Compare current window to prior window."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show per-cluster velocity metrics from commit history."""
+    from archobs.display import format_velocity, read_cluster_metrics, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    cluster_metrics_df = read_cluster_metrics(out)
+    text = format_velocity(
+        commits_df, file_metrics_df, cluster_metrics_df,
+        window=window, compare=compare, fmt=fmt,
+    )
+    _write_or_print(text, out_path)
+
+
+@show_app.command("edges")
+def show_edges(
+    cluster_id: int = typer.Argument(help="Cluster ID to inspect edges for."),
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show cross-cluster edge relationships for a given cluster."""
+    from archobs.display import format_edges, read_cluster_metrics, read_file_metrics, read_graph_edges
+
+    graph_edges_df = read_graph_edges(out)
+    cluster_metrics_df = read_cluster_metrics(out)
+    file_metrics_df = read_file_metrics(out)
+    text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("summary")
 def show_summary(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
@@ -317,13 +355,15 @@ def show_summary(
 @show_app.command("all")
 def show_all(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
-    top: int = typer.Option(10, help="Number of top entries per section."),
+    top: int = typer.Option(0, help="Number of top entries per section (0 = all). Shorthand for --top-risks and --top-clusters."),
+    top_risks: int | None = typer.Option(None, "--top-risks", help="Number of top-risk files (overrides --top)."),
+    top_clusters: int | None = typer.Option(None, "--top-clusters", help="Number of top clusters (overrides --top)."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     from archobs.display import format_all
 
-    text = format_all(out, top=top, fmt=fmt)
+    text = format_all(out, top=top, top_risks=top_risks, top_clusters=top_clusters, fmt=fmt)
     _write_or_print(text, out_path)
 
 
