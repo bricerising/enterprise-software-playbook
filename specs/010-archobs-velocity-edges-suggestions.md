@@ -82,9 +82,9 @@ archobs show edges <cluster_id> [--format json] [--out-file path]
 
 **Solution**: Add domain keyword extraction — extract common non-generic filename stems (e.g., "orders", "payments") and prepend when a single dominant stem appears in >40% of files.
 
-### 7. Restructure trajectory SKILL.md (P3)
+### 7. Restructure trajectory SKILL.md (P3) — DONE
 
-Lead with archobs-native queries (`show velocity`, `show edges`) as primary path. Move `intel change-trajectory` to enhancement section.
+Trajectory SKILL.md now leads with archobs-native queries (`show velocity`, `show edges`) as the primary path. `intel change-trajectory` was removed (archobs and intel are separate tools).
 
 ### 8. Split `show all --top` into `--top-risks` / `--top-clusters` (P3)
 

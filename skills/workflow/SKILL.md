@@ -60,8 +60,6 @@ Pick the minimal “definition artifacts” needed:
 - If the primary pressure is cross-service (partial failures, sagas, event-driven, domain boundaries), **use `architecture`**.
 - If the primary pressure is in-process design (construction/structure/behavior), **use `design`**.
 - For non-trivial changes, **run `archobs` and wait for its report to complete** before proceeding to `architecture` or `design`. Downstream skills depend on archobs output (risk scores, boundary leakage, cluster assignments) to make evidence-based decisions — do not continue until the report is available.
-- If `intel_risk_overlay` MCP tool is available and the work domain overlaps with tracked intelligence topics, invoke it after archobs completes — pass archobs clusters, file risks, and drift data. Compound signals (compounding_risk, pressure_breach, slow_response, declining_hub) should inform risk prioritization in the plan/architecture/design phase.
-- If `intel_change_trajectory` MCP tool is available and the work involves planning what to build next, invoke it after archobs — pass commits + archobs data. Trajectory surfaces development momentum for predicting feature adjacencies.
 
 ### 2) Standardize (make it consistent)
 
@@ -115,7 +113,7 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `archobs` → `trajectory` → `plan`
 
 **Full situational awareness**:
-`archobs` → `trajectory` → `forecast` → `risk-overlay` → `plan`
+`archobs` → `trajectory` → `forecast` → `plan`
 
 **Architecture health pass**:
 `archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`

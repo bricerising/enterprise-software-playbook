@@ -160,31 +160,16 @@ Use `forecast` when the user wants forward-looking intelligence, scenario planni
    | Multiscale divergence | Leading indicator of trend reversal |
    | Decay-weighted support gap | Pattern staleness |
 
-### Risk overlay (archobs + forecast composition)
+### Internal development signals
 
-When both `archobs` and `intel forecast` data are available, the `intel_risk_overlay` tool
-composes them to surface compound risk signals that neither produces alone:
-
-| Compound signal | Archobs condition | Forecast condition | What it means |
-|---|---|---|---|
-| `compounding_risk` | cluster risk_max > 0.5 | reinforcing loop in relevant topic | Code fragility + amplifying external signal |
-| `pressure_breach` | cluster leakage > 0.20 | accumulation in relevant topic | Porous boundary + building pressure |
-| `slow_response` | drift ari_prev < 0.50 | delay in relevant topic | Architecture restructuring + signal lag |
-| `declining_hub` | file hubness > 0.45 | dampening in relevant topic | High fan-in hub + fading signal |
-
-Topic relevance is determined by matching cluster file paths and optional import specifiers
-against the intel topic taxonomy keywords.
-
-### Change trajectory (internal development signals)
-
-**If the user is asking about internal development patterns, redirect to the [`trajectory`](../trajectory/SKILL.md) skill.** Forecast is for external signals only. Trajectory and forecast compose at the workflow layer — they are not interchangeable.
+**If the user is asking about internal development patterns, redirect to the [`trajectory`](../trajectory/SKILL.md) skill.** Forecast is for external signals only.
 
 | Question | Skill |
 |----------|-------|
 | "What external shifts should we prepare for?" | **forecast** (this skill) |
 | "What are we likely to build next?" | [`trajectory`](../trajectory/SKILL.md) |
 | "Where is development momentum?" | [`trajectory`](../trajectory/SKILL.md) |
-| "Full picture: external + internal" | `archobs` → `trajectory` → `forecast` → `risk-overlay` → `plan` |
+| "Full picture: external + internal" | `archobs` → `trajectory` → `forecast` → `plan` |
 
 4. **Deepen on high-probability scenarios** — for the top scenarios, fetch supporting events:
    ```bash
