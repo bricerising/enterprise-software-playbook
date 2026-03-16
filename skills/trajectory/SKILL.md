@@ -33,25 +33,25 @@ When running in the same session as archobs (data already loaded), use this chec
 
 1. `archobs show velocity --window 30 --compare --include-added-paths --format json`
 2. `archobs show clusters --sort leakage --format json` (for `external_inbound_weight` and `recent_file_changes_*` context)
-3. `git branch -r --sort=-committerdate | head -20`
-4. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
-5. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
+3. `archobs show edges <cluster_id> --format json` — run for the top 2-3 clusters by `file_change_count` from step 1. Edge data is critical for identifying cross-cutting feature trajectories and convergent hub patterns.
+4. `git branch -r --sort=-committerdate | head -20`
+5. `git log --since="30 days ago" --format="%s" --no-merges | head -40`
+6. Theme extraction + feature adjacency reasoning (step 5 and 6 below)
 
-Run commands 1-2 in parallel (they read independent artifacts), then 3-4 in parallel (independent git queries).
+Run commands 1-2 in parallel (they read independent artifacts). Then run 3 (depends on cluster IDs from 1-2). Then 4-5 in parallel (independent git queries).
 
 ### Primary path: archobs-native queries
 
 1. **Get velocity data** — per-cluster commit activity with growth/churn ratios:
    ```bash
-   archobs show velocity --window 30 --format json
-   ```
-   With acceleration comparison to the prior 30-day window:
-   ```bash
-   archobs show velocity --window 30 --compare --format json
-   ```
-   With recently added file paths (highest-signal data for feature prediction):
-   ```bash
    archobs show velocity --window 30 --compare --include-added-paths --format json
+   ```
+   Always use `--include-added-paths` for trajectory analysis — recently added file paths are the highest-signal data for feature prediction. Use `--compare` to get acceleration relative to the prior window.
+
+   Simpler variants (when you only need a quick check, not full trajectory):
+   ```bash
+   archobs show velocity --window 30 --format json                  # basic velocity only
+   archobs show velocity --window 30 --compare --format json        # with acceleration, no paths
    ```
 
 2. **Inspect cluster relationships** — which clusters are connected and how strongly:
@@ -79,6 +79,8 @@ Run commands 1-2 in parallel (they read independent artifacts), then 3-4 in para
    ```
    Branch names are direct feature declarations — they tell you what the team is building, not what you infer from file changes. Include these in your analysis with the highest confidence level.
 
+   **Ticket ID extraction**: Extract ticket ID prefixes (e.g. `OIQ-516`, `CR-02`) from branch names and cross-reference with commit message prefixes (e.g. `feat(loyalty):`, `chore(db):`) to group related branches into feature initiatives. Multiple branches sharing the same prefix or ticket series (e.g. `OIQ-515`, `OIQ-516`, `OIQ-523`) likely represent coordinated work on one feature area.
+
 4b. **Collect commit message themes** — what the team is describing:
    ```bash
    git log --since="30 days ago" --format="%s" --no-merges | head -40
@@ -97,11 +99,24 @@ Run commands 1-2 in parallel (they read independent artifacts), then 3-4 in para
    | Cross-cluster edges (show edges) | Feature adjacency — what depends on what |
    | High `external_inbound_weight` | Gravitational center — other clusters pull toward this one |
 
+   **Compound velocity signal matrix** — the combination of acceleration and growth is what matters for interpretation:
+
+   | Acceleration | Growth | Signal |
+   |---|---|---|
+   | High (>1.5x) | High (>30%) | Brand-new feature area expanding rapidly — needs architecture review |
+   | High (>1.5x) | Zero (0%) | Batch ops work on existing code — needs capacity planning |
+   | Moderate | High (>20%) | Steady buildout of new capability — define boundaries early |
+   | Low (<0.5x) | High churn | Maintenance/refinement — safe window for refactoring |
+   | Low (<0.5x) | Zero | Dormant — safe for structural cleanup if leaky |
+   | Test-only cluster with high growth | — | Feature commitment signal — team is writing tests before/alongside production code. Look at the production cluster this maps to for architectural decisions. |
+
    **Cross-reference velocity with risk**: Files that appear in both `show risks` (risk > 0.5) AND belong to a high-velocity cluster are the highest-urgency items. These are files that are simultaneously architecturally risky and actively being changed — the most dangerous combination. Use `archobs show risks --min-risk 0.5 --min-volatility 0.5 --format json` to find them directly.
 
    **Convergent hub pattern**: When 3+ clusters leak primarily toward the same target (visible via `show edges` or the `external_inbound_weight` metric on `show clusters`), the finding is about the hub, not the individual boundaries. The actionable insight is "decompose the attractor" rather than "build N separate boundaries." This is the most common pattern in real monoliths.
 
    **Acceleration context for new clusters**: When `prior_commit_count` is 0 or very low, acceleration will be infinite or very high (e.g. 6.0x). This signals **emergence** (a brand-new area appearing), not **acceleration** (an existing area speeding up). Distinguish "brand new area" from "existing area speeding up" — they require different responses. New areas need architecture review; accelerating areas need capacity planning.
+
+   **Test-only clusters**: A cluster containing predominantly test files (>80% test paths) with high acceleration is a different signal than a production cluster at the same metrics. It means the team is investing in test coverage for a feature — high confidence the feature is real and the team is committed, but boundary decisions live in the production code, not the test code. Identify the production cluster the tests correspond to and direct architectural recommendations there.
 
 6. **Reason about feature adjacency** using the patterns below and your domain knowledge:
 

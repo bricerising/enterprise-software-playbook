@@ -87,7 +87,11 @@ def _humanize_path_token(token: str) -> str:
 
 
 def _humanize_area_label(label: str) -> str:
-    parts = [part.strip() for part in label.split("+") if part.strip()]
+    # Remove trailing truncation markers from cluster labels (e.g. '(test unit and unit contro...")')
+    cleaned_label = re.sub(r"\s*\([^)]*\.\.\.[\"']?\)\s*$", "", label).strip()
+    if not cleaned_label:
+        cleaned_label = label
+    parts = [part.strip() for part in cleaned_label.split("+") if part.strip()]
     human = [_humanize_path_token(part) for part in parts[:2]]
     return " and ".join(part for part in human if part).strip() or label
 
@@ -411,6 +415,18 @@ def _rule_based_change_suggestions(
                 label = f"cluster {cid}"
             area = _humanize_area_label(label) if label != f"cluster {cid}" else label
             scope = _cluster_scope_paths(file_metrics_df, cid)
+
+            # Skip test-only clusters — boundary suggestions aren't actionable for test infrastructure
+            if not file_metrics_df.empty and "cluster_id" in file_metrics_df.columns:
+                cluster_paths = file_metrics_df[file_metrics_df["cluster_id"] == cid]["path"].tolist()
+                if cluster_paths:
+                    test_ratio = sum(
+                        1 for p in cluster_paths
+                        if "/test/" in str(p) or "/tests/" in str(p) or ".test." in str(p) or ".spec." in str(p)
+                    ) / len(cluster_paths)
+                    if test_ratio > 0.8:
+                        continue
+
             if accel >= 1.5 and growth >= 0.3:
                 suggestions.append(
                     {

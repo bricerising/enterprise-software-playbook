@@ -80,6 +80,11 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    ```
    The `--compact` flag limits output to 5 risks, 10 clusters, velocity without added_paths, and edges for top-3 clusters only.
 
+   **When to use compact vs parallel queries:**
+   - Repos < 500 files: `show all --compact` is sufficient for a quick overview
+   - Repos 500–2000 files: parallel individual queries recommended — compact output truncates important context
+   - Repos > 2000 files: parallel queries required, and consider `--top` limits to control output size
+
    **Full dump** — for human review or when you need everything:
    ```bash
    archobs show all --top 5 --format json
@@ -133,6 +138,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    When reporting drift, always examine the ARI trend (last 2+ windows) rather than applying a single threshold. A codebase with ARI 1.0 → 0.38 → 0.58 → 0.77 is stabilizing, not unstable.
 
+   **Young repos**: Repos with less than 6 months of history may produce fewer drift windows than configured. This is expected — interpret the trend with whatever windows are available.
+
    **Velocity** (`archobs show velocity`):
    | Signal | Suggests |
    |--------|----------|
@@ -151,7 +158,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
-   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction.
+   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction. **Always pass `--include-added-paths`** for trajectory analysis — it surfaces exactly which new files are being built in each cluster.
      **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --include-added-paths --format json`, check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the trajectory skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `trajectory` skill.
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
