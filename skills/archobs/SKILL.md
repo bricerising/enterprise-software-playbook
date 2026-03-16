@@ -91,6 +91,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
+   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next)
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
@@ -123,6 +124,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 - Boundary redesign from leakage data: [`architecture`](../architecture/SKILL.md)
 - In-process pattern selection from coupling data: [`design`](../design/SKILL.md)
 - Refactoring prioritization from risk scores: [`plan`](../plan/SKILL.md)
+- Development trajectory and feature prediction from cluster activity: [`trajectory`](../trajectory/SKILL.md)
 - Architecture health regression gate: [`finish`](../finish/SKILL.md)
 - Architecture-type adversarial review: [`review`](../review/SKILL.md)
 - Facade/Adapter for porous boundaries: [`patterns-structural`](../patterns-structural/SKILL.md)

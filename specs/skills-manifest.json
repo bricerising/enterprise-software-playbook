@@ -2,7 +2,7 @@
   "version": 2,
   "updated": "2026-03-10",
   "stages": {
-    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "brief"],
+    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "brief", "forecast", "trajectory"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
     "Verify": ["testing", "review", "finish"],
@@ -14,7 +14,7 @@
       "stage": "Define",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
-      "related": ["architecture", "design", "plan", "review", "finish"],
+      "related": ["architecture", "design", "plan", "trajectory", "review", "finish"],
       "overhead": "moderate"
     },
     "architecture": {
@@ -168,6 +168,22 @@
       "trigger": "Have intel signals and need a reader-ready brief tailored for a specific audience or decision context.",
       "related": ["intel", "plan", "spec", "architecture"],
       "overhead": "minimal"
+    },
+    "forecast": {
+      "path": "skills/forecast/SKILL.md",
+      "stage": "Define",
+      "tags": ["forecast", "prediction", "scenarios", "chains", "lifecycle", "convergence", "trends", "intelligence", "bayesian", "entropy", "cusum", "hmm", "decay"],
+      "trigger": "Need forward-looking intelligence — what's likely to happen next, scenario planning, or which current signals predict future developments.",
+      "related": ["intel", "brief", "archobs", "trajectory", "plan"],
+      "overhead": "moderate"
+    },
+    "trajectory": {
+      "path": "skills/trajectory/SKILL.md",
+      "stage": "Define",
+      "tags": ["trajectory", "momentum", "velocity", "feature-prediction", "git-history", "development-patterns", "change-analysis", "adjacency"],
+      "trigger": "Need to predict likely next features from recent development patterns by analyzing git history through archobs cluster context.",
+      "related": ["archobs", "forecast", "plan", "spec"],
+      "overhead": "moderate"
     }
   }
 }

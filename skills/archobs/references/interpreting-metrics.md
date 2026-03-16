@@ -88,9 +88,20 @@ Query with `archobs show drift --format json` (or read `.archobs/drift.parquet` 
 
 Measures how much the cluster assignments changed between adjacent time windows. Compares consecutive snapshots of the subsystem map.
 
+**Point-in-time thresholds:**
 - **> 0.80**: Stable — architecture is not reshuffling.
 - **0.50 - 0.80**: Moderate drift — some subsystem boundaries are shifting.
 - **< 0.50**: Unstable — the subsystem map is changing significantly. Avoid broad moves until boundaries stabilize.
+
+**Multi-window trend patterns** (when 3+ drift windows are available, the trajectory of ARI is more informative than any single value):
+
+| Pattern | Example | Interpretation |
+|---------|---------|---------------|
+| Rising (low → high) | 0.38 → 0.58 → 0.77 | **Stabilizing after restructuring** — boundaries are converging. Safe to plan architectural moves. |
+| Falling (high → low) | 0.82 → 0.60 → 0.42 | **Actively destabilizing** — boundaries are dissolving. Investigate what's driving structural change before refactoring. |
+| Oscillating | 0.50 → 0.72 → 0.48 | **Unstable equilibrium** — architecture hasn't settled. Cluster assignments are unreliable for planning. |
+| Plateau (high) | 0.85 → 0.83 → 0.81 | **Stable architecture** — safe to use cluster assignments for trajectory analysis and planning. |
+| Plateau (low) | 0.35 → 0.38 → 0.33 | **Persistently unstable** — the codebase may lack natural boundaries. Consider whether the clustering resolution is appropriate. |
 
 ### `modularity` (0.0 - 1.0)
 

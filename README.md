@@ -52,6 +52,8 @@ Please review this enterprise web application.
 - [`skills/archobs/`](skills/archobs/SKILL.md): Measure coupling, boundary health, and risk hotspots before architecture or refactoring decisions.
 - [`skills/intel/`](skills/intel/SKILL.md): Query collected intelligence signals — trends, search, events, evidence packs — from curated feeds.
 - [`skills/brief/`](skills/brief/SKILL.md): Shape intel signals into audience-aware briefs (executive, engineering, decision, daily digest).
+- [`skills/forecast/`](skills/forecast/SKILL.md): Predict likely next developments using Bayesian scenario projection, entropy scoring, and lifecycle classification from collected intelligence feeds.
+- [`skills/trajectory/`](skills/trajectory/SKILL.md): Predict likely next features from recent development patterns by analyzing git history through archobs cluster context.
 
 **Standardize (make it consistent)**
 

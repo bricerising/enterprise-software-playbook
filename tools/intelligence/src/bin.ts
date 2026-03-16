@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { loadConfig, getDbPath, type IntelConfig } from './config.js';
 import { openReader, withReader, openWriter, sqliteBusyRetry, checkSqliteVersion, getMigrations } from './db.js';
@@ -14,6 +15,10 @@ import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
 import { computeForecast } from './queries/forecast.js';
+import { composeRiskIntelligence } from './queries/risk-intelligence.js';
+import type { ArchobsInput } from './queries/risk-intelligence.js';
+import { computeTrajectory } from './queries/change-trajectory.js';
+import type { TrajectoryInput } from './queries/change-trajectory.js';
 import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
@@ -363,6 +368,80 @@ program
           }),
         ),
       );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+// --- risk-overlay ---
+program
+  .command('risk-overlay')
+  .description('Compose archobs metrics with forecast intelligence to surface compound risk signals')
+  .requiredOption('--archobs <path>', 'Path to archobs JSON file (output of archobs show all --format json)')
+  .option('--import-specifiers <list>', 'Comma-separated external package import specifiers')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const archobsRaw = JSON.parse(readFileSync(opts.archobs, 'utf-8'));
+
+      const archobsInput: ArchobsInput = {
+        clusters: archobsRaw.clusters ?? [],
+        file_risks: archobsRaw.file_risks,
+        drift: archobsRaw.drift,
+        import_specifiers: opts.importSpecifiers
+          ? (opts.importSpecifiers as string).split(',').map((s: string) => s.trim())
+          : undefined,
+      };
+
+      const topics = loadTopics(config.topics_file);
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) => {
+          const forecastResult = computeForecast(db);
+          return composeRiskIntelligence(archobsInput, forecastResult.data, topics);
+        }),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+// --- change-trajectory ---
+program
+  .command('change-trajectory')
+  .description('Analyze recent development patterns from git history to surface development momentum')
+  .requiredOption('--commits <path>', 'Path to commits JSON file')
+  .requiredOption('--archobs <path>', 'Path to archobs JSON file (output of archobs show all --format json)')
+  .option('--commit-messages <path>', 'Path to commit messages JSON file ([{commit_sha, subject}])')
+  .option('--window-days <days>', 'Analysis window in days', '30')
+  .action((opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+
+      const commits = JSON.parse(readFileSync(opts.commits, 'utf-8'));
+      const archobsRaw = JSON.parse(readFileSync(opts.archobs, 'utf-8'));
+
+      const trajectoryInput: TrajectoryInput = {
+        commits,
+        clusters: archobsRaw.clusters ?? [],
+        file_risks: archobsRaw.file_risks ?? archobsRaw.risks,
+        drift: Array.isArray(archobsRaw.drift)
+          ? archobsRaw.drift[archobsRaw.drift.length - 1]
+          : archobsRaw.drift,
+      };
+
+      if (opts.commitMessages) {
+        trajectoryInput.commit_messages = JSON.parse(readFileSync(opts.commitMessages, 'utf-8'));
+      }
+
+      trajectoryInput.window_days = parseInt(opts.windowDays, 10);
+
+      const result = computeTrajectory(trajectoryInput);
       output(result, fmt);
     } catch (err) {
       handleError(err, 'read');

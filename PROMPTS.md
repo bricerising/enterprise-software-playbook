@@ -108,6 +108,34 @@ Goal: Synthesize intel signals into a reader-ready brief tailored to the target 
 Filter and rank signals through the audience lens and produce a brief readable in under 2 minutes.
 ```
 
+### Forecast external technology shifts
+
+```text
+What external technology shifts should we be watching? Run a forecast and tell me
+what's likely to happen next, what's driving it, and what we should prepare for.
+```
+
+### Predict next features from development patterns
+
+```text
+Run archobs on this repo, then analyze the change trajectory. What areas are most
+active, what kinds of changes are happening, and what features are likely next?
+```
+
+### Sprint planning with trajectory context
+
+```text
+I'm planning next sprint. Analyze our development trajectory over the last 14 days.
+Where is momentum concentrated and what does the pattern suggest we should build next?
+```
+
+### Full situational awareness
+
+```text
+Give me full situational awareness on this codebase: architecture health, development
+trajectory, external forecast, and compound risks. What should we prioritize?
+```
+
 ### Choose an in-process/design pattern
 
 ```text

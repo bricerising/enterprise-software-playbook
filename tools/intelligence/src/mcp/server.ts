@@ -15,6 +15,11 @@ import { queryTopics } from '../queries/topics.js';
 import { queryStats } from '../queries/stats.js';
 import { buildPack } from '../queries/pack.js';
 import { computeForecast } from '../queries/forecast.js';
+import { composeRiskIntelligence } from '../queries/risk-intelligence.js';
+import type { ArchobsInput } from '../queries/risk-intelligence.js';
+import { computeTrajectory } from '../queries/change-trajectory.js';
+import type { TrajectoryInput } from '../queries/change-trajectory.js';
+import { loadTopics, getLoadedTopics } from '../collector/topic-classifier.js';
 
 const TOOL_DEFINITIONS = [
   {
@@ -115,6 +120,73 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'intel_risk_overlay',
+    description: 'Compose architecture observability metrics with forecast intelligence to surface compound risk signals',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        clusters: {
+          type: 'array',
+          description: 'Archobs cluster metrics (from archobs show clusters --format json)',
+          items: { type: 'object' },
+        },
+        file_risks: {
+          type: 'array',
+          description: 'Archobs file risk metrics (from archobs show risks --format json)',
+          items: { type: 'object' },
+        },
+        drift: {
+          type: 'object',
+          description: 'Most recent archobs drift entry (from archobs show drift --format json)',
+        },
+        import_specifiers: {
+          type: 'array',
+          description: 'External package import specifiers from the codebase (optional, improves topic matching)',
+          items: { type: 'string' },
+        },
+      },
+      required: ['clusters'],
+    },
+  },
+  {
+    name: 'intel_change_trajectory',
+    description: 'Analyze recent development patterns from git history to surface where development momentum is concentrated and what areas are growing — structured data for predicting likely next features',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        commits: {
+          type: 'array',
+          description: 'Commit-level file changes. Each: {commit_sha, commit_ts (unix seconds), status (A/M/D), path}',
+          items: { type: 'object' },
+        },
+        clusters: {
+          type: 'array',
+          description: 'Archobs cluster metrics (from archobs show clusters --format json)',
+          items: { type: 'object' },
+        },
+        file_risks: {
+          type: 'array',
+          description: 'Archobs file risk metrics with cluster_id (from archobs show risks --format json)',
+          items: { type: 'object' },
+        },
+        drift: {
+          type: 'object',
+          description: 'Most recent archobs drift entry (from archobs show drift --format json)',
+        },
+        commit_messages: {
+          type: 'array',
+          description: 'Optional: [{commit_sha, subject}] for pattern extraction',
+          items: { type: 'object' },
+        },
+        window_days: {
+          type: 'number',
+          description: 'Analysis window in days (default: 30)',
+        },
+      },
+      required: ['commits', 'clusters'],
+    },
+  },
 ];
 
 export async function startMcpServer(dbPath: string): Promise<void> {
@@ -204,6 +276,32 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             dedup: params.dedup as string | undefined,
           });
           break;
+
+        case 'intel_change_trajectory': {
+          const trajectoryInput: TrajectoryInput = {
+            commits: (params.commits as TrajectoryInput['commits']) ?? [],
+            clusters: (params.clusters as TrajectoryInput['clusters']) ?? [],
+            file_risks: params.file_risks as TrajectoryInput['file_risks'],
+            drift: params.drift as TrajectoryInput['drift'],
+            commit_messages: params.commit_messages as TrajectoryInput['commit_messages'],
+            window_days: params.window_days as number | undefined,
+          };
+          result = computeTrajectory(trajectoryInput);
+          break;
+        }
+
+        case 'intel_risk_overlay': {
+          const topics = getLoadedTopics().length > 0 ? getLoadedTopics() : loadTopics();
+          const forecastResult = computeForecast(db);
+          const archobsInput: ArchobsInput = {
+            clusters: (params.clusters as ArchobsInput['clusters']) ?? [],
+            file_risks: params.file_risks as ArchobsInput['file_risks'],
+            drift: params.drift as ArchobsInput['drift'],
+            import_specifiers: params.import_specifiers as ArchobsInput['import_specifiers'],
+          };
+          result = composeRiskIntelligence(archobsInput, forecastResult.data, topics);
+          break;
+        }
 
         default:
           return {
