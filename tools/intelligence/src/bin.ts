@@ -351,6 +351,8 @@ program
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .option('--with-context', 'Inline top event titles per change point and top chain topic')
+  .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.openai,hw.gpu)')
+  .option('--section <sections>', 'Comma-separated sections to include (e.g., lifecycles,entropy)')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
@@ -368,6 +370,8 @@ program
             compact: opts.compact ?? false,
             summary: opts.summary ?? false,
             with_context: opts.withContext ?? false,
+            topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
+            sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
           }),
         ),
       );

@@ -114,6 +114,9 @@ intel forecast --compact                          # compact output: top-N per se
 intel forecast --compact --window 7               # short-term compact forecast
 intel forecast --summary                          # minimal output: top-3 scenarios, top-5 chains, change points
 intel forecast --summary --window 7               # short-term summary forecast
+intel forecast --topics ai.openai,hw.gpu          # filter output to specific topics
+intel forecast --section lifecycles,entropy        # include only specific sections
+intel forecast --topics ai.openai --section lifecycles,entropy --compact  # combined filtering
 ```
 
 ### MCP Tool
@@ -131,7 +134,9 @@ intel forecast --summary --window 7               # short-term summary forecast
       "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" },
       "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, or 30 (default: 30)" },
       "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" },
-      "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" }
+      "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" },
+      "topics": { "type": "array", "items": { "type": "string" }, "description": "Filter output to specific topic IDs" },
+      "sections": { "type": "array", "items": { "type": "string" }, "description": "Include only these sections in the response" }
     }
   }
 }
@@ -148,6 +153,8 @@ intel forecast --summary --window 7               # short-term summary forecast
 | `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
 | `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). |
+| `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
+| `sections` | string[] | — | Include only named sections in the response. Valid values: lifecycles, chains, ranked_chains, scenarios, multiscale, transitive_chains, entropy, dynamics, change_points_summary, context. |
 
 ---
 
@@ -349,7 +356,9 @@ Discover multi-hop propagation paths. If A→B and B→C both exist as direct ch
    - `min_support` = min(support_AB, support_BC) — weakest link
    - `combined_lift` = lift_AB × lift_BC — multiplicative above-chance ratio
    - `cross_domain` = true if A and C have different top-level domains (e.g., `ai.llm` → `aws.lambda`)
-5. Sort by `combined_lift` descending, cap at 100 results
+5. Sort by `combined_lift` descending
+6. Per-prefix diversity cap: keep at most `MAX_TRANSITIVE_PER_PREFIX` (3) chains per A→B prefix — prevents a single high-lift prefix from dominating all top results (e.g., 5 variations of `aws.bedrock→hw.chip→*`)
+7. Cap at 100 results total
 
 ### Output
 
@@ -448,6 +457,8 @@ interface ScenarioItem {
 - `'high'` — event assigned to 1-2 topics (specific classification)
 - `'medium'` — event assigned to 3-4 topics
 - `'low'` — event assigned to 5 topics (broad classification, higher false-positive risk)
+
+**Evidence pre-filter**: Scenarios where ALL evidence titles have `'low'` relevance are dropped before ranking. This catches cases where the classifier misfired on every supporting event (e.g., "Home Assistant waters my plants" as evidence for a TypeScript scenario). If no evidence has at least medium or high relevance, the scenario has no genuine evidence and is removed at the source rather than relying on the consumer to discount it.
 
 ---
 
@@ -657,6 +668,7 @@ tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe bl
 | Tiered activation threshold | 7d acceleration > 1.0 | Sparse-day fallback for chain activation |
 | Lift filter | >= 1.5 | Minimum lift for scenario projection (below-chance chains excluded) |
 | Transitive chain cap | 100 | Maximum transitive chains returned |
+| `MAX_TRANSITIVE_PER_PREFIX` | 3 | Maximum transitive chains per A→B prefix in top-100 output |
 | Ranked chain cap | 50 | Maximum ranked chains returned |
 | `DECAY_HALF_LIFE_DAYS` | 14 | Exponential decay half-life for chain recency weighting |
 | `CUSUM_K_SIGMA` | 0.5 | CUSUM sensitivity parameter |
@@ -782,6 +794,10 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Evidence relevance hints | topic_count heuristic | Events assigned to fewer topics are more specifically classified. Parallel `evidence_relevance` array flags 'high'/'medium'/'low' per evidence title. |
 | Accumulation freshness gate | published_at recency check | Topics whose events lack `published_at` in the analysis window (backfill-only) are excluded from accumulation detection to prevent false signals from bulk-ingested old content. |
 | Top-level change_points_summary | Always populated, sorted by recency | CUSUM change points are easy to overlook when buried in per-topic lifecycle data. Top-level summary ensures they're always surfaced. |
+| Topic-level output filtering | `--topics` post-filter | Full pipeline runs (chains/scenarios need cross-topic data) but output is post-filtered. Eliminates re-running the entire pipeline to extract lifecycle/entropy for specific topics. |
+| Section-level output filtering | `--section` inclusion filter | Only named sections are included in the response. Reduces output to exactly the data needed. |
+| Transitive chain diversity | per-prefix cap of 3 | Prevents a single A→B prefix from dominating all transitive chain results. Surfaces diverse cross-domain propagation paths. |
+| Evidence pre-filter | Drop all-low-relevance scenarios | Scenarios where every evidence title has 'low' relevance (classifier misfired on all supporting events) are removed before ranking. |
 
 ---
 

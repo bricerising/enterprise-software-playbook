@@ -117,6 +117,8 @@ const TOOL_DEFINITIONS = [
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
         summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
         with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },
+        topics: { type: 'array', items: { type: 'string' }, description: 'Filter output to specific topic IDs (e.g., ["ai.openai", "hw.gpu"])' },
+        sections: { type: 'array', items: { type: 'string' }, description: 'Include only these sections (e.g., ["lifecycles", "entropy"])' },
       },
     },
   },
@@ -211,6 +213,8 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             compact: params.compact as boolean | undefined,
             summary: params.summary as boolean | undefined,
             with_context: params.with_context as boolean | undefined,
+            topics: params.topics as string[] | undefined,
+            sections: params.sections as string[] | undefined,
           });
           break;
 

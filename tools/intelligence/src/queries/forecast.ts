@@ -179,6 +179,11 @@ const MAX_CHAINS_PER_TARGET = 5;
  *  don't monopolize all ranked chain slots. */
 const MAX_RANKED_PER_TRIGGER = 3;
 
+/** Maximum transitive chains per A→B prefix in the top-100.
+ *  Ensures diverse cross-domain paths rather than five variations
+ *  of the same cascade (e.g., all sharing aws.bedrock→hw.chip prefix). */
+const MAX_TRANSITIVE_PER_PREFIX = 3;
+
 export interface ComputeForecastOpts {
   lag_window_days?: number;
   min_support?: number;
@@ -194,6 +199,16 @@ export interface ComputeForecastOpts {
   /** When true, inline top event titles per change point topic and per top ranked chain
    *  topic. Saves a round-trip of `intel search` deepening calls. */
   with_context?: boolean;
+  /** Filter output to specific topic IDs (e.g., ['ai.openai', 'hw.gpu']).
+   *  The full pipeline runs but output is post-filtered to only include data
+   *  relating to these topics. Eliminates the need to run the full forecast
+   *  twice to extract lifecycle/multiscale/entropy for specific topics. */
+  topics?: string[];
+  /** Filter output to specific section names (e.g., ['lifecycles', 'entropy']).
+   *  Only these sections are included in the response. Valid values:
+   *  lifecycles, chains, ranked_chains, scenarios, multiscale,
+   *  transitive_chains, entropy, dynamics, change_points_summary, context. */
+  sections?: string[];
 }
 
 /* ── Main entry ─────────────────────────────────────────────────────── */
@@ -307,38 +322,107 @@ export function computeForecast(
     context = buildTopicContext(db, changePointsSummary, ranked_chains, windowStart, limits?.ranked_chains ?? 5);
   }
 
+  // --topics: post-filter all sections to only include data relating to specified topics.
+  // The full pipeline runs (chains/scenarios need cross-topic data) but output is filtered.
+  const topicFilter = opts.topics && opts.topics.length > 0
+    ? new Set(opts.topics)
+    : null;
+
+  const filteredLifecycles = topicFilter
+    ? lifecycles.filter(lc => topicFilter.has(lc.topic))
+    : lifecycles;
+  const filteredChains = topicFilter
+    ? chains.filter(c => topicFilter.has(c.from_topic) || topicFilter.has(c.to_topic))
+    : chains;
+  const filteredRankedChains = topicFilter
+    ? ranked_chains.filter(c => topicFilter.has(c.from_topic) || topicFilter.has(c.to_topic))
+    : ranked_chains;
+  const filteredScenarios = topicFilter
+    ? scenarios.filter(s => topicFilter.has(s.target_topic) || s.trigger_topics.some(t => topicFilter.has(t)))
+    : scenarios;
+  const filteredMultiscale = topicFilter
+    ? multiscale.filter(ms => topicFilter.has(ms.topic))
+    : multiscale;
+  const filteredTransitive = topicFilter
+    ? transitive_chains.filter(tc => tc.path.some(p => topicFilter.has(p)))
+    : transitive_chains;
+  const filteredEntropy = topicFilter
+    ? entropy.filter(e => topicFilter.has(e.topic))
+    : entropy;
+  const filteredDynamics = topicFilter
+    ? dynamics.filter(d => d.topics.some(t => topicFilter.has(t)))
+    : dynamics;
+  const filteredChangePoints = topicFilter
+    ? changePointsSummary.filter(cp => topicFilter.has(cp.topic))
+    : changePointsSummary;
+  const filteredContext = topicFilter && context
+    ? context.filter(c => topicFilter.has(c.topic))
+    : context;
+
+  // --section: only include specified sections in the response.
+  const sectionFilter = opts.sections && opts.sections.length > 0
+    ? new Set(opts.sections)
+    : null;
+
   if (limits) {
     const result: ForecastData = {
       window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
-      ranked_chains: ranked_chains.slice(0, limits.ranked_chains),
-      scenarios: scenarios.slice(0, limits.scenarios),
-      dynamics,
-      change_points_summary: changePointsSummary,
+      ranked_chains: filteredRankedChains.slice(0, limits.ranked_chains),
+      scenarios: filteredScenarios.slice(0, limits.scenarios),
+      dynamics: filteredDynamics,
+      change_points_summary: filteredChangePoints,
     };
     // Only include sections whose limit is > 0 — avoids wasted tokens
     // from empty arrays in summary mode.
-    if (limits.lifecycles > 0) result.lifecycles = lifecycles.slice(0, limits.lifecycles);
-    if (limits.chains > 0) result.chains = chains.slice(0, limits.chains);
-    if (limits.multiscale > 0) result.multiscale = multiscale.slice(0, limits.multiscale);
-    if (limits.transitive_chains > 0) result.transitive_chains = transitive_chains.slice(0, limits.transitive_chains);
-    if (limits.entropy > 0) result.entropy = entropy.slice(0, limits.entropy);
-    if (context) result.context = context;
+    if (limits.lifecycles > 0) result.lifecycles = filteredLifecycles.slice(0, limits.lifecycles);
+    if (limits.chains > 0) result.chains = filteredChains.slice(0, limits.chains);
+    if (limits.multiscale > 0) result.multiscale = filteredMultiscale.slice(0, limits.multiscale);
+    if (limits.transitive_chains > 0) result.transitive_chains = filteredTransitive.slice(0, limits.transitive_chains);
+    if (limits.entropy > 0) result.entropy = filteredEntropy.slice(0, limits.entropy);
+    if (filteredContext) result.context = filteredContext;
+
+    if (sectionFilter) {
+      return ok(filterSections(result, sectionFilter));
+    }
+
     return ok(result);
   }
 
-  return ok({
+  const fullResult: ForecastData = {
     window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
-    lifecycles,
-    chains,
-    ranked_chains,
-    scenarios,
-    multiscale,
-    transitive_chains,
-    entropy,
-    dynamics,
-    change_points_summary: changePointsSummary,
-    ...(context ? { context } : {}),
-  });
+    lifecycles: filteredLifecycles,
+    chains: filteredChains,
+    ranked_chains: filteredRankedChains,
+    scenarios: filteredScenarios,
+    multiscale: filteredMultiscale,
+    transitive_chains: filteredTransitive,
+    entropy: filteredEntropy,
+    dynamics: filteredDynamics,
+    change_points_summary: filteredChangePoints,
+    ...(filteredContext ? { context: filteredContext } : {}),
+  };
+
+  if (sectionFilter) {
+    return ok(filterSections(fullResult, sectionFilter));
+  }
+
+  return ok(fullResult);
+}
+
+/** Strip a ForecastData to only the sections named in the filter set.
+ *  `window` is always included. The result is typed as ForecastData but
+ *  omitted sections will be absent from the serialized JSON. */
+function filterSections(data: ForecastData, keep: Set<string>): ForecastData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: any = { window: data.window };
+  const keys: Array<keyof Omit<ForecastData, 'window'>> = [
+    'lifecycles', 'chains', 'ranked_chains', 'scenarios', 'multiscale',
+    'transitive_chains', 'entropy', 'dynamics', 'change_points_summary', 'context',
+  ];
+  for (const k of keys) {
+    if (keep.has(k) && data[k] !== undefined) out[k] = data[k];
+  }
+  return out as ForecastData;
 }
 
 /* ── A. Lifecycle positioning ───────────────────────────────────────── */
@@ -684,9 +768,23 @@ function detectTransitiveChains(chains: ChainItem[]): TransitiveChainItem[] {
     }
   }
 
-  // Sort by combined_lift descending, cap at 100
+  // Sort by combined_lift descending, then apply per-prefix diversity cap.
+  // Without this, a single high-lift A→B prefix can dominate all top results
+  // (e.g., 5 variations of aws.bedrock→hw.chip→*).
   results.sort((a, b) => b.combined_lift - a.combined_lift);
-  return results.slice(0, 100);
+
+  const prefixCounts = new Map<string, number>();
+  const diversified: TransitiveChainItem[] = [];
+  for (const tc of results) {
+    const prefix = `${tc.path[0]}→${tc.path[1]}`;
+    const count = prefixCounts.get(prefix) ?? 0;
+    if (count >= MAX_TRANSITIVE_PER_PREFIX) continue;
+    prefixCounts.set(prefix, count + 1);
+    diversified.push(tc);
+    if (diversified.length >= 100) break;
+  }
+
+  return diversified;
 }
 
 /* ── D. Multiscale convergence ──────────────────────────────────────── */
@@ -1355,9 +1453,17 @@ function projectScenariosBayesian(
     });
   }
 
+  // Pre-filter: drop scenarios where ALL evidence is topically unrelated
+  // (all 'low' relevance). This catches cases where the classifier misfired
+  // on every supporting event — the scenario has no genuine evidence.
+  const filtered = scenarios.filter(s =>
+    s.evidence_relevance.length === 0 ||
+    s.evidence_relevance.some(r => r !== 'low'),
+  );
+
   // Sort by probability descending, take top N
-  scenarios.sort((a, b) => b.probability - a.probability);
-  return scenarios.slice(0, topN);
+  filtered.sort((a, b) => b.probability - a.probability);
+  return filtered.slice(0, topN);
 }
 
 /* ── Context inlining (--with-context) ─────────────────────────────── */

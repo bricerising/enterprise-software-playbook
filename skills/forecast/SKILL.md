@@ -114,10 +114,11 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 | **CUSUM change points** | Change point within last 7 days | History may not hold — always surface these prominently. Highest-priority signal |
 | **Signal quality** | Scenario ranking | Scenarios rank by chain confidence × source diversity × trigger specificity, not just lift. Low-fanout triggers rank higher |
 | **Base rate noise** | `trigger_base_rate` > 0.5 | Topic spikes most days — chains from it are less informative |
-| **Evidence relevance** | `evidence_relevance` = `low` | Likely a classifier false positive (event tagged with 5+ topics). Weight scenario lower |
+| **Evidence relevance** | `evidence_relevance` = `low` | Likely a classifier false positive (event tagged with 5+ topics). Weight scenario lower. Scenarios where ALL evidence is 'low' are pre-filtered out |
 | **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing |
 | **Accumulation freshness** | Accumulation dynamics | Requires `published_at` in window. Backfill-only topics are excluded |
 | **HMM vs rule-based** | Phase classification | HMM overrides rule-based when confidence is +0.15 higher. `phase_probabilities` only present when HMM was used |
+| **Transitive diversity** | A→B→C chains | Per-prefix cap of 3 ensures diverse paths. If all top results share the same A→B prefix, lower-ranked cross-domain paths are more interesting |
 | **Transitive uncertainty** | A→B→C chains | `combined_lift` is a product, `min_support` is the weakest link — uncertainty compounds |
 | **Cluster staleness** | Internal engine | Low `drift.ari_prev` means cluster boundaries are shifting. Path-based analysis still valid |
 | **30-day retention** | All forecasts | System only sees patterns within retention window |

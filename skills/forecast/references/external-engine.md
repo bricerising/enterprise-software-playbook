@@ -26,9 +26,10 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
 ## Workflow
 
-1. **Check data freshness and depth**:
+1. **Check data freshness and current trends** (run in parallel — they're independent):
    ```bash
    intel stats
+   intel trends --since 24h
    ```
    Verify `total_events` is substantial (100+) and data spans multiple days.
 
@@ -54,6 +55,17 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    intel forecast --window 14                         # 14-day analysis window
    intel forecast --dedup none                        # count raw events
    ```
+
+   **Topic-level and section-level filtering** — query specific subsets without running the full pipeline twice:
+   ```bash
+   # Get lifecycle/entropy for specific topics (avoids re-running full forecast)
+   intel forecast --topics ai.openai,ai.agents,hw.gpu --section lifecycles,entropy,multiscale
+   # Get just scenarios and dynamics for specific topics
+   intel forecast --compact --topics hw.gpu,aws.bedrock --section scenarios,dynamics
+   # Full forecast filtered to a topic group
+   intel forecast --topics ai.openai,ai.agents --with-context
+   ```
+   `--topics` post-filters all sections to only include data relating to specified topics. `--section` includes only named sections in the response. Both can be combined with `--compact`/`--summary`/`--with-context`.
 
 3. **Interpret the response sections**:
 
@@ -104,9 +116,11 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    intel events --id <event_id>
    ```
 
-5. **Cross-reference with current trends**:
+5. **Cross-reference with current trends** (skip if already run in step 1):
    ```bash
    intel trends --since 24h
    ```
 
 6. **Synthesize** using the output template in the main skill document.
+
+**Parallelism note**: `intel stats`, `intel trends`, and `intel forecast` are independent queries with no data dependency. Run them in parallel when possible to minimize latency (e.g., stats + trends in step 1, or trends + forecast if data freshness is already confirmed).
