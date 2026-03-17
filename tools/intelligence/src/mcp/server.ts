@@ -116,6 +116,7 @@ const TOOL_DEFINITIONS = [
         window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
         summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
+        with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },
       },
     },
   },
@@ -209,6 +210,7 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             window_days: params.window_days as number | undefined,
             compact: params.compact as boolean | undefined,
             summary: params.summary as boolean | undefined,
+            with_context: params.with_context as boolean | undefined,
           });
           break;
 

@@ -38,14 +38,18 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    ```
    Use `--summary` for agent consumption — returns only top-3 scenarios, top-5 ranked chains, top-3 dynamics, and change points. Omits empty sections entirely for minimal token usage.
 
-   Use `--compact` when you need more detail (top-N per section) but still want reduced output.
+   Use `--compact` when you need more detail (top-N per section) but still want reduced output. **Prefer `--compact` over `--summary` when scenario yield from `--summary` is low** (< 3 actionable scenarios) — the extra ranked chains and lifecycle data often contain the most useful signals.
+
+   Use `--with-context` to inline top event titles per change point topic and top ranked chain topic. This saves a full round-trip of `intel search` deepening calls by embedding narrative context directly in the forecast response.
 
    CLI defaults: `--lag-window 7 --min-support 2 --top-scenarios 10 --dedup canonical --window 30`
 
    Optional tuning:
    ```bash
-   intel forecast --summary --window 7               # short-term summary forecast
+   intel forecast --summary --with-context            # summary + inlined context (recommended)
+   intel forecast --summary --window 7                # short-term summary forecast
    intel forecast --compact                           # more detail, still bounded
+   intel forecast --compact --with-context             # detail + inlined context
    intel forecast --lag-window 5 --min-support 2 --top-scenarios 15
    intel forecast --window 14                         # 14-day analysis window
    intel forecast --dedup none                        # count raw events
@@ -64,6 +68,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `entropy` | Shannon entropy per topic — low (< 0.3) = predictable; high (> 0.8) = bursty |
    | `dynamics` | Systems dynamics: reinforcing loops, delays, accumulations (with freshness gate), dampening signals |
    | `change_points_summary` | **HIGH PRIORITY** — topics with CUSUM structural breaks, sorted by recency. Always call these out. |
+   | `context` | *(--with-context only)* Top event titles per change point topic and top chain topic. Use for narrative context without separate `intel search` calls. |
 
    **CUSUM change points** are the highest-priority signal in the forecast output. A change point means a topic's volume trajectory shifted structurally — the historical pattern broke. When `change_points_summary` is non-empty:
    - Always call out which topics had structural breaks and how recently
@@ -73,7 +78,13 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
    **Chains are sorted by lift** (above-chance co-occurrence ratio), not by raw support. High-lift chains are informative regardless of volume. Chains also include `trigger_base_rate` — values > 0.5 indicate omnipresent triggers whose chains are less informative.
 
+   **Temporal artifact detection**: chains include an optional `temporal_pattern` field. When set to `weekday_correlated`, both the trigger and target topics spike predominantly on weekdays (Mon-Fri, >85% of co-occurrence days). This usually indicates a calendar cadence (e.g., business-hours publishing, earnings cycles, weekday SRE content) rather than a causal relationship. Discount these chains unless you can identify a plausible mechanism beyond shared weekday scheduling.
+
    **Evidence relevance**: Each scenario includes `evidence_relevance` parallel to `evidence_titles`. Values are 'high' (1-2 topics), 'medium' (3-4 topics), or 'low' (5 topics). Low-relevance evidence may be a classifier false positive — flag it and weight the scenario lower.
+
+   **Classifier precision caveat**: The topic classifier over-tags high-volume topics (e.g., `lang.typescript`, `infra.gpu`). Events about tangentially related subjects get these tags, which inflates both volume numbers and evidence relevance. When evidence titles for a scenario look topically unrelated (e.g., "Home Assistant waters my plants" as evidence for a TypeScript scenario), the classifier misfired — discount that evidence and note the scenario may have inflated support. This primarily affects topics that match on broad keyword patterns.
+
+   **Low scenario yield**: If `--summary` returns fewer than 3 actionable scenarios (e.g., two at P < 0.05), the most useful intelligence is likely in the change points, ranked chains, and system dynamics sections — not the Bayesian scenarios. In this case, try `--compact` for more ranked chain data, or use `--with-context` to get narrative context without extra round-trips. The scenario engine's lift threshold (≥ 1.5) and support minimum filter out weak signals, which is correct behavior — low yield means the data genuinely doesn't support strong scenario-level predictions for this window.
 
    **Systems dynamics interpretation**:
 
@@ -84,7 +95,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `accumulation` | aligned_up + emerging/accelerating + rising entropy + freshness gate | Pressure building without release. Requires recent published_at events (not backfill). Ask: what is the threshold event? |
    | `dampening` | Decaying phase + recent CUSUM change point | Something arrested growth. Ask: natural limit, policy change, or competing signal? |
 
-4. **Deepen on high-probability scenarios**:
+4. **Deepen on high-probability scenarios** (skip if `--with-context` was used — context is already inlined):
    ```bash
    # Free-text search (FTS5 syntax) — use natural language, not topic IDs
    intel search "AI agents" --since 7d --limit 10

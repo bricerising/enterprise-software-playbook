@@ -350,6 +350,7 @@ program
   .option('--window <days>', 'Analysis window in days (7, 14, or 30)', '30')
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
+  .option('--with-context', 'Inline top event titles per change point and top chain topic')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
@@ -366,6 +367,7 @@ program
             window_days: parseInt(opts.window, 10),
             compact: opts.compact ?? false,
             summary: opts.summary ?? false,
+            with_context: opts.withContext ?? false,
           }),
         ),
       );

@@ -101,24 +101,28 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 
 ## Guardrails
 
-- **Probabilities are not certainties** — always present forecasts as probabilistic scenarios, not predictions of fact.
-- **Trajectory is evidence, not prediction** — present trajectory data as "evidence suggests" or "development patterns indicate."
-- **Feature adjacency is heuristic** — the adjacency table reflects common patterns, not rules. Domain context matters.
-- **Freshness check required** — stale data produces stale forecasts. Always verify data recency before synthesizing.
-- **Spurious correlations exist** — low-support chains (support < 3) or low source-diversity chains should be flagged as lower confidence.
-- **Decay reveals staleness** — compare `decay_weighted_support` to raw `support`. A large gap means the co-movement pattern hasn't recurred recently. Half-life is 14 days.
-- **Entropy signals predictability** — high normalized entropy (> 0.8) means the target is bursty and less predictable.
-- **CUSUM change points invalidate history** — if a trigger or target topic has a change point within the last 7 days, the scenario's effective lift is discounted. **Always surface change points prominently** — they represent structural shifts that are easy to miss but highly actionable.
-- **Scenario probabilities reflect signal quality** — scenarios are differentiated by chain confidence, source diversity, and trigger specificity (not just lift). A scenario driven by a trigger that chains to only 3 targets ranks higher than one driven by a trigger that chains to 30 targets, because the signal is more specific.
-- **Trigger base rate reveals noise** — chains with `trigger_base_rate` > 0.5 originate from topics that spike on most days. Ranked chains now apply a base-rate discount and per-trigger cap (max 3 per trigger) to surface diverse signals. Prefer interpreting chains with lower trigger base rates.
-- **Evidence relevance hints** — each scenario's `evidence_relevance` array flags titles as 'high', 'medium', or 'low' based on topic specificity. Low-relevance evidence may be a classifier false positive — note this and weight the scenario lower.
-- **Accumulation freshness gate** — accumulation signals require events with `published_at` in the analysis window. Topics whose events are all fetched_at fallback (backfilled old content) are excluded from accumulation detection to prevent false signals.
-- **HMM vs rule-based phase** — the HMM classifier overrides the rule-based one when its confidence is 0.15+ higher. `phase_probabilities` is only present when the HMM was used, so the probabilities always agree with the assigned phase.
-- **Transitive chains compound uncertainty** — A->B->C has `min_support` (weakest link) and `combined_lift` (product), but uncertainty compounds.
-- **Cluster assignments may be stale** — if `drift.ari_prev` is low, cluster boundaries are shifting. Path-based analysis is still valid.
-- **30-day retention limits** — the system only sees patterns within its retention window.
-- **Do not fabricate** — only use data returned by the tools. Never invent scenarios or probabilities.
-- **Do not dump raw JSON** — always synthesize through the output template.
+| Rule | When it matters | What to do |
+|---|---|---|
+| **Probabilities ≠ certainties** | Always | Present forecasts as probabilistic scenarios, not predictions of fact |
+| **Trajectory = evidence** | Internal engine | Use "evidence suggests" / "development patterns indicate" framing |
+| **Adjacency is heuristic** | Internal engine | The adjacency table reflects common patterns, not rules. Domain context overrides |
+| **Freshness check** | Before synthesis | Stale data → stale forecasts. Verify recency via `intel stats` |
+| **Spurious correlations** | Chains with support < 3 or low source diversity | Flag as lower confidence |
+| **Temporal artifacts** | Chains where `temporal_pattern` = `weekday_correlated` | Likely a calendar cadence, not causal. Discount unless you can identify a mechanism |
+| **Decay reveals staleness** | `decay_weighted_support` ≪ `support` | Co-movement hasn't recurred recently (half-life = 14d) |
+| **Entropy = predictability** | `normalized_entropy` > 0.8 | Target is bursty and less predictable; widen confidence window |
+| **CUSUM change points** | Change point within last 7 days | History may not hold — always surface these prominently. Highest-priority signal |
+| **Signal quality** | Scenario ranking | Scenarios rank by chain confidence × source diversity × trigger specificity, not just lift. Low-fanout triggers rank higher |
+| **Base rate noise** | `trigger_base_rate` > 0.5 | Topic spikes most days — chains from it are less informative |
+| **Evidence relevance** | `evidence_relevance` = `low` | Likely a classifier false positive (event tagged with 5+ topics). Weight scenario lower |
+| **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing |
+| **Accumulation freshness** | Accumulation dynamics | Requires `published_at` in window. Backfill-only topics are excluded |
+| **HMM vs rule-based** | Phase classification | HMM overrides rule-based when confidence is +0.15 higher. `phase_probabilities` only present when HMM was used |
+| **Transitive uncertainty** | A→B→C chains | `combined_lift` is a product, `min_support` is the weakest link — uncertainty compounds |
+| **Cluster staleness** | Internal engine | Low `drift.ari_prev` means cluster boundaries are shifting. Path-based analysis still valid |
+| **30-day retention** | All forecasts | System only sees patterns within retention window |
+| **No fabrication** | Always | Only use data returned by tools. Never invent scenarios or probabilities |
+| **No raw JSON** | Output | Always synthesize through the output template |
 
 ---
 

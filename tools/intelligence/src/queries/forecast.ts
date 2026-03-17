@@ -60,6 +60,12 @@ export interface ChangePointSummary {
   days_ago: number;
 }
 
+/** Inline context titles for a topic, used by --with-context to save deepening round-trips. */
+export interface TopicContext {
+  topic: string;
+  titles: string[];
+}
+
 export interface ForecastData {
   window: { start: string; end: string; events_analyzed: number };
   /** Omitted in summary mode (limit 0). */
@@ -76,6 +82,9 @@ export interface ForecastData {
   entropy?: EntropyItem[];
   dynamics: DynamicItem[];
   change_points_summary: ChangePointSummary[];
+  /** Present when --with-context is used. Top event titles per change point topic
+   *  and per top ranked chain topic, inlined to save deepening round-trips. */
+  context?: TopicContext[];
 }
 
 export interface LifecycleItem {
@@ -103,6 +112,10 @@ export interface ChainItem {
   /** Fraction of window days on which the trigger topic spikes (0-1).
    *  High values (> 0.5) indicate omnipresent topics whose chains are less informative. */
   trigger_base_rate: number;
+  /** Calendar artifact hint. Present when co-occurrences cluster on weekdays.
+   *  'weekday_correlated' = both trigger and target spike predominantly Mon-Fri
+   *  and co-occurrences are >85% weekday. Likely a calendar cadence, not causal. */
+  temporal_pattern?: 'weekday_correlated';
 }
 
 export interface TransitiveChainItem {
@@ -178,6 +191,9 @@ export interface ComputeForecastOpts {
   /** When true, return a minimal summary (top-3 scenarios, top-5 chains, top-3 dynamics,
    *  change points) for fast agent consumption. Implies compact. */
   summary?: boolean;
+  /** When true, inline top event titles per change point topic and per top ranked chain
+   *  topic. Saves a round-trip of `intel search` deepening calls. */
+  with_context?: boolean;
 }
 
 /* ── Main entry ─────────────────────────────────────────────────────── */
@@ -283,6 +299,14 @@ export function computeForecast(
   }
   changePointsSummary.sort((a, b) => a.days_ago - b.days_ago);
 
+  // --with-context: inline top event titles for change point topics and
+  // top ranked chain topics so the agent doesn't need separate deepening calls.
+  const withContext = opts.with_context ?? false;
+  let context: TopicContext[] | undefined;
+  if (withContext) {
+    context = buildTopicContext(db, changePointsSummary, ranked_chains, windowStart, limits?.ranked_chains ?? 5);
+  }
+
   if (limits) {
     const result: ForecastData = {
       window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
@@ -298,6 +322,7 @@ export function computeForecast(
     if (limits.multiscale > 0) result.multiscale = multiscale.slice(0, limits.multiscale);
     if (limits.transitive_chains > 0) result.transitive_chains = transitive_chains.slice(0, limits.transitive_chains);
     if (limits.entropy > 0) result.entropy = entropy.slice(0, limits.entropy);
+    if (context) result.context = context;
     return ok(result);
   }
 
@@ -312,6 +337,7 @@ export function computeForecast(
     entropy,
     dynamics,
     change_points_summary: changePointsSummary,
+    ...(context ? { context } : {}),
   });
 }
 
@@ -518,7 +544,9 @@ function detectChains(
              - AVG(JULIANDAY(b.day) - JULIANDAY(a.day)) * AVG(JULIANDAY(b.day) - JULIANDAY(a.day))
            )) AS lag_stddev,
            MAX(b.day) AS most_recent_day,
-           sa.spike_days * 1.0 / tw.total_days AS trigger_base_rate
+           sa.spike_days * 1.0 / tw.total_days AS trigger_base_rate,
+           AVG(CASE WHEN CAST(STRFTIME('%w', a.day) AS INTEGER) BETWEEN 1 AND 5 THEN 1.0 ELSE 0.0 END) AS trigger_weekday_ratio,
+           AVG(CASE WHEN CAST(STRFTIME('%w', b.day) AS INTEGER) BETWEEN 1 AND 5 THEN 1.0 ELSE 0.0 END) AS target_weekday_ratio
     FROM daily_volumes a
     JOIN daily_volumes b
       ON b.day > a.day
@@ -547,6 +575,8 @@ function detectChains(
     lag_stddev: number | null;
     most_recent_day: string;
     trigger_base_rate: number;
+    trigger_weekday_ratio: number;
+    target_weekday_ratio: number;
   }>;
 
   if (chainRows.length === 0) return [];
@@ -582,6 +612,13 @@ function detectChains(
     const daysSinceRecent = Math.max(0, nowJulian - recentJulian);
     const decayFactor = Math.exp(-DECAY_LAMBDA * daysSinceRecent);
 
+    // Temporal artifact detection: if both trigger and target spike predominantly
+    // on weekdays (Mon-Fri) with >85% ratio, the chain is likely a calendar cadence.
+    const trigWd = row.trigger_weekday_ratio ?? 0;
+    const tgtWd = row.target_weekday_ratio ?? 0;
+    const temporalPattern: 'weekday_correlated' | undefined =
+      trigWd > 0.85 && tgtWd > 0.85 ? 'weekday_correlated' : undefined;
+
     return {
       from_topic: row.from_topic,
       to_topic: row.to_topic,
@@ -597,6 +634,7 @@ function detectChains(
       lag_stddev: Math.round((row.lag_stddev ?? 0) * 100) / 100,
       decay_weighted_support: Math.round(row.support * decayFactor * 100) / 100,
       trigger_base_rate: Math.round((row.trigger_base_rate ?? 0) * 100) / 100,
+      ...(temporalPattern ? { temporal_pattern: temporalPattern } : {}),
     };
   });
 
@@ -1320,6 +1358,54 @@ function projectScenariosBayesian(
   // Sort by probability descending, take top N
   scenarios.sort((a, b) => b.probability - a.probability);
   return scenarios.slice(0, topN);
+}
+
+/* ── Context inlining (--with-context) ─────────────────────────────── */
+
+/** Max titles per topic in the context section. */
+const CONTEXT_TITLES_PER_TOPIC = 3;
+
+function buildTopicContext(
+  db: Database.Database,
+  changePoints: ChangePointSummary[],
+  rankedChains: RankedChainItem[],
+  windowStart: string,
+  topRankedN: number,
+): TopicContext[] {
+  // Collect unique topics from change points and top ranked chains (both from + to)
+  const topics = new Set<string>();
+  for (const cp of changePoints) topics.add(cp.topic);
+  for (const rc of rankedChains.slice(0, topRankedN)) {
+    topics.add(rc.from_topic);
+    topics.add(rc.to_topic);
+  }
+
+  if (topics.size === 0) return [];
+
+  const titleSql = `
+    SELECT e.title
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE et.topic = ? AND ${PUB_TS} >= ?
+    ORDER BY e.score DESC, ${PUB_TS} DESC
+    LIMIT ?
+  `;
+  const stmt = db.prepare(titleSql);
+
+  const results: TopicContext[] = [];
+  for (const topic of topics) {
+    const rows = stmt.all(topic, windowStart, CONTEXT_TITLES_PER_TOPIC) as Array<{ title: string | null }>;
+    const titles = rows
+      .map(r => sanitizeSnippet(r.title, { maxLength: 200 }).text)
+      .filter(t => t.length > 0);
+    if (titles.length > 0) {
+      results.push({ topic, titles });
+    }
+  }
+
+  // Sort by topic for stable output
+  results.sort((a, b) => a.topic.localeCompare(b.topic));
+  return results;
 }
 
 /** sinceISO with optional explicit `now` for deterministic window alignment. */

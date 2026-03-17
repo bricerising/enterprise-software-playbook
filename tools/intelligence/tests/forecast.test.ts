@@ -1025,3 +1025,75 @@ describe('ranked chain diversity', () => {
     }
   });
 });
+
+/* ── temporal_pattern tests ────────────────────────────────────────── */
+
+describe('temporal_pattern', () => {
+  it('chains have temporal_pattern field only when weekday_correlated', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const chain of result.data.chains!) {
+      if (chain.temporal_pattern) {
+        expect(chain.temporal_pattern).toBe('weekday_correlated');
+      }
+    }
+  });
+});
+
+/* ── --with-context tests ──────────────────────────────────────────── */
+
+describe('with_context', () => {
+  it('context is absent when with_context is false', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    expect(result.data.context).toBeUndefined();
+  });
+
+  it('context is present when with_context is true', () => {
+    const result = computeForecast(db, { min_support: 2, with_context: true });
+    expect(result.data.context).toBeDefined();
+    expect(Array.isArray(result.data.context)).toBe(true);
+  });
+
+  it('context entries have topic and non-empty titles', () => {
+    const result = computeForecast(db, { min_support: 2, with_context: true });
+    for (const ctx of result.data.context ?? []) {
+      expect(typeof ctx.topic).toBe('string');
+      expect(ctx.topic.length).toBeGreaterThan(0);
+      expect(ctx.titles.length).toBeGreaterThan(0);
+      expect(ctx.titles.length).toBeLessThanOrEqual(3);
+      for (const title of ctx.titles) {
+        expect(typeof title).toBe('string');
+        expect(title.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('context is sorted by topic', () => {
+    const result = computeForecast(db, { min_support: 2, with_context: true });
+    const context = result.data.context ?? [];
+    for (let i = 1; i < context.length; i++) {
+      expect(context[i - 1].topic.localeCompare(context[i].topic)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it('context works with summary mode', () => {
+    const result = computeForecast(db, { min_support: 2, summary: true, with_context: true });
+    expect(result.status).toBe('ok');
+    expect(result.data.context).toBeDefined();
+    // Summary sections should still be omitted
+    expect(result.data.lifecycles).toBeUndefined();
+  });
+
+  it('context is empty for empty database', () => {
+    const emptyDir = mkdtempSync(join(tmpdir(), 'intel-ctx-empty-'));
+    const emptyPath = join(emptyDir, 'empty.db');
+    const emptyDb = openWriter(emptyPath);
+
+    try {
+      const result = computeForecast(emptyDb, { with_context: true });
+      expect(result.data.context).toEqual([]);
+    } finally {
+      emptyDb.close();
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
+  });
+});
