@@ -77,13 +77,13 @@ Close the gaps between what archobs computes internally and what it exposes to a
 
 **Files**: `skills/trajectory/SKILL.md` — new step 4b
 
-### 7. Inline basic trajectory guidance in archobs route-findings (P1)
+### 7. Inline basic trajectory guidance in archobs skill (P1) — SUPERSEDED
 
 **Problem**: After archobs, the most natural next step is trajectory analysis, but it requires a skill context switch.
 
-**Solution**: Add a "Quick trajectory in the same session" paragraph to the route-findings section with the key commands and a pointer to the full trajectory skill.
+**Original solution**: Add a "Quick trajectory in the same session" paragraph to the route-findings section.
 
-**Files**: `skills/archobs/SKILL.md` — route-findings section
+**Status**: Superseded by the "Route findings" table in archobs SKILL.md, which already links trajectory as the recommended next skill for development momentum analysis. The same-session fast path in trajectory SKILL.md (Change 10) addresses the workflow efficiency concern directly. Spec 012 proposes merging trajectory into forecast, which would further simplify this handoff.
 
 ### 8. Add `--include-added-paths` flag to velocity (P2)
 

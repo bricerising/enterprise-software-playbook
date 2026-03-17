@@ -6,18 +6,23 @@ The intelligence tool collects signals and computes trends, but trends are backw
 
 ## Goal
 
-Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes five complementary views from a single 30-day analysis window:
+Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes ten complementary views from a single 30-day analysis window:
 
-1. **Lifecycle positioning** — classify each topic's trajectory phase (emerging, accelerating, peaking, decaying, stable)
-2. **Chain detection** — find statistically significant temporal co-movement patterns between topics with causal directionality
-3. **Transitive chains** — discover multi-hop propagation paths (A triggers B triggers C)
-4. **Scenario projection** — predict which topics are likely to spike next, with probability and timeframe estimates
+1. **Lifecycle positioning** — rule-based + HMM probabilistic phase classification (emerging, accelerating, peaking, decaying, stable)
+2. **Chain detection** — statistically significant temporal co-movement patterns with causal directionality and exponential decay weighting
+3. **Transitive chains** — multi-hop propagation paths (A triggers B triggers C)
+4. **Scenario projection** — Bayesian posterior probability predictions with entropy-widened timeframes
 5. **Multiscale convergence** — flag topics where short-term and long-term momentum agree or conflict
+6. **Ranked chains** — prioritized active chains scored by composite metric, cross-domain chains first
+7. **Exponential decay weighting** — 14-day half-life weighting reveals whether co-movement patterns are still active or stale
+8. **Entropy-based surprise scoring** — Shannon entropy per topic measuring predictability vs burstiness
+9. **CUSUM change-point detection** — structural breaks in topic volume that discount chain reliability
+10. **Systems dynamics detection** — translates statistical output into systems thinking concepts (reinforcing loops, delays, accumulations, dampening)
 
 ## Non-Goals
 
 - Quantitative price/volume forecasting (this is topic-level signal analysis, not financial modeling)
-- Machine learning or LLM-based prediction (pure statistical/algorithmic approach)
+- Machine learning or LLM-based prediction (HMM classification is the only probabilistic model; everything else is statistical/algorithmic)
 - Real-time streaming computation (runs on-demand against the SQLite database)
 - Backtesting framework (forecasts are forward-looking snapshots, not evaluated against outcomes)
 
@@ -25,11 +30,14 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 
 | In scope | Out of scope |
 |----------|-------------|
-| Lifecycle classification from multi-window acceleration | Custom lifecycle phase definitions |
-| Chain detection with statistical rigor (lift, confidence, directionality) | User-defined chain rules or overrides |
+| Lifecycle classification from multi-window acceleration (rule-based + HMM hybrid) | Custom lifecycle phase definitions |
+| Chain detection with statistical rigor (lift, confidence, directionality, decay weighting) | User-defined chain rules or overrides |
 | Transitive chain inference from direct chains | Chains longer than 2 hops (A→B→C) |
-| Scenario projection from active chains | Scenario evaluation or accuracy tracking |
+| Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Scenario evaluation or accuracy tracking |
 | Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d |
+| Entropy-based surprise scoring per topic | Custom entropy thresholds |
+| CUSUM change-point detection for structural breaks | Real-time streaming CUSUM |
+| Systems dynamics detection (reinforcing loops, delays, accumulations, dampening) | Full causal modeling or simulation |
 
 ---
 
@@ -40,15 +48,19 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 │  computeForecast(db, opts)                                           │
 │                                                                      │
 │  ┌──────────────────────┐                                            │
-│  │ A. computeLifecycles │──┐                                         │
+│  │ A. computeLifecycles │──┐  (rule-based + HMM hybrid)              │
+│  │    + CUSUM per topic  │  │                                        │
 │  └──────────────────────┘  │                                         │
 │                            │                                         │
 │  ┌─────────────────────┐   │  ┌───────────────────────────┐          │
 │  │ B. detectChains     │───┼─▶│ B2. detectTransitiveChains│          │
-│  └─────────────────────┘   │  └───────────────────────────┘          │
+│  │  + decay weighting  │   │  └───────────────────────────┘          │
+│  └─────────────────────┘   │                                         │
 │           │                │                                         │
 │           │  ┌─────────────────────────┐                             │
-│           ├─▶│ C. projectScenarios     │                             │
+│           ├─▶│ C. projectScenarios     │  (Bayesian posterior +      │
+│           │  │  + entropy widening     │   CUSUM discounts)          │
+│           │  │  + CUSUM discounts      │                             │
 │           │  └─────────────────────────┘                             │
 │           │                │                                         │
 │           │  ┌─────────────────────────┐                             │
@@ -59,21 +71,31 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 │  │ D. buildMultiscaleView│◀┘                                         │
 │  └───────────────────────┘                                           │
 │                                                                      │
-│  ──▶ ForecastData (7 sections)                                       │
+│  ┌───────────────────────┐                                           │
+│  │ F. computeEntropy     │  (Shannon entropy per topic)              │
+│  └───────────────────────┘                                           │
+│                                                                      │
+│  ┌───────────────────────┐                                           │
+│  │ F2. detectDynamics    │  (systems thinking interpretation)        │
+│  └───────────────────────┘                                           │
+│                                                                      │
+│  ──▶ ForecastData (9 sections)                                       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-All computation is read-only against the existing `events` and `event_topics` tables. No new tables or schema changes. The module is a single function (`computeForecast`) that returns the standard `IntelResponse<ForecastData>` envelope.
+All computation is read-only against the existing `events` and `event_topics` tables. No new tables or schema changes. The module is a single function (`computeForecast`) that returns the standard `IntelResponse<ForecastData>` envelope. Temporal queries use `COALESCE(published_at, fetched_at)` so bulk ingests don't compress real-world timelines.
 
 ### Execution Flow
 
 1. Count events in the 30-day analysis window
-2. **Lifecycles**: compute volume and acceleration at 4 windows (1d, 7d, 14d, 30d) for every topic; classify phase
-3. **Chains**: detect temporal co-movement patterns via SQL; compute statistical metrics; determine directionality
+2. **Lifecycles**: compute volume and acceleration at 4 windows (1d, 7d, 14d, 30d) for every topic; classify phase via rule-based + HMM hybrid; detect CUSUM change points per topic
+3. **Chains**: detect temporal co-movement patterns via SQL; compute statistical metrics; determine directionality; apply exponential decay weighting (14-day half-life)
 4. **Transitive chains**: join direct chains A→B and B→C to find 2-hop propagation paths
-5. **Scenarios**: filter chains by activation and statistical significance; score, aggregate by target, normalize
+5. **Scenarios**: filter active chains with lift ≥ 1.5; compute Bayesian posterior probabilities from base rates × chain lifts × decay factors × CUSUM discounts; widen timeframes by entropy factor
 6. **Multiscale**: compare short-term vs long-term acceleration for convergence/divergence signals
 7. **Ranked chains**: score active chains for prioritized display
+8. **Entropy**: compute Shannon entropy and normalized entropy per topic
+9. **Dynamics**: detect systems thinking patterns (reinforcing loops, delays, accumulations, dampening) from statistical output
 
 ---
 
@@ -82,7 +104,7 @@ All computation is read-only against the existing `events` and `event_topics` ta
 ### CLI
 
 ```
-intel forecast                                    # defaults: 7d lag, min_support=3, top 10 scenarios
+intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios
 intel forecast --lag-window 14                    # 14-day lag window for chain detection
 intel forecast --min-support 2                    # lower threshold for sparse data
 intel forecast --top-scenarios 5                  # limit scenario output
@@ -112,7 +134,7 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `lag_window_days` | number | 7 | Maximum days between spike days A and B for chain detection |
-| `min_support` | number | 3 | Minimum co-occurrence count for a chain to be emitted |
+| `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted (CLI default: 3) |
 | `top_scenarios` | number | 10 | Cap on scenario results returned |
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 
@@ -129,6 +151,8 @@ interface ForecastData {
   scenarios: ScenarioItem[];
   multiscale: MultiscaleItem[];
   transitive_chains: TransitiveChainItem[];
+  entropy: EntropyItem[];
+  dynamics: DynamicItem[];
 }
 ```
 
@@ -180,10 +204,16 @@ interface LifecycleItem {
   topic: string;
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;          // 0.33 - 1.0
+  phase_probabilities: Record<string, number>; // HMM posterior per phase (emerging: 0.6, stable: 0.3, ...)
   volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N }
   accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N }
+  change_points: number[];           // days ago when CUSUM detected structural breaks
 }
 ```
+
+**HMM hybrid classification**: The rule-based classifier (described below) is supplemented by an HMM probabilistic classifier using Gaussian emission models with log-sum-exp posterior normalization. The HMM overrides the rule-based phase when its confidence is substantially higher (+0.15). `phase_probabilities` exposes the full HMM posterior. When the top two phases are within 0.15, present both possibilities.
+
+**CUSUM change-point detection**: For each topic, a CUSUM algorithm (sensitivity k=0.5σ, threshold h=4.0σ) detects structural breaks in daily volume. Change points within the last 7 days discount chain reliability in scenario projection (50-100% of original lift depending on recency).
 
 ---
 
@@ -273,8 +303,11 @@ interface ChainItem {
   confidence: number;         // 0.0 - 1.0
   directionality: number;     // 0.0 - 1.0 (0.5 = symmetric, 1.0 = unidirectional)
   lag_stddev: number;         // >= 0; days of timing spread
+  decay_weighted_support: number; // support × exponential decay factor (14-day half-life)
 }
 ```
+
+**Exponential decay weighting**: Each chain's support is weighted by recency using a 14-day half-life (`λ = ln(2) / 14`). The `decay_weighted_support` vs raw `support` gap reveals pattern staleness — a large gap means the co-movement hasn't recurred recently. The decay factor is computed from the most recent co-occurrence: `exp(-λ × daysSinceRecent)`.
 
 ---
 
@@ -322,33 +355,40 @@ Answer "what's likely to happen next" by combining active chains with statistica
 
 Only chains that are both `active` (trigger topic is currently spiking) and have `lift >= 1.5` (above-chance co-occurrence — filters spurious correlations). If no chains pass, scenarios is empty.
 
-**Step 2: Score**
+**Step 2: Compute Bayesian posteriors**
 
-For each qualifying chain:
+For each qualifying chain, compute a log-posterior:
 
 ```
-rawScore = confidence × lift × source_diversity × (1 + max(0, acceleration))
+base_rate = (target_spike_days / total_days)   // prior probability
+likelihood = decay_weighted_lift               // chain lift adjusted by decay factor
+cusum_discount = 0.5-1.0                       // reduced if trigger/target has recent change point
+
+log_posterior += log(base_rate) + Σ log(likelihood_i × cusum_discount_i)
 ```
 
-Where `acceleration` is the trigger topic's acceleration (prefer d1 if |d1| >= 0.1, else d7 fallback).
+This replaces the earlier heuristic scoring (`confidence × lift × source_diversity × ...`) with a principled Bayesian approach. Probabilities are exponentiated from log-posteriors and normalized so the highest-scoring target is 1.0.
 
 **Step 3: Aggregate by target topic**
 
 Multiple chains may predict the same target. Aggregate:
-- `totalScore` = sum of rawScores from all chains pointing to this target
+- `probability` = normalized posterior (highest = 1.0; others relative)
 - `triggerTopics` = union of all trigger topics
 - `chainCount` = number of supporting chains
-- `timeframe` = [min(avg_lag - 2×stddev), max(avg_lag + 2×stddev)] across all chains to this target
+- `timeframe` = entropy-widened window (see Step 4)
 
-The stddev-based timeframe replaces an earlier arbitrary ×0.5/×1.5 multiplier, giving statistically grounded prediction windows.
+**Step 4: Entropy-widened timeframes**
 
-**Step 4: Normalize probability**
+Compute the base timeframe from chain lag statistics, then widen by the target topic's entropy:
 
 ```
-probability = totalScore / max(totalScore across all targets)
+entropyFactor = 1 + normalized_entropy   // ranges 1.0 (predictable) to 2.0 (bursty)
+center = (avgLagMin + avgLagMax) / 2
+halfWidth = (avgLagMax - avgLagMin) / 2
+timeframe = [center - halfWidth × entropyFactor, center + halfWidth × entropyFactor]
 ```
 
-Scaled to 0–1. The highest-scoring target gets probability 1.0; others are relative.
+Bursty topics (high entropy > 0.8) get wider prediction windows, reflecting less predictable timing.
 
 **Step 5: Evidence titles**
 
@@ -363,11 +403,12 @@ Sort by probability descending, return top N (default 10).
 ```typescript
 interface ScenarioItem {
   target_topic: string;
-  probability: number;              // 0.0 - 1.0 (relative, not absolute)
-  timeframe_days: [number, number]; // [min_days, max_days] — stddev-based window
+  probability: number;              // 0.0 - 1.0 (relative Bayesian posterior)
+  timeframe_days: [number, number]; // [min_days, max_days] — entropy-widened window
   trigger_topics: string[];
   supporting_chains: number;
   evidence_titles: string[];        // up to 3, sanitized
+  target_entropy: number;           // target topic's normalized entropy (0-1); >0.8 = bursty
 }
 ```
 
@@ -434,6 +475,113 @@ interface RankedChainItem extends ChainItem {
 
 ---
 
+## F. Entropy-Based Surprise Scoring
+
+### Purpose
+
+Measure how predictable or bursty each topic's event cadence is. Low-entropy topics have regular, predictable patterns; high-entropy topics are bursty and less predictable. Entropy is used to widen scenario timeframes for bursty targets.
+
+### Algorithm
+
+For each topic, compute daily event counts over the 30-day window:
+
+1. Normalize daily counts into a probability distribution: `p_i = count_i / total`
+2. Compute Shannon entropy: `H = -Σ p_i × log₂(p_i)`
+3. Normalize: `normalized_entropy = H / log₂(active_days)` (0-1 scale)
+
+### Output
+
+```typescript
+interface EntropyItem {
+  topic: string;
+  entropy: number;              // raw Shannon entropy (bits)
+  normalized_entropy: number;   // 0.0 - 1.0 (0 = perfectly regular, 1 = maximally bursty)
+  active_days: number;          // days with at least 1 event
+}
+```
+
+Interpretation: normalized entropy < 0.3 = regular cadence (predictable); > 0.8 = bursty (wider prediction windows).
+
+---
+
+## F2. Systems Dynamics Detection
+
+### Purpose
+
+Translate statistical forecast output into systems thinking concepts. This helps agents and humans reason about feedback loops, delays, and accumulation patterns rather than raw statistical metrics.
+
+### Algorithm
+
+Scans the computed lifecycles, chains, multiscale, and entropy data to detect four dynamics patterns:
+
+| Dynamics type | Detection rule | Systems thinking analog |
+|---|---|---|
+| `reinforcing_loop` | Bidirectional chains with directionality 0.3-0.7 and mutual lift > 1 | Reinforcing feedback loop — topics amplify each other |
+| `delay` | Active chains with avg_lag_days and lag_stddev | System delay — gap between cause and effect |
+| `accumulation` | aligned_up + emerging/accelerating + rising entropy | Stock accumulation — pressure building without release |
+| `dampening` | Decaying phase + recent CUSUM change point | Balancing feedback loop — something arrested growth |
+
+### Output
+
+```typescript
+interface DynamicItem {
+  type: 'reinforcing_loop' | 'delay' | 'accumulation' | 'dampening';
+  topics: string[];
+  metric: string;             // key statistical evidence (e.g., "bidirectional lift 2.3")
+  interpretation: string;     // pre-computed human-readable interpretation
+}
+```
+
+---
+
+## G. CUSUM Change-Point Detection
+
+### Purpose
+
+Detect structural breaks in topic volume timelines. A recent change point (within 7 days) means historical co-movement patterns may no longer hold, so chain reliability should be discounted in scenario projection.
+
+### Algorithm
+
+For each topic with sufficient data:
+
+1. Compute daily volumes and running mean
+2. Apply one-sided CUSUM with sensitivity k = 0.5σ and threshold h = 4.0σ
+3. Detect both upward and downward breaks
+4. Report change points as "days ago" in the lifecycle output
+
+### Constants
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `CUSUM_K_SIGMA` | 0.5 | Sensitivity parameter — lower detects smaller shifts |
+| `CUSUM_H_SIGMA` | 4.0 | Threshold — higher requires more evidence before declaring a break |
+| `CUSUM_DISCOUNT_HORIZON_DAYS` | 7 | Change points within this window discount scenario chain reliability |
+
+Change points integrate into scenario projection: if a trigger or target topic has a change point within 7 days, the scenario's effective lift is discounted (50-100% of original depending on recency).
+
+---
+
+## H. HMM Probabilistic Phase Classification
+
+### Purpose
+
+Supplement the rule-based lifecycle classifier with a probabilistic model. The HMM uses Gaussian emission models for each phase and computes posterior probabilities via log-sum-exp normalization.
+
+### Algorithm
+
+1. For each topic, collect acceleration values across the 4 time windows
+2. Compute log-likelihoods for each phase using pre-defined Gaussian emission parameters (`PHASE_EMISSIONS`)
+3. Normalize via log-sum-exp to get posterior probabilities
+4. Return the MAP phase and full posterior distribution
+
+The HMM overrides the rule-based classification when its confidence is substantially higher (+0.15 threshold). Otherwise, the deterministic rule-based phase is used for backward compatibility.
+
+### Output
+
+`phase_probabilities` in `LifecycleItem` — a record mapping each phase to its posterior probability (sums to ~1.0).
+
+---
+
 ## Implementation
 
 ### File Structure
@@ -445,16 +593,20 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 
 ### Internal Functions
 
-| Function | Section | Lines | Description |
-|----------|---------|-------|-------------|
-| `computeForecast` | Main | 90–125 | Orchestrator; wires all sections together |
-| `computeLifecycles` | A | 129–220 | Multi-window volume/acceleration + phase classification |
-| `classifyPhase` | A | 222–274 | Rule-based phase assignment with sparse-day fallbacks |
-| `detectChains` | B | 278–399 | SQL-based chain detection + directionality post-processing |
-| `detectTransitiveChains` | B2 | 403–434 | Adjacency-based 2-hop chain inference |
-| `projectScenarios` | C | 438–555 | Chain scoring, target aggregation, probability normalization |
-| `buildMultiscaleView` | D | 559–590 | Acceleration vector alignment classification |
-| `computeRankedChains` | E | 594–625 | Active chain scoring and sorting |
+| Function | Section | Description |
+|----------|---------|-------------|
+| `computeForecast` | Main | Orchestrator; wires all sections together |
+| `computeLifecycles` | A | Multi-window volume/acceleration + hybrid phase classification |
+| `classifyPhase` | A | Rule-based phase assignment with sparse-day fallbacks |
+| `classifyPhaseHMM` | H | HMM probabilistic phase classification with Gaussian emissions |
+| `detectChains` | B | SQL-based chain detection + directionality + decay weighting |
+| `detectTransitiveChains` | B2 | Adjacency-based 2-hop chain inference |
+| `projectScenarios` | C | Bayesian posterior projection with entropy widening and CUSUM discounts |
+| `buildMultiscaleView` | D | Acceleration vector alignment classification |
+| `computeRankedChains` | E | Active chain scoring and sorting |
+| `computeEntropy` | F | Shannon entropy per topic |
+| `detectDynamics` | F2 | Systems thinking pattern detection |
+| `detectChangePoints` | G | CUSUM change-point detection per topic |
 
 ### Constants
 
@@ -467,6 +619,11 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 | Lift filter | >= 1.5 | Minimum lift for scenario projection (below-chance chains excluded) |
 | Transitive chain cap | 100 | Maximum transitive chains returned |
 | Ranked chain cap | 50 | Maximum ranked chains returned |
+| `DECAY_HALF_LIFE_DAYS` | 14 | Exponential decay half-life for chain recency weighting |
+| `CUSUM_K_SIGMA` | 0.5 | CUSUM sensitivity parameter |
+| `CUSUM_H_SIGMA` | 4.0 | CUSUM threshold parameter |
+| `CUSUM_DISCOUNT_HORIZON_DAYS` | 7 | Window within which change points discount chain reliability |
+| HMM override threshold | +0.15 | HMM must beat rule-based by this margin to override |
 
 ### Dependencies
 
@@ -502,7 +659,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 ### Test Cases (20 tests, 4 describe blocks)
 
 **`computeForecast` (8 tests)**:
-- Response envelope shape includes all 7 sections (including `transitive_chains`)
+- Response envelope shape includes all 9 sections (including `transitive_chains`, `entropy`, `dynamics`)
 - Chain support counts >= min_support, avg_lag_days > 0, source_diversity in [0, 1]
 - Chain fields include `lift`, `confidence`, `directionality`, `lag_stddev`
 - Active chains when trigger topic is spiking
@@ -553,7 +710,11 @@ Two fixture sets seed synthetic data for deterministic testing:
 | 4-window lifecycle (1d/7d/14d/30d) | 4 windows | Balances granularity with computation cost; 14d adds mid-term signal |
 | Spike day threshold = 3 events | 3 | Filters noise from single stray events; tunable via data density |
 | Lift >= 1.5 for scenarios | 1.5 | Excludes below-chance and borderline chains; conservative filter |
-| Stddev-based timeframes | avg_lag +/- 2*stddev | Statistically grounded ~95% CI vs arbitrary multipliers |
+| Entropy-widened timeframes | avg_lag ± halfWidth × (1 + entropy) | Bayesian + entropy approach replaces earlier stddev-based windows |
+| Bayesian scenario projection | log-posterior from base rates × lifts × decay × CUSUM | Principled probabilistic scoring replaces earlier heuristic scoring |
+| HMM hybrid classification | override rule-based when +0.15 confidence | Supplements rule-based with probabilistic model; backward-compatible |
+| Exponential decay (14-day half-life) | support × exp(-λ × days) | Reveals pattern staleness; stale patterns get lower effective lift |
+| CUSUM change-point detection | k=0.5σ, h=4.0σ | Identifies structural breaks that invalidate historical patterns |
 | Directionality via support ratio | support(A→B) / (A→B + B→A) | Simple, interpretable, computable from existing data |
 | Transitive chains 2-hop only | A→B→C | 3+ hops would multiply noise; 2 hops catches key propagation |
 | Cross-domain priority in ranking | Sort cross-domain first | Novel cross-domain signals (e.g., ai→aws) are more actionable |
@@ -574,11 +735,18 @@ intel forecast --min-support 2
 
 # 4. Verify new fields present in chain output
 intel forecast --min-support 2 | jq '.data.chains[0] | keys'
-# Expected: active, avg_lag_days, confidence, directionality, from_topic, lag_stddev, lift, source_diversity, support, to_topic
+# Expected: active, avg_lag_days, confidence, decay_weighted_support, directionality, from_topic, lag_stddev, lift, source_diversity, support, to_topic
 
 # 5. Verify transitive chains populated
 intel forecast --min-support 2 | jq '.data.transitive_chains | length'
 
-# 6. Verify scenarios use stddev-based timeframes
-intel forecast --min-support 2 | jq '.data.scenarios[0].timeframe_days'
+# 6. Verify scenarios use entropy-widened timeframes and include target_entropy
+intel forecast --min-support 2 | jq '.data.scenarios[0] | {timeframe_days, target_entropy}'
+
+# 7. Verify entropy and dynamics sections populated
+intel forecast --min-support 2 | jq '.data.entropy | length'
+intel forecast --min-support 2 | jq '.data.dynamics | length'
+
+# 8. Verify lifecycle items include phase_probabilities and change_points
+intel forecast --min-support 2 | jq '.data.lifecycles[0] | {phase, phase_probabilities, change_points}'
 ```

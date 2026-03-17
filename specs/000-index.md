@@ -21,5 +21,9 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/skills-manifest.json`](skills-manifest.json): Machine-readable stage/tag index for retrieval and routing.
 - [`specs/tasks.md`](tasks.md): Backlog of work with acceptance criteria.
 - [`specs/quickstart.md`](quickstart.md): Copy/paste commands to validate/package skills locally.
+- [`specs/009-archobs-agent-ergonomics.md`](009-archobs-agent-ergonomics.md): CLI ergonomics for agent workflows — cluster file inspection, full file-to-cluster JSON, auto-generated labels.
+- [`specs/010-archobs-velocity-edges-suggestions.md`](010-archobs-velocity-edges-suggestions.md): Velocity queries, boundary edge inspection, and suggestion improvements for archobs.
+- [`specs/011-archobs-trajectory-feedback.md`](011-archobs-trajectory-feedback.md): Feedback-driven improvements — velocity compare, drift trend, monolith labels, trajectory fast path.
+- [`specs/012-skill-consolidation-and-cross-domain-integration.md`](012-skill-consolidation-and-cross-domain-integration.md): Merge trajectory→forecast and brief→intel; add cross-domain integration (archobs × forecast) to architecture, plan, design, and spec skills.
 - [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)).
 - [`specs/templates/`](templates/README.md): Copy/paste templates for app-repo integration, CI quality gates, and service spec bundles.

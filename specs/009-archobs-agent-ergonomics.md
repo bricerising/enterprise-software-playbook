@@ -27,21 +27,20 @@ Improve the archobs CLI to serve agent workflows as a first-class use case, elim
 
 **Problem**: `archobs show clusters` returns metrics (leakage, cohesion, etc.) but not which files belong to each cluster. Cluster IDs are meaningless without knowing what's in them.
 
-**Solution**: Add a `show cluster-files` subcommand and an `--include-paths` flag.
+**Solution**: Add a `show cluster-files` subcommand.
 
 ```bash
 # Show files in a specific cluster
 archobs show cluster-files <cluster_id> [--top-paths 20] [--format json]
-
-# Include top paths in cluster listing
-archobs show clusters --include-paths [--top-paths 10] [--format json]
 ```
 
 **Implementation**: Read `file_metrics.parquet`, filter by `cluster_id`, sort by risk descending, limit to `--top-paths` (default 20).
 
+**Note**: The spec originally proposed an `--include-paths` flag on `show clusters`. This was implemented as the separate `show cluster-files` subcommand instead, which provides the same capability with a clearer interface.
+
 **Files affected**:
 - `tools/archobs/src/archobs/display.py` — add `format_cluster_files()` function
-- `tools/archobs/src/archobs/cli.py` — register `show cluster-files` subcommand, add `--include-paths` flag to `show clusters`
+- `tools/archobs/src/archobs/cli.py` — register `show cluster-files` subcommand
 
 ### B. Full file-to-cluster JSON output (High — Findings #5, #8)
 
@@ -92,35 +91,19 @@ archobs show all --top 0 --format json > /tmp/archobs.json  # complete
 
 **Caveat**: Labels are heuristic — they reflect path distribution, not semantic meaning. The label should be presented as a hint, not a name.
 
-### D. Momentum-aware suggestion prioritization (Medium — Finding #10)
+### D. Momentum-aware suggestion prioritization (Medium — Finding #10) — DEFERRED
 
 **Problem**: The suggestions engine knows about risk and leakage but not development momentum. A cluster that's leaky AND accelerating is more urgent to refactor than one that's leaky but dormant.
 
 **Solution**: Cross-reference `git_stats.parquet` volatility data in suggestion prioritization.
 
-**Algorithm**:
-1. When generating suggestions, load `git_stats.parquet` and compute per-cluster average volatility
-2. For leakage/risk suggestions, multiply priority score by a momentum factor:
-   - High volatility (top quartile): 1.3x priority boost
-   - Low volatility (bottom quartile): 0.8x priority reduction
-3. Re-sort suggestions after applying momentum factor
+**Status**: Deferred. Velocity data is integrated into the suggestions engine for boundary analysis and test-cluster detection (see spec 010), but the priority-weighting multiplication (0.8-1.3x factor) was not implemented. The velocity-aware boundary suggestions provide most of the value without the additional complexity of re-sorting all suggestions by momentum.
 
-**Implementation**:
-- `tools/archobs/src/archobs/suggestions.py` — modify `RuleSuggestionEngine` to accept and use `git_stats` data
-
-### E. Path truncation improvement (Low — Finding #11)
+### E. Path truncation improvement (Low — Finding #11) — DEFERRED
 
 **Problem**: `_truncate_path` in display.py truncates to 4 segments, which sometimes removes domain context for deep paths. Test factories and other deeply nested paths lose meaning.
 
-**Solution**: Truncate by removing the common repository prefix instead of limiting segments.
-
-**Algorithm**:
-1. Compute the longest common prefix across all displayed paths
-2. Remove that prefix (e.g., strip `src/` if all paths start with `src/`)
-3. If the remaining path exceeds the column width, truncate from the left with `...`
-
-**Implementation**:
-- `display.py`: Update `_truncate_path()` to use common-prefix stripping
+**Status**: Deferred. The improved cluster labeling (Change C, enhanced further in spec 011 Change 9) addresses the primary readability concern by generating better labels from path prefixes. The 4-segment truncation remains in `_truncate_path()` for table display.
 
 ---
 
@@ -131,10 +114,10 @@ archobs show all --top 0 --format json > /tmp/archobs.json  # complete
 | **1 (highest)** | B: Full file-to-cluster JSON | Unblocks trajectory tool from getting complete cluster mappings — highest-impact single change |
 | **2** | A: Cluster file inspection | Unblocks agents from understanding cluster composition — meaningless IDs become interpretable |
 | **3** | C: Cluster labels | Reduces cognitive load — works well with A but independent |
-| **4** | D: Momentum-aware suggestions | Field-validated: drift suggestions use worst-case ARI not trend; risk suggestions ignore volatility correlation |
-| **5** | E: Path truncation | Cosmetic improvement for table output |
+| **4** | D: Momentum-aware suggestions | Deferred — velocity-aware boundary suggestions (spec 010) provide most of the value |
+| **5** | E: Path truncation | Deferred — improved cluster labeling (Change C + spec 011) addresses the primary concern |
 
-Changes A-C can be implemented together. D and E are independent.
+Changes A-C were implemented together. D and E are deferred.
 
 ---
 

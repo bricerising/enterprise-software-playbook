@@ -10,7 +10,7 @@ More importantly, the data is locked inside the pipeline. Agents can't query it.
 
 Redesign as a lightweight tool in `tools/intelligence/` that:
 
-1. **Collects data** continuously from curated sources (RSS, HN, Lobsters, EDGAR)
+1. **Collects data** continuously from curated sources (RSS, HN, Lobsters, EDGAR, Earnings)
 2. **Exposes intelligence** as CLI commands and MCP tools that agents can invoke
 3. **Runs on SQLite** — no Postgres, no Redis, no Kafka, no Docker required
 
@@ -147,7 +147,7 @@ sequenceDiagram
 CREATE TABLE events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id    TEXT    UNIQUE NOT NULL,           -- stable per-source ID
-    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','lobsters','edgar')),
+    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','lobsters','edgar','earnings')),
     feed        TEXT,                              -- feed name/identifier
     url           TEXT,
     canonical_url TEXT,                            -- normalized URL for cross-source dedup
@@ -644,6 +644,7 @@ interface SourceAdapter {
    - **Rate limit**: hard cap at 10 requests/second (SEC-monitored maximum). The adapter should self-limit well below this — 2 req/s default with configurable ceiling. Config validation must enforce `edgar_max_rps <= 10`; values above 10 are rejected at startup.
    - **Startup validation**: if any feed has `source: edgar`, the collector must validate that `collector.edgar_contact` is set and non-empty, and that `collector.edgar_max_rps` does not exceed 10. Fail fast with a clear error if either check fails — running EDGAR requests without a declared User-Agent risks IP blocks, and exceeding 10 rps risks rate limiting or blocking by the SEC.
    - **Carry forward**: the predecessor's `secUserAgent` mechanism and EDGAR form-type parsing hooks.
+5. **Earnings** — SEC filings adapter tracking 10-K and 10-Q form types from a configurable roster of tech companies. Uses the same SEC EDGAR API infrastructure and rate-limiting as the EDGAR adapter. Added via migration 002.
 
 Each adapter manages its own checkpoint (last-seen cursor) stored in the `checkpoints` table.
 
@@ -835,6 +836,7 @@ intel mcp                        # start MCP server (stdio transport)
 | `intel_topics` | `intel topics` | List configured intelligence topics |
 | `intel_stats` | `intel stats` | Database statistics and health overview |
 | `intel_pack` | `intel pack` | Bounded evidence bundle for agent synthesis |
+| `intel_forecast` | `intel forecast` | Forward-looking predictions from topic co-movement and lifecycle analysis (see spec 007) |
 
 The MCP server reads the same SQLite file as the CLI. No separate process needed beyond the collector daemon.
 
@@ -914,6 +916,12 @@ feeds:
     poll_interval: 900
     entities: ["AMZN", "GOOG", "MSFT", "AAPL", "META", "NVDA"]
 
+  - source: earnings
+    name: SEC Earnings
+    form_types: [10-K, 10-Q]
+    poll_interval: 900
+    entities: ["AMZN", "GOOG", "MSFT", "AAPL", "META", "NVDA"]
+
 # Topic classification
 topics_file: ~/.config/intel/topics.yaml   # or embed inline
 
@@ -944,7 +952,8 @@ tools/intelligence/
 │   │   │   ├── rss.ts                   # RSS/Atom adapter
 │   │   │   ├── hackernews.ts            # HN API adapter
 │   │   │   ├── lobsters.ts              # Lobsters adapter
-│   │   │   └── edgar.ts                 # SEC EDGAR adapter
+│   │   │   ├── edgar.ts                 # SEC EDGAR adapter
+│   │   │   └── earnings.ts             # SEC Earnings (10-K/10-Q) adapter
 │   │   ├── content-fetcher.ts           # Readability extraction
 │   │   ├── topic-classifier.ts          # allowlist matching
 │   │   └── checkpoints.ts              # cursor persistence
@@ -953,7 +962,10 @@ tools/intelligence/
 │   │   ├── search.ts                    # FTS5 queries
 │   │   ├── events.ts                    # filtered event browsing
 │   │   ├── sources.ts                   # source health queries
-│   │   └── pack.ts                      # evidence bundle assembly
+│   │   ├── pack.ts                      # evidence bundle assembly
+│   │   ├── forecast.ts                  # forward-looking predictions (see spec 007)
+│   │   ├── topics.ts                    # topic listing
+│   │   └── stats.ts                     # database statistics
 │   ├── mcp/
 │   │   └── server.ts                    # MCP server (stdio transport)
 │   ├── control/
