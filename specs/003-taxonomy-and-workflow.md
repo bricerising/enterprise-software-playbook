@@ -18,10 +18,8 @@ Intent, boundaries, and context:
 - System-pattern selection for cross-service pressures (`architecture`)
 - Code-pattern selection for in-process pressures (`design`)
 - Empirical coupling, boundary health, and risk data from the codebase (`archobs`)
-- Current external signals from collected feeds (`intel`)
-- Forward-looking prediction from internal and external signals (`forecast`)
-- Audience-aware synthesis of intelligence signals (`brief`)
-- Internal development trajectory from git history + archobs clusters (`trajectory`)
+- Current external signals from collected feeds, with audience-aware output (`intel`)
+- Forward-looking prediction from internal development patterns and external signals (`forecast`)
 
 ### Standardize (make it consistent)
 
@@ -90,7 +88,7 @@ Unless you have a strong reason to deviate:
 11. `testing`
 12. `finish`
 
-`trajectory` and `forecast` feed into `plan` for roadmap and situational awareness. `intel` and `brief` provide external context on demand. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
+`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
 
 The sequence is a guideline, not rigid — `workflow` applies proportionality-based skipping (e.g., skip `architecture` unless cross-service, skip `platform` unless 2+ services duplicate boundary logic).
 

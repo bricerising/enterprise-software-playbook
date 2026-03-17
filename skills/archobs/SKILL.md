@@ -178,8 +178,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
-   - Development momentum and feature prediction: `trajectory` (which clusters are active, what features are likely next). When running trajectory in the same session, archobs artifacts are already available — the trajectory skill can read directly from `.archobs/` without re-extraction. `added_paths` are included by default in JSON output, surfacing exactly which new files are being built in each cluster.
-     **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --format json` (added_paths included by default), check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the trajectory skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `trajectory` skill.
+   - Development momentum and feature prediction: `forecast` internal engine (which clusters are active, what features are likely next). When running forecast in the same session, archobs artifacts are already available — the forecast skill can read directly from `.archobs/` without re-extraction. `added_paths` are included by default in JSON output, surfacing exactly which new files are being built in each cluster.
+     **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --format json` (added_paths included by default), check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the forecast skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `forecast` skill (internal mode).
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
@@ -242,7 +242,7 @@ When reporting analysis results:
 - **Leakiest clusters** (1-3): cluster ID, leakage %, strongest outward pull, boundary recommendation.
 - **Drift assessment**: stable / degrading / improving (with ARI values).
 - **Suggestions** (if generated): priority-ordered list with scope and evidence.
-- **Trajectory** (when running with trajectory analysis):
+- **Trajectory** (when running with forecast internal engine):
   - Active feature initiatives (grouped by domain, not by cluster)
   - Feature adjacency predictions with confidence levels
   - Recommended architectural actions for growing areas

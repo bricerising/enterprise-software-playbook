@@ -121,7 +121,7 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
     "type": "object",
     "properties": {
       "lag_window_days": { "type": "number", "description": "Max days between chain links (default: 7)" },
-      "min_support": { "type": "number", "description": "Min co-occurrences for valid chain (default: 3)" },
+      "min_support": { "type": "number", "description": "Min co-occurrences for valid chain (default: 2)" },
       "top_scenarios": { "type": "number", "description": "Max scenarios to return (default: 10)" },
       "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" }
     }
@@ -134,7 +134,7 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `lag_window_days` | number | 7 | Maximum days between spike days A and B for chain detection |
-| `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted (CLI default: 3) |
+| `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted |
 | `top_scenarios` | number | 10 | Cap on scenario results returned |
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 
@@ -527,7 +527,7 @@ Scans the computed lifecycles, chains, multiscale, and entropy data to detect fo
 interface DynamicItem {
   type: 'reinforcing_loop' | 'delay' | 'accumulation' | 'dampening';
   topics: string[];
-  metric: string;             // key statistical evidence (e.g., "bidirectional lift 2.3")
+  metric: { name: string; value: number; secondary_value?: number }; // structured statistical evidence
   interpretation: string;     // pre-computed human-readable interpretation
 }
 ```
