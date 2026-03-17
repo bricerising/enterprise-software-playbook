@@ -110,10 +110,16 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `archobs` → `plan` → `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `review` → `finish`
 
 **Feature roadmap**:
-`archobs` → `trajectory` → `plan`
+`archobs` → `forecast (internal)` → `plan`
 
 **Full situational awareness**:
-`archobs` → `trajectory` → `forecast` → `plan`
+`archobs` → `forecast (combined)` → `plan`
+
+**Technology adoption assessment** (outside-in):
+`intel` → `forecast (external)` → `archobs` → `architecture` → `plan`
+Start with ecosystem signals, then check internal readiness. Use when the question is "should we adopt X?" rather than "what should we build next?"
+
+**Conditional composition**: When archobs reveals high coupling to external dependencies (files with high `xnbr` bridging to third-party code, or clusters labeled with external technology names), invoke `forecast` in combined mode (not just internal). Topics for the external engine are derived from archobs cluster labels and high-xnbr file paths.
 
 **Architecture health pass**:
 `archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`

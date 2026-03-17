@@ -1,8 +1,8 @@
 {
-  "version": 2,
-  "updated": "2026-03-10",
+  "version": 3,
+  "updated": "2026-03-16",
   "stages": {
-    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "brief", "forecast", "trajectory"],
+    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "forecast"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
     "Verify": ["testing", "review", "finish"],
@@ -14,7 +14,7 @@
       "stage": "Define",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
-      "related": ["architecture", "design", "plan", "trajectory", "review", "finish"],
+      "related": ["architecture", "design", "plan", "forecast", "review", "finish"],
       "overhead": "moderate"
     },
     "architecture": {
@@ -126,7 +126,7 @@
       "stage": "Define",
       "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr"],
       "trigger": "Creating or updating specs, API contracts, ADRs, or task lists — especially before major behavior changes.",
-      "related": ["plan", "architecture", "testing"],
+      "related": ["plan", "architecture", "testing", "archobs"],
       "overhead": "significant"
     },
     "testing": {
@@ -156,33 +156,17 @@
     "intel": {
       "path": "skills/intel/SKILL.md",
       "stage": "Define",
-      "tags": ["intelligence", "trends", "signals", "research", "briefing", "news", "feeds", "evidence"],
-      "trigger": "Need current signal on a technology, vendor, or industry trend from collected feeds before making decisions.",
-      "related": ["plan", "spec", "architecture", "archobs", "brief"],
-      "overhead": "minimal"
-    },
-    "brief": {
-      "path": "skills/brief/SKILL.md",
-      "stage": "Define",
-      "tags": ["brief", "audience", "executive", "engineering", "decision", "digest", "synthesis", "presentation", "stakeholder"],
-      "trigger": "Have intel signals and need a reader-ready brief tailored for a specific audience or decision context.",
-      "related": ["intel", "plan", "spec", "architecture"],
+      "tags": ["intelligence", "trends", "signals", "research", "briefing", "news", "feeds", "evidence", "audience", "executive", "engineering", "decision", "digest", "synthesis", "presentation", "stakeholder"],
+      "trigger": "Need current signal on a technology, vendor, or industry trend — or need to present signals to a specific audience.",
+      "related": ["forecast", "plan", "spec", "architecture", "archobs"],
       "overhead": "minimal"
     },
     "forecast": {
       "path": "skills/forecast/SKILL.md",
       "stage": "Define",
-      "tags": ["forecast", "prediction", "scenarios", "chains", "lifecycle", "convergence", "trends", "intelligence", "bayesian", "entropy", "cusum", "hmm", "decay"],
-      "trigger": "Need forward-looking intelligence — what's likely to happen next, scenario planning, or which current signals predict future developments.",
-      "related": ["intel", "brief", "archobs", "trajectory", "plan"],
-      "overhead": "moderate"
-    },
-    "trajectory": {
-      "path": "skills/trajectory/SKILL.md",
-      "stage": "Define",
-      "tags": ["trajectory", "momentum", "velocity", "feature-prediction", "git-history", "development-patterns", "change-analysis", "adjacency"],
-      "trigger": "Need to predict likely next features from recent development patterns by analyzing git history through archobs cluster context.",
-      "related": ["archobs", "forecast", "plan", "spec"],
+      "tags": ["forecast", "prediction", "scenarios", "chains", "lifecycle", "convergence", "trends", "intelligence", "bayesian", "entropy", "cusum", "hmm", "decay", "trajectory", "momentum", "velocity", "feature-prediction", "git-history", "development-patterns", "change-analysis", "adjacency"],
+      "trigger": "Need forward-looking intelligence — predict likely next developments from internal development patterns (git + archobs) or external signals (intel feeds).",
+      "related": ["intel", "archobs", "plan", "spec", "architecture", "design"],
       "overhead": "moderate"
     }
   }

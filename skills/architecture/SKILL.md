@@ -21,6 +21,27 @@ Use code patterns for in-process structure; use system patterns when the problem
    - Use file-level risk scores to focus on the highest-impact areas.
    - Skip this step only if the repo is too small (< 10 files) for meaningful analysis.
 
+0b. **Ecosystem Pressure Check** (conditional — run when the architecture decision involves adopting or replacing a technology, defining boundaries around external dependencies, or planning work with a time horizon > 6 months):
+
+   ```bash
+   intel forecast    # external engine — lifecycle phases and chains
+   ```
+
+   **Decision mapping** (lifecycle phase → boundary design):
+   | Lifecycle phase | Boundary recommendation |
+   |---|---|
+   | emerging | Keep boundaries loose — expect interface churn, use Adapter |
+   | accelerating | Good adoption window — design against current APIs |
+   | peaking / stable | Design for longevity — pin versions confidently |
+   | decaying | Wall off behind Facade — minimize coupling surface |
+
+   **Dynamic signals**:
+   | Dynamics signal | Architecture implication |
+   |---|---|
+   | reinforcing loop detected | Area is compounding — delaying adoption widens the gap |
+   | dampening detected | Growth arrested — don't over-invest in integration depth |
+   | accumulation detected | Pressure building — define boundary before forced migration |
+
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)
    - boundary (in/out), time horizon, actors/incentives, and key flows
@@ -40,8 +61,8 @@ Use code patterns for in-process structure; use system patterns when the problem
    - explicit opportunity cost (what this option prevents us from doing or building)
    - kill criteria / reversal trigger
 6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? If forecast data is available, check lifecycle phases and chain decay_weighted_support to validate or challenge trajectory assumptions. *(attach to decision table)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode? Which team absorbs the downside? If forecast data is available, check transitive chains for empirical second-order effects and scenarios for quantified downstream probabilities. *(attach to system sketch)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? Cross-reference with ecosystem pressure check from step 0b (if applicable). *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode? Which team absorbs the downside? Cross-reference with ecosystem pressure check from step 0b (if applicable). *(attach to system sketch)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
    - Note: Feedback Loops are covered natively by step 9 (dynamics check). Pre-mortem is normally part of the Second-Order Effects probe but is already covered in step 8 (blast-radius path); do not duplicate either.
@@ -55,7 +76,7 @@ Use code patterns for in-process structure; use system patterns when the problem
    - where are delays (feedback, approvals, recovery)?
    - what accumulates (toil, backlog, queue lag, exceptions)?
    - what balancing loop prevents runaway growth?
-   - if forecast data is available, check the `dynamics` section for empirically detected reinforcing loops, delays, and accumulations that may confirm or challenge the qualitative assessment
+   - cross-reference with ecosystem pressure check from step 0b (if applicable) for empirically detected reinforcing loops, delays, and accumulations that may confirm or challenge the qualitative assessment
 10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
 
 ## Clarifying Questions

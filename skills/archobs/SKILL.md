@@ -172,7 +172,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    Filter to active clusters: `archobs show velocity --window 30 --compare --min-acceleration 1.0 --min-growth-ratio 0.1 --format json`
 
-   For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [trajectory skill](../trajectory/SKILL.md).
+   For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [forecast skill](../forecast/SKILL.md) (internal engine).
 
 6. **Route findings to the right skill**:
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
@@ -197,7 +197,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
 ## Combined Archobs + Trajectory Workflow
 
-For the combined archobs + trajectory workflow, see the [trajectory skill](../trajectory/SKILL.md#combined-archobs--trajectory-workflow). That version includes `archobs show suggestions --format json` in the parallel batch and is the canonical reference.
+For the combined archobs + trajectory workflow, see the [forecast skill](../forecast/SKILL.md) (internal engine — combined archobs + trajectory workflow). That version includes `archobs show suggestions --format json` in the parallel batch and is the canonical reference.
 
 ## Clarifying Questions
 
@@ -221,7 +221,7 @@ For the combined archobs + trajectory workflow, see the [trajectory skill](../tr
 - Boundary redesign from leakage data: [`architecture`](../architecture/SKILL.md)
 - In-process pattern selection from coupling data: [`design`](../design/SKILL.md)
 - Refactoring prioritization from risk scores: [`plan`](../plan/SKILL.md)
-- Development trajectory and feature prediction from cluster activity: [`trajectory`](../trajectory/SKILL.md)
+- Development trajectory and feature prediction from cluster activity: [`forecast`](../forecast/SKILL.md) (internal engine)
 - Architecture health regression gate: [`finish`](../finish/SKILL.md)
 - Architecture-type adversarial review: [`review`](../review/SKILL.md)
 - Facade/Adapter for porous boundaries: [`patterns-structural`](../patterns-structural/SKILL.md)
