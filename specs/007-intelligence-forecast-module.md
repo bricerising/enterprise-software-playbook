@@ -147,7 +147,7 @@ intel forecast --summary --window 7               # short-term summary forecast
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 | `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
-| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. |
+| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). |
 
 ---
 
@@ -156,13 +156,13 @@ intel forecast --summary --window 7               # short-term summary forecast
 ```typescript
 interface ForecastData {
   window: { start: string; end: string; events_analyzed: number };
-  lifecycles: LifecycleItem[];
-  chains: ChainItem[];
+  lifecycles?: LifecycleItem[];          // omitted in summary mode (limit 0)
+  chains?: ChainItem[];                  // omitted in summary mode (limit 0)
   ranked_chains: RankedChainItem[];
   scenarios: ScenarioItem[];
-  multiscale: MultiscaleItem[];
-  transitive_chains: TransitiveChainItem[];
-  entropy: EntropyItem[];
+  multiscale?: MultiscaleItem[];         // omitted in summary mode (limit 0)
+  transitive_chains?: TransitiveChainItem[];  // omitted in summary mode (limit 0)
+  entropy?: EntropyItem[];               // omitted in summary mode (limit 0)
   dynamics: DynamicItem[];
   change_points_summary: ChangePointSummary[];  // topics with CUSUM structural breaks, sorted by recency
 }
@@ -439,9 +439,15 @@ interface ScenarioItem {
   trigger_topics: string[];
   supporting_chains: number;
   evidence_titles: string[];        // up to 3, sanitized
+  evidence_relevance: Array<'high' | 'medium' | 'low'>; // parallel to evidence_titles; based on topic_count heuristic
   target_entropy: number;           // target topic's normalized entropy (0-1); >0.8 = bursty
 }
 ```
+
+**Evidence relevance**: Each evidence title is scored based on how many topics the source event was assigned to by the classifier. Events assigned to fewer topics are more specifically classified, so their titles are more likely genuinely relevant:
+- `'high'` — event assigned to 1-2 topics (specific classification)
+- `'medium'` — event assigned to 3-4 topics
+- `'low'` — event assigned to 5 topics (broad classification, higher false-positive risk)
 
 ---
 
@@ -490,10 +496,12 @@ Provide a prioritized view of the most actionable active chains, with cross-doma
 ### Algorithm
 
 1. Filter to active chains only
-2. Score: `support × source_diversity × lift × confidence × (1 + max(0, acceleration))`
+2. Score: `support × source_diversity × lift × confidence × (1 + max(0, acceleration)) × baseRateDiscount`
+   - `baseRateDiscount = 1 / (1 + max(0, trigger_base_rate - 0.5) × 3)` — penalizes omnipresent triggers (base_rate > 0.5)
 3. Mark `cross_domain`: true if `from_topic` and `to_topic` have different top-level domains (first segment before `.`)
 4. Sort: cross-domain chains first, then by score descending
-5. Cap at 50 results
+5. Per-trigger cap: keep at most `MAX_RANKED_PER_TRIGGER` (3) chains per trigger topic — ensures diverse trigger representation
+6. Cap at 50 results total
 
 ### Output
 
@@ -549,7 +557,7 @@ Scans the computed lifecycles, chains, multiscale, and entropy data to detect fo
 |---|---|---|
 | `reinforcing_loop` | Bidirectional chains with directionality 0.3-0.7 and mutual lift > 1 | Reinforcing feedback loop — topics amplify each other |
 | `delay` | Active chains with avg_lag_days and lag_stddev | System delay — gap between cause and effect |
-| `accumulation` | aligned_up + emerging/accelerating + rising entropy | Stock accumulation — pressure building without release |
+| `accumulation` | aligned_up + emerging/accelerating + rising entropy + freshness gate | Stock accumulation — pressure building without release. Requires `published_at` events in the analysis window (backfill-only topics excluded). |
 | `dampening` | Decaying phase + recent CUSUM change point | Balancing feedback loop — something arrested growth |
 
 ### Output
@@ -618,8 +626,8 @@ The HMM overrides the rule-based classification when its confidence is substanti
 ### File Structure
 
 ```
-tools/intelligence/src/queries/forecast.ts    — all algorithm code (~630 lines)
-tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blocks
+tools/intelligence/src/queries/forecast.ts    — all algorithm code (~1300 lines)
+tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe blocks
 ```
 
 ### Internal Functions
@@ -657,6 +665,7 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 | HMM override threshold | +0.15 | HMM must beat rule-based by this margin to override |
 | `MAX_CHAINS_PER_TARGET` | 5 | Maximum trigger chains contributing to a single target's posterior |
 | `MAX_DYNAMICS_PER_TYPE` | 10 | Maximum dynamics entries per type (reinforcing/delay/accumulation/dampening) |
+| `MAX_RANKED_PER_TRIGGER` | 3 | Maximum ranked chains per trigger topic in top-50 output |
 | `SOFTMAX_TEMPERATURE` | 0.5 | Temperature for scenario softmax; < 1.0 sharpens probability differentiation |
 
 ### Dependencies
@@ -673,7 +682,7 @@ No external dependencies beyond what the intelligence tool already uses.
 
 ## Tests
 
-**File**: `tools/intelligence/tests/forecast.test.ts`
+**File**: `tools/intelligence/tests/forecast.test.ts` (61 tests, 14 describe blocks)
 
 ### Test Fixtures
 
@@ -690,7 +699,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 - Previous window (8–12 days ago) has low volume, creating high 7d acceleration
 - Tests the sparse-day fallback paths (d7 proxy, tiered activation)
 
-### Test Cases (58 tests, 12 describe blocks)
+### Test Cases (61 tests, 14 describe blocks)
 
 **`computeForecast` (8 tests)**:
 - Response envelope shape includes all 9 sections (including `transitive_chains`, `entropy`, `dynamics`)
@@ -720,6 +729,13 @@ Two fixture sets seed synthetic data for deterministic testing:
 - Valid structure: path length 3, no A→B→A loops, finite numeric fields, min_support >= threshold
 - Cross-domain correctness: first and last path elements compared
 - Capped at 100 results
+
+**`evidence relevance` (1 test)**:
+- `evidence_relevance` parallel to `evidence_titles`, values are 'high'/'medium'/'low'
+
+**`ranked chain diversity` (2 tests)**:
+- No trigger appears more than 3 times in ranked chains (per-trigger cap)
+- High base-rate triggers get valid scores (base-rate discount applied)
 
 ---
 
@@ -755,13 +771,16 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Softmax scenario normalization | Proper softmax over all targets | Prevents all-1.0 saturation when many triggers active; produces a probability distribution summing to 1.0 |
 | Cap trigger chains per target | Max 5 chains per target | Prevents posterior accumulation from unbounded chain count; top-5 by effective lift keeps strongest signals |
 | Compact output mode | `--compact` flag | Avoids 277KB+ JSON dumps; returns top-N per section for agent-friendly output |
-| Summary output mode | `--summary` flag | Returns top-3 scenarios, top-5 ranked chains, top-3 dynamics, change points. Minimal output for fast agent synthesis. |
+| Summary output mode | `--summary` flag | Returns top-3 scenarios, top-5 ranked chains, top-3 dynamics, change points. Zero-limited sections omitted entirely (not empty arrays). Minimal output for fast agent synthesis. |
 | Dynamics ranking and capping | Top 10 per type, ranked by signal strength | Raw dynamics output (60+ loops, 200+ delays) is too noisy; ranking by lift/stddev/entropy surfaces most important signals |
 | Temperature-scaled softmax | T = 0.5 | Standard softmax (T=1.0) produces near-uniform probabilities when log-posteriors are similar. T=0.5 doubles differences, making top scenarios stand out. |
 | Signal enrichment in posterior | √confidence × √diversity × fanout penalty | Chains vary widely in confidence and source diversity. Incorporating these creates scenario differentiation that pure lift-based posteriors miss. |
 | Trigger fanout penalty | 1/log₂(1+N) | High-fanout triggers (chain to many targets) are less informative. Penalty suppresses omnipresent topics like lang.typescript. |
 | Chain sort by lift | ORDER BY lift DESC, support DESC | Surfaces rare-but-informative chains over common-but-boring ones. Raw support still visible for filtering. |
 | Trigger base rate field | spike_days/total_days per chain | Exposes how "omnipresent" a trigger is. Consumers can filter/deprioritize chains with trigger_base_rate > 0.5. |
+| Ranked chain diversity | base-rate discount + per-trigger cap (3) | Prevents high-base-rate triggers from monopolizing ranked chain output. Discount formula: `1/(1 + max(0, base_rate - 0.5) * 3)`. |
+| Evidence relevance hints | topic_count heuristic | Events assigned to fewer topics are more specifically classified. Parallel `evidence_relevance` array flags 'high'/'medium'/'low' per evidence title. |
+| Accumulation freshness gate | published_at recency check | Topics whose events lack `published_at` in the analysis window (backfill-only) are excluded from accumulation detection to prevent false signals from bulk-ingested old content. |
 | Top-level change_points_summary | Always populated, sorted by recency | CUSUM change points are easy to overlook when buried in per-topic lifecycle data. Top-level summary ensures they're always surfaced. |
 
 ---
@@ -804,6 +823,30 @@ intel forecast --min-support 2 | jq '.data.chains[:3] | .[] | {from_topic, to_to
 # 11. Verify scenario probabilities are differentiated (not all identical)
 intel forecast --min-support 2 | jq '[.data.scenarios[].probability] | unique | length'
 
-# 12. Verify summary mode returns minimal output
-intel forecast --summary | jq '{scenarios: (.data.scenarios | length), ranked_chains: (.data.ranked_chains | length), change_points: (.data.change_points_summary | length)}'
+# 12. Verify summary mode omits empty sections entirely
+intel forecast --summary | jq 'keys' | grep -v lifecycles
+# Expected: lifecycles, chains, multiscale, transitive_chains, entropy should be ABSENT
+
+# 13. Verify evidence_relevance parallel to evidence_titles
+intel forecast --min-support 2 | jq '.data.scenarios[0] | {evidence_titles, evidence_relevance}'
+
+# 14. Verify ranked chains have diverse triggers (max 3 per trigger)
+intel forecast --min-support 2 | jq '[.data.ranked_chains[].from_topic] | group_by(.) | map(length) | max'
+# Expected: <= 3
 ```
+
+---
+
+## Future Work
+
+### Narrative scenario layer
+
+The current scenario engine models topic co-movement statistically (Bayesian posteriors from chain lift/decay/CUSUM), but the resulting scenarios represent "statistically interesting co-movement" rather than "coherent market narratives." The most actionable insights in practice come from the LLM's synthesis of trends + events + dynamics, not from the scenario probabilities directly.
+
+A future enhancement could add a narrative clustering layer on top of the Bayesian chain model:
+
+1. **Signal clustering**: Group related signals (chains, dynamics, lifecycle phases) by domain/theme into coherent narratives
+2. **Narrative scoring**: Score narratives by coherence (how well signals reinforce each other) rather than just statistical co-movement
+3. **Evidence alignment**: Match evidence titles to narrative themes rather than individual topics, reducing false-positive noise
+
+This would bridge the gap between the statistical engine's output and the kind of forward-looking intelligence that's most actionable for decision-making. The current approach — having the LLM synthesize across sections — works but pushes narrative construction entirely to the consumer.

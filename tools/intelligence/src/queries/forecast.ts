@@ -62,13 +62,18 @@ export interface ChangePointSummary {
 
 export interface ForecastData {
   window: { start: string; end: string; events_analyzed: number };
-  lifecycles: LifecycleItem[];
-  chains: ChainItem[];
+  /** Omitted in summary mode (limit 0). */
+  lifecycles?: LifecycleItem[];
+  /** Omitted in summary mode (limit 0). */
+  chains?: ChainItem[];
   ranked_chains: RankedChainItem[];
   scenarios: ScenarioItem[];
-  multiscale: MultiscaleItem[];
-  transitive_chains: TransitiveChainItem[];
-  entropy: EntropyItem[];
+  /** Omitted in summary mode (limit 0). */
+  multiscale?: MultiscaleItem[];
+  /** Omitted in summary mode (limit 0). */
+  transitive_chains?: TransitiveChainItem[];
+  /** Omitted in summary mode (limit 0). */
+  entropy?: EntropyItem[];
   dynamics: DynamicItem[];
   change_points_summary: ChangePointSummary[];
 }
@@ -120,6 +125,11 @@ export interface ScenarioItem {
   trigger_topics: string[];
   supporting_chains: number;
   evidence_titles: string[];
+  /** Parallel array with evidence_titles: per-title relevance hint based on
+   *  how many topics the source event was assigned to. Fewer topics = more
+   *  specific classification = higher confidence the title is actually relevant.
+   *  'high' = 1-2 topics, 'medium' = 3-4, 'low' = 5 (classifier may be noisy). */
+  evidence_relevance: Array<'high' | 'medium' | 'low'>;
   target_entropy: number;
 }
 
@@ -150,6 +160,11 @@ export interface DynamicItem {
 /** Maximum trigger chains that contribute to any single target's posterior.
  *  Prevents posterior saturation when many triggers are simultaneously active. */
 const MAX_CHAINS_PER_TARGET = 5;
+
+/** Maximum ranked chains per trigger topic in the top-50.
+ *  Ensures diverse trigger representation; high-base-rate triggers
+ *  don't monopolize all ranked chain slots. */
+const MAX_RANKED_PER_TRIGGER = 3;
 
 export interface ComputeForecastOpts {
   lag_window_days?: number;
@@ -239,9 +254,25 @@ export function computeForecast(
 
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
+  // Freshness gate: identify topics with at least one event where published_at
+  // is non-null and falls within the analysis window. Topics where all events
+  // use the fetched_at fallback may be backfill artifacts (e.g., old blog posts
+  // bulk-ingested recently) and should not trigger accumulation signals.
+  const freshnessSql = `
+    SELECT DISTINCT et.topic
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE e.published_at IS NOT NULL
+      AND e.published_at >= ?
+  `;
+  const freshTopics = new Set(
+    (db.prepare(freshnessSql).all(windowStart) as Array<{ topic: string }>)
+      .map(r => r.topic),
+  );
+
   const limits = summary ? SUMMARY_LIMITS : (compact ? COMPACT_LIMITS : null);
   const dynamicsPerType = limits?.dynamics_per_type ?? MAX_DYNAMICS_PER_TYPE;
-  const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType);
+  const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType, freshTopics);
 
   // Build change_points_summary: topics with CUSUM change points, sorted by recency
   const changePointsSummary: ChangePointSummary[] = [];
@@ -253,18 +284,21 @@ export function computeForecast(
   changePointsSummary.sort((a, b) => a.days_ago - b.days_ago);
 
   if (limits) {
-    return ok({
+    const result: ForecastData = {
       window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
-      lifecycles: lifecycles.slice(0, limits.lifecycles),
-      chains: chains.slice(0, limits.chains),
       ranked_chains: ranked_chains.slice(0, limits.ranked_chains),
       scenarios: scenarios.slice(0, limits.scenarios),
-      multiscale: multiscale.slice(0, limits.multiscale),
-      transitive_chains: transitive_chains.slice(0, limits.transitive_chains),
-      entropy: entropy.slice(0, limits.entropy),
       dynamics,
       change_points_summary: changePointsSummary,
-    });
+    };
+    // Only include sections whose limit is > 0 — avoids wasted tokens
+    // from empty arrays in summary mode.
+    if (limits.lifecycles > 0) result.lifecycles = lifecycles.slice(0, limits.lifecycles);
+    if (limits.chains > 0) result.chains = chains.slice(0, limits.chains);
+    if (limits.multiscale > 0) result.multiscale = multiscale.slice(0, limits.multiscale);
+    if (limits.transitive_chains > 0) result.transitive_chains = transitive_chains.slice(0, limits.transitive_chains);
+    if (limits.entropy > 0) result.entropy = entropy.slice(0, limits.entropy);
+    return ok(result);
   }
 
   return ok({
@@ -671,8 +705,11 @@ function computeRankedChains(
 
   const ranked: RankedChainItem[] = activeChains.map((chain) => {
     const accel = Math.max(0, accelMap.get(chain.from_topic) ?? 0);
+    // Base-rate discount: omnipresent triggers (base_rate > 0.5) get penalized
+    // so high-base-rate topics like lang.typescript don't dominate rankings.
+    const baseRateDiscount = 1 / (1 + Math.max(0, chain.trigger_base_rate - 0.5) * 3);
     const score =
-      Math.round(chain.support * chain.source_diversity * chain.lift * chain.confidence * (1 + accel) * 100) / 100;
+      Math.round(chain.support * chain.source_diversity * chain.lift * chain.confidence * (1 + accel) * baseRateDiscount * 100) / 100;
     const cross_domain =
       chain.from_topic.split('.')[0] !== chain.to_topic.split('.')[0];
     return { ...chain, score, cross_domain };
@@ -684,7 +721,19 @@ function computeRankedChains(
     return b.score - a.score;
   });
 
-  return ranked.slice(0, 50);
+  // Per-trigger cap: ensure diverse trigger representation in results.
+  // After sorting by score, keep at most MAX_RANKED_PER_TRIGGER per trigger.
+  const triggerCounts = new Map<string, number>();
+  const diversified: RankedChainItem[] = [];
+  for (const rc of ranked) {
+    const count = triggerCounts.get(rc.from_topic) ?? 0;
+    if (count >= MAX_RANKED_PER_TRIGGER) continue;
+    triggerCounts.set(rc.from_topic, count + 1);
+    diversified.push(rc);
+    if (diversified.length >= 50) break;
+  }
+
+  return diversified;
 }
 
 /* ── F. Entropy-based surprise scoring ─────────────────────────────── */
@@ -760,6 +809,7 @@ export function detectDynamics(
   multiscale: MultiscaleItem[],
   entropy: EntropyItem[],
   maxPerType: number = MAX_DYNAMICS_PER_TYPE,
+  freshTopics?: Set<string>,
 ): DynamicItem[] {
   // Rank each type by signal strength, then cap
   const loops = detectReinforcingLoops(chains);
@@ -768,7 +818,7 @@ export function detectDynamics(
   const delays = detectDelays(chains);
   delays.sort((a, b) => (a.metric.secondary_value ?? Infinity) - (b.metric.secondary_value ?? Infinity)); // by tightest lag_stddev
 
-  const accum = detectAccumulations(lifecycles, multiscale, entropy);
+  const accum = detectAccumulations(lifecycles, multiscale, entropy, freshTopics);
   accum.sort((a, b) => b.metric.value - a.metric.value); // by normalized_entropy
 
   const damp = detectDampening(lifecycles);
@@ -830,6 +880,7 @@ function detectAccumulations(
   lifecycles: LifecycleItem[],
   multiscale: MultiscaleItem[],
   entropy: EntropyItem[],
+  freshTopics?: Set<string>,
 ): DynamicItem[] {
   const msMap = new Map<string, MultiscaleItem>();
   for (const ms of multiscale) msMap.set(ms.topic, ms);
@@ -841,6 +892,11 @@ function detectAccumulations(
 
   for (const lc of lifecycles) {
     if (lc.phase !== 'emerging' && lc.phase !== 'accelerating') continue;
+
+    // Freshness gate: skip topics whose events are all fetched_at fallback
+    // (no published_at in the analysis window). These may be backfill artifacts
+    // where old content was bulk-ingested recently, creating a false volume spike.
+    if (freshTopics && !freshTopics.has(lc.topic)) continue;
 
     const ms = msMap.get(lc.topic);
     if (!ms || ms.alignment !== 'aligned_up') continue;
@@ -1195,9 +1251,12 @@ function projectScenariosBayesian(
     softmaxSum += Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE);
   }
 
-  // Fetch evidence titles
+  // Fetch evidence titles with topic_count for relevance scoring.
+  // Events assigned to fewer topics have more specific classification,
+  // so their titles are more likely genuinely relevant to the target topic.
   const titleSql = `
-    SELECT e.title
+    SELECT e.title,
+           (SELECT COUNT(*) FROM event_topics et2 WHERE et2.event_id = e.event_id) AS topic_count
     FROM event_topics et
     JOIN events e ON e.event_id = et.event_id
     WHERE et.topic = ? AND ${PUB_TS} >= ?
@@ -1217,11 +1276,16 @@ function projectScenariosBayesian(
       target,
       windowStart,
       MAX_TITLES_PER_SCENARIO,
-    ) as Array<{ title: string | null }>;
+    ) as Array<{ title: string | null; topic_count: number }>;
 
-    const evidenceTitles = titleRows
-      .map((r) => sanitizeSnippet(r.title, { maxLength: 200 }).text)
-      .filter((t) => t.length > 0);
+    const evidenceEntries = titleRows
+      .map((r) => ({
+        text: sanitizeSnippet(r.title, { maxLength: 200 }).text,
+        relevance: (r.topic_count <= 2 ? 'high' : r.topic_count <= 4 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+      }))
+      .filter((e) => e.text.length > 0);
+    const evidenceTitles = evidenceEntries.map((e) => e.text);
+    const evidenceRelevance = evidenceEntries.map((e) => e.relevance);
 
     // Entropy-widened timeframe: bursty targets get wider prediction windows.
     // entropyFactor ranges from 1.0 (perfectly predictable) to 2.0 (max entropy).
@@ -1248,6 +1312,7 @@ function projectScenariosBayesian(
       trigger_topics: sortedTriggers,
       supporting_chains: data.chainCount,
       evidence_titles: evidenceTitles,
+      evidence_relevance: evidenceRelevance,
       target_entropy: targetEnt,
     });
   }

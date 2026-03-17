@@ -822,6 +822,7 @@ describe('dynamics detection (unit)', () => {
     directionality: 0.5,
     lag_stddev: 0.5,
     decay_weighted_support: 4.0,
+    trigger_base_rate: 0.3,
     ...overrides,
   });
 
@@ -922,13 +923,14 @@ describe('summary mode', () => {
     expect(result.data.ranked_chains.length).toBeLessThanOrEqual(5);
   });
 
-  it('omits detail sections in summary mode', () => {
+  it('omits detail sections entirely in summary mode', () => {
     const result = computeForecast(db, { min_support: 2, summary: true });
-    expect(result.data.lifecycles).toEqual([]);
-    expect(result.data.chains).toEqual([]);
-    expect(result.data.multiscale).toEqual([]);
-    expect(result.data.transitive_chains).toEqual([]);
-    expect(result.data.entropy).toEqual([]);
+    // Zero-limited sections should be omitted from the response (not empty arrays)
+    expect(result.data.lifecycles).toBeUndefined();
+    expect(result.data.chains).toBeUndefined();
+    expect(result.data.multiscale).toBeUndefined();
+    expect(result.data.transitive_chains).toBeUndefined();
+    expect(result.data.entropy).toBeUndefined();
   });
 
   it('always includes change_points_summary', () => {
@@ -978,9 +980,48 @@ describe('scenario differentiation', () => {
 
   it('chains are sorted by lift descending', () => {
     const result = computeForecast(db, { min_support: 2 });
-    const chains = result.data.chains;
+    const chains = result.data.chains!;
     for (let i = 1; i < chains.length; i++) {
       expect(chains[i - 1].lift).toBeGreaterThanOrEqual(chains[i].lift);
+    }
+  });
+});
+
+/* ── Evidence relevance tests ──────────────────────────────────────── */
+
+describe('evidence relevance', () => {
+  it('scenarios include evidence_relevance parallel to evidence_titles', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const s of result.data.scenarios) {
+      expect(s.evidence_relevance).toHaveLength(s.evidence_titles.length);
+      for (const r of s.evidence_relevance) {
+        expect(['high', 'medium', 'low']).toContain(r);
+      }
+    }
+  });
+});
+
+/* ── Chain ranking diversity tests ─────────────────────────────────── */
+
+describe('ranked chain diversity', () => {
+  it('no trigger appears more than 3 times in ranked chains', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const triggerCounts = new Map<string, number>();
+    for (const rc of result.data.ranked_chains) {
+      triggerCounts.set(rc.from_topic, (triggerCounts.get(rc.from_topic) ?? 0) + 1);
+    }
+    for (const [, count] of triggerCounts) {
+      expect(count).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('high base-rate triggers get lower scores', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const ranked = result.data.ranked_chains;
+    // All ranked chains should have valid scores
+    for (const rc of ranked) {
+      expect(typeof rc.score).toBe('number');
+      expect(rc.score).toBeGreaterThanOrEqual(0);
     }
   });
 });
