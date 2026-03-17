@@ -152,7 +152,7 @@ intel forecast --topics ai.openai --section lifecycles,entropy --compact  # comb
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 | `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
-| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). |
+| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
 | `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
 | `sections` | string[] | — | Include only named sections in the response. Valid values: lifecycles, chains, ranked_chains, scenarios, multiscale, transitive_chains, entropy, dynamics, change_points_summary, context. |
 
@@ -329,6 +329,8 @@ interface ChainItem {
   lag_stddev: number;         // >= 0; days of timing spread
   decay_weighted_support: number; // support × exponential decay factor (14-day half-life)
   trigger_base_rate: number;     // fraction of window days the trigger topic spikes (0-1); >0.5 = omnipresent
+  temporal_pattern?: 'weekday_correlated'; // calendar artifact flag (>75% weekday co-occurrences)
+  weekday_ratio: number;         // avg weekday fraction of trigger+target co-occurrence days (0-1); >0.7 = calendar artifact risk
 }
 ```
 
@@ -369,6 +371,7 @@ interface TransitiveChainItem {
   min_support: number;
   combined_lift: number;
   cross_domain: boolean;
+  normalized_confidence: number; // geometric mean of leg confidences — calibrated [0,1]
 }
 ```
 
@@ -450,6 +453,7 @@ interface ScenarioItem {
   evidence_titles: string[];        // up to 3, sanitized
   evidence_relevance: Array<'high' | 'medium' | 'low'>; // parallel to evidence_titles; based on topic_count heuristic
   target_entropy: number;           // target topic's normalized entropy (0-1); >0.8 = bursty
+  target_base_rate: number;         // fraction of window days target spikes (0-1); >0.8 = omnipresent
 }
 ```
 
@@ -458,7 +462,9 @@ interface ScenarioItem {
 - `'medium'` — event assigned to 3-4 topics
 - `'low'` — event assigned to 5 topics (broad classification, higher false-positive risk)
 
-**Evidence pre-filter**: Scenarios where ALL evidence titles have `'low'` relevance are dropped before ranking. This catches cases where the classifier misfired on every supporting event (e.g., "Home Assistant waters my plants" as evidence for a TypeScript scenario). If no evidence has at least medium or high relevance, the scenario has no genuine evidence and is removed at the source rather than relying on the consumer to discount it.
+**Evidence pre-filter**: Two pre-filter gates run before ranking:
+1. Scenarios where ALL evidence titles have `'low'` relevance are dropped. This catches cases where the classifier misfired on every supporting event (e.g., "Home Assistant waters my plants" as evidence for a TypeScript scenario).
+2. Scenarios where `target_base_rate` > 0.8 AND no evidence has `'high'` relevance are dropped. Predicting that an omnipresent topic will spike is trivially true and not actionable — only strong, specific evidence justifies keeping such scenarios.
 
 ---
 
@@ -694,7 +700,7 @@ No external dependencies beyond what the intelligence tool already uses.
 
 ## Tests
 
-**File**: `tools/intelligence/tests/forecast.test.ts` (61 tests, 14 describe blocks)
+**File**: `tools/intelligence/tests/forecast.test.ts` (68+ tests, 14+ describe blocks)
 
 ### Test Fixtures
 
@@ -797,7 +803,11 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Topic-level output filtering | `--topics` post-filter | Full pipeline runs (chains/scenarios need cross-topic data) but output is post-filtered. Eliminates re-running the entire pipeline to extract lifecycle/entropy for specific topics. |
 | Section-level output filtering | `--section` inclusion filter | Only named sections are included in the response. Reduces output to exactly the data needed. |
 | Transitive chain diversity | per-prefix cap of 3 | Prevents a single A→B prefix from dominating all transitive chain results. Surfaces diverse cross-domain propagation paths. |
-| Evidence pre-filter | Drop all-low-relevance scenarios | Scenarios where every evidence title has 'low' relevance (classifier misfired on all supporting events) are removed before ranking. |
+| Evidence pre-filter | Drop all-low-relevance scenarios; drop high-base-rate targets with weak evidence | Two gates: (1) all 'low' relevance = drop; (2) target_base_rate > 0.8 + no 'high' relevance = drop (trivially true, not actionable). |
+| Target base rate field | spike_days/total_days per scenario target | Exposes how "omnipresent" the target topic is. Scenarios with target_base_rate > 0.8 are pre-filtered unless strong evidence justifies them. |
+| Weekday ratio field | Avg weekday fraction always present on chains | `weekday_ratio` (0-1) enables programmatic calendar artifact assessment. Binary `temporal_pattern` flag threshold lowered from 0.85 to 0.75. |
+| Normalized transitive confidence | Geometric mean of leg confidences | `normalized_confidence = sqrt(conf_AB * conf_BC)` — calibrated [0,1] metric for comparing transitive chain strength without raw combined_lift inflation. |
+| Adaptive summary mode | Auto-upgrade thin sections when scenario yield < 3 | Summary mode upgrades ranked_chains, dynamics, lifecycles to compact limits when fewer than 3 scenarios qualify. Eliminates manual --compact retry round-trip. |
 
 ---
 

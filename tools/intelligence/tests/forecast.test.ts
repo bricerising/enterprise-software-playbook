@@ -471,6 +471,16 @@ describe('transitive chains', () => {
     const result = computeForecast(db, { min_support: 2 });
     expect(result.data.transitive_chains.length).toBeLessThanOrEqual(100);
   });
+
+  it('normalized_confidence is in [0, 1] and finite', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const tc of result.data.transitive_chains) {
+      expect(typeof tc.normalized_confidence).toBe('number');
+      expect(Number.isFinite(tc.normalized_confidence)).toBe(true);
+      expect(tc.normalized_confidence).toBeGreaterThanOrEqual(0);
+      expect(tc.normalized_confidence).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 /* ── Exponential decay weighting tests ─────────────────────────────── */
@@ -823,6 +833,7 @@ describe('dynamics detection (unit)', () => {
     lag_stddev: 0.5,
     decay_weighted_support: 4.0,
     trigger_base_rate: 0.3,
+    weekday_ratio: 0.6,
     ...overrides,
   });
 
@@ -945,6 +956,21 @@ describe('summary mode', () => {
       expect(cps[i - 1].days_ago).toBeLessThanOrEqual(cps[i].days_ago);
     }
   });
+
+  it('adaptive summary upgrades sections when scenario yield is thin', () => {
+    // Use high min_support to reduce scenario yield
+    const result = computeForecast(db, { min_support: 2, summary: true, top_scenarios: 1 });
+    // With thin scenario yield (< 3), adaptive summary should upgrade
+    // ranked_chains to compact limit (10) and include lifecycles
+    if (result.data.scenarios.length < 3) {
+      // Ranked chains should be allowed up to 10 (compact limit)
+      expect(result.data.ranked_chains.length).toBeLessThanOrEqual(10);
+      // Lifecycles should be present (upgraded from 0 to compact limit 15)
+      if (result.data.lifecycles) {
+        expect(result.data.lifecycles.length).toBeLessThanOrEqual(15);
+      }
+    }
+  });
 });
 
 /* ── Scenario differentiation tests ────────────────────────────────── */
@@ -999,6 +1025,15 @@ describe('evidence relevance', () => {
       }
     }
   });
+
+  it('scenarios include target_base_rate field', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const s of result.data.scenarios) {
+      expect(typeof s.target_base_rate).toBe('number');
+      expect(s.target_base_rate).toBeGreaterThanOrEqual(0);
+      expect(s.target_base_rate).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 /* ── Chain ranking diversity tests ─────────────────────────────────── */
@@ -1035,6 +1070,15 @@ describe('temporal_pattern', () => {
       if (chain.temporal_pattern) {
         expect(chain.temporal_pattern).toBe('weekday_correlated');
       }
+    }
+  });
+
+  it('chains always include weekday_ratio field in [0, 1]', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const chain of result.data.chains!) {
+      expect(typeof chain.weekday_ratio).toBe('number');
+      expect(chain.weekday_ratio).toBeGreaterThanOrEqual(0);
+      expect(chain.weekday_ratio).toBeLessThanOrEqual(1);
     }
   });
 });

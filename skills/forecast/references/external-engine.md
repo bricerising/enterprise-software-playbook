@@ -37,9 +37,9 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    ```bash
    intel forecast --summary
    ```
-   Use `--summary` for agent consumption — returns only top-3 scenarios, top-5 ranked chains, top-3 dynamics, and change points. Omits empty sections entirely for minimal token usage.
+   Use `--summary` for agent consumption — returns only top-3 scenarios, top-5 ranked chains, top-3 dynamics, and change points. Omits empty sections entirely for minimal token usage. **Adaptive behavior**: when scenario yield is thin (< 3), summary mode automatically upgrades ranked chains, dynamics, and lifecycles to compact limits — no need to manually retry with `--compact`.
 
-   Use `--compact` when you need more detail (top-N per section) but still want reduced output. **Prefer `--compact` over `--summary` when scenario yield from `--summary` is low** (< 3 actionable scenarios) — the extra ranked chains and lifecycle data often contain the most useful signals.
+   Use `--compact` when you need more detail (top-N per section) but still want reduced output.
 
    Use `--with-context` to inline top event titles per change point topic and top ranked chain topic. This saves a full round-trip of `intel search` deepening calls by embedding narrative context directly in the forecast response.
 
@@ -90,13 +90,13 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
    **Chains are sorted by lift** (above-chance co-occurrence ratio), not by raw support. High-lift chains are informative regardless of volume. Chains also include `trigger_base_rate` — values > 0.5 indicate omnipresent triggers whose chains are less informative.
 
-   **Temporal artifact detection**: chains include an optional `temporal_pattern` field. When set to `weekday_correlated`, both the trigger and target topics spike predominantly on weekdays (Mon-Fri, >85% of co-occurrence days). This usually indicates a calendar cadence (e.g., business-hours publishing, earnings cycles, weekday SRE content) rather than a causal relationship. Discount these chains unless you can identify a plausible mechanism beyond shared weekday scheduling.
+   **Temporal artifact detection**: chains include an optional `temporal_pattern` field and a `weekday_ratio` field (always present). When `temporal_pattern` = `weekday_correlated`, both the trigger and target topics spike predominantly on weekdays (Mon-Fri, >75% of co-occurrence days). This usually indicates a calendar cadence (e.g., business-hours publishing, earnings cycles, weekday SRE content) rather than a causal relationship. The `weekday_ratio` field (0-1, average of trigger and target weekday fractions) is always present so you can assess calendar artifact risk programmatically even below the binary threshold. Chains with `weekday_ratio` > 0.7 warrant extra scrutiny.
 
    **Evidence relevance**: Each scenario includes `evidence_relevance` parallel to `evidence_titles`. Values are 'high' (1-2 topics), 'medium' (3-4 topics), or 'low' (5 topics). Low-relevance evidence may be a classifier false positive — flag it and weight the scenario lower.
 
    **Classifier precision caveat**: The topic classifier over-tags high-volume topics (e.g., `lang.typescript`, `infra.gpu`). Events about tangentially related subjects get these tags, which inflates both volume numbers and evidence relevance. When evidence titles for a scenario look topically unrelated (e.g., "Home Assistant waters my plants" as evidence for a TypeScript scenario), the classifier misfired — discount that evidence and note the scenario may have inflated support. This primarily affects topics that match on broad keyword patterns.
 
-   **Low scenario yield**: If `--summary` returns fewer than 3 actionable scenarios (e.g., two at P < 0.05), the most useful intelligence is likely in the change points, ranked chains, and system dynamics sections — not the Bayesian scenarios. In this case, try `--compact` for more ranked chain data, or use `--with-context` to get narrative context without extra round-trips. The scenario engine's lift threshold (≥ 1.5) and support minimum filter out weak signals, which is correct behavior — low yield means the data genuinely doesn't support strong scenario-level predictions for this window.
+   **Low scenario yield**: If `--summary` returns fewer than 3 actionable scenarios (e.g., two at P < 0.05), the most useful intelligence is likely in the change points, ranked chains, and system dynamics sections — not the Bayesian scenarios. Summary mode now handles this automatically: when scenario yield is thin (< 3), it upgrades ranked chains, dynamics, and lifecycles to compact limits. Use `--with-context` to add narrative context without extra round-trips. The scenario engine's lift threshold (≥ 1.5) and support minimum filter out weak signals, which is correct behavior — low yield means the data genuinely doesn't support strong scenario-level predictions for this window.
 
    **Systems dynamics interpretation**:
 
@@ -116,11 +116,19 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    intel events --id <event_id>
    ```
 
-5. **Cross-reference with current trends** (skip if already run in step 1):
+5. **Deepen on accumulation signals**: When the dynamics section shows `accumulation` entries (pressure building without release), these need context to be actionable. The key question is: "what is the threshold event?" Search for recent content on the accumulating topic to identify what could trigger a release:
+   ```bash
+   # For each accumulation topic, search for recent context
+   intel search "kubernetes security" --since 7d --limit 10
+   intel events --topic security.appsec --since 14d --limit 10
+   ```
+   Look for: policy announcements, vulnerability disclosures, conference deadlines, or competitive moves that could serve as the threshold event. Accumulations without an identifiable trigger are noted but lower-priority.
+
+6. **Cross-reference with current trends** (skip if already run in step 1):
    ```bash
    intel trends --since 24h
    ```
 
-6. **Synthesize** using the output template in the main skill document.
+7. **Synthesize** using the output template in the main skill document.
 
 **Parallelism note**: `intel stats`, `intel trends`, and `intel forecast` are independent queries with no data dependency. Run them in parallel when possible to minimize latency (e.g., stats + trends in step 1, or trends + forecast if data freshness is already confirmed).

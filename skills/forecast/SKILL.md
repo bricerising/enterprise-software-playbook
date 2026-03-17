@@ -108,18 +108,19 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 | **Adjacency is heuristic** | Internal engine | The adjacency table reflects common patterns, not rules. Domain context overrides |
 | **Freshness check** | Before synthesis | Stale data → stale forecasts. Verify recency via `intel stats` |
 | **Spurious correlations** | Chains with support < 3 or low source diversity | Flag as lower confidence |
-| **Temporal artifacts** | Chains where `temporal_pattern` = `weekday_correlated` | Likely a calendar cadence, not causal. Discount unless you can identify a mechanism |
+| **Temporal artifacts** | Chains where `temporal_pattern` = `weekday_correlated` or `weekday_ratio` > 0.7 | Likely a calendar cadence, not causal. `weekday_ratio` is always present for programmatic assessment. Discount unless you can identify a mechanism |
 | **Decay reveals staleness** | `decay_weighted_support` ≪ `support` | Co-movement hasn't recurred recently (half-life = 14d) |
 | **Entropy = predictability** | `normalized_entropy` > 0.8 | Target is bursty and less predictable; widen confidence window |
 | **CUSUM change points** | Change point within last 7 days | History may not hold — always surface these prominently. Highest-priority signal |
 | **Signal quality** | Scenario ranking | Scenarios rank by chain confidence × source diversity × trigger specificity, not just lift. Low-fanout triggers rank higher |
 | **Base rate noise** | `trigger_base_rate` > 0.5 | Topic spikes most days — chains from it are less informative |
+| **Target base rate noise** | `target_base_rate` > 0.8 | Target topic is omnipresent — predicting it will spike is trivially true. Pre-filtered when evidence is weak (no 'high' relevance) |
 | **Evidence relevance** | `evidence_relevance` = `low` | Likely a classifier false positive (event tagged with 5+ topics). Weight scenario lower. Scenarios where ALL evidence is 'low' are pre-filtered out |
-| **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing |
+| **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing. Scenarios with high `target_base_rate` (> 0.8) and no 'high'-relevance evidence are now pre-filtered |
 | **Accumulation freshness** | Accumulation dynamics | Requires `published_at` in window. Backfill-only topics are excluded |
 | **HMM vs rule-based** | Phase classification | HMM overrides rule-based when confidence is +0.15 higher. `phase_probabilities` only present when HMM was used |
 | **Transitive diversity** | A→B→C chains | Per-prefix cap of 3 ensures diverse paths. If all top results share the same A→B prefix, lower-ranked cross-domain paths are more interesting |
-| **Transitive uncertainty** | A→B→C chains | `combined_lift` is a product, `min_support` is the weakest link — uncertainty compounds |
+| **Transitive uncertainty** | A→B→C chains | `combined_lift` is a product, `min_support` is the weakest link — uncertainty compounds. Use `normalized_confidence` (geometric mean of leg confidences, 0-1) for calibrated comparison |
 | **Cluster staleness** | Internal engine | Low `drift.ari_prev` means cluster boundaries are shifting. Path-based analysis still valid |
 | **30-day retention** | All forecasts | System only sees patterns within retention window |
 | **No fabrication** | Always | Only use data returned by tools. Never invent scenarios or probabilities |

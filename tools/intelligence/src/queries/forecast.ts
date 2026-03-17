@@ -114,8 +114,12 @@ export interface ChainItem {
   trigger_base_rate: number;
   /** Calendar artifact hint. Present when co-occurrences cluster on weekdays.
    *  'weekday_correlated' = both trigger and target spike predominantly Mon-Fri
-   *  and co-occurrences are >85% weekday. Likely a calendar cadence, not causal. */
+   *  and co-occurrences are >75% weekday. Likely a calendar cadence, not causal. */
   temporal_pattern?: 'weekday_correlated';
+  /** Fraction of co-occurrence days that fall on weekdays (Mon-Fri) for this
+   *  chain's trigger and target, averaged. Always present so consumers can
+   *  programmatically assess calendar artifacts even below the binary threshold. */
+  weekday_ratio: number;
 }
 
 export interface TransitiveChainItem {
@@ -124,6 +128,10 @@ export interface TransitiveChainItem {
   min_support: number;
   combined_lift: number;
   cross_domain: boolean;
+  /** Geometric mean of the two leg confidences — calibrated [0,1] score
+   *  that accounts for uncertainty compounding in multi-hop chains.
+   *  More useful than combined_lift for comparing transitive chain strength. */
+  normalized_confidence: number;
 }
 
 export interface RankedChainItem extends ChainItem {
@@ -144,6 +152,10 @@ export interface ScenarioItem {
    *  'high' = 1-2 topics, 'medium' = 3-4, 'low' = 5 (classifier may be noisy). */
   evidence_relevance: Array<'high' | 'medium' | 'low'>;
   target_entropy: number;
+  /** Fraction of window days on which the target topic spikes (0-1).
+   *  High values (> 0.8) indicate omnipresent targets — predicting they'll
+   *  spike is trivially true and not actionable. */
+  target_base_rate: number;
 }
 
 export interface EntropyItem {
@@ -302,7 +314,11 @@ export function computeForecast(
   );
 
   const limits = summary ? SUMMARY_LIMITS : (compact ? COMPACT_LIMITS : null);
-  const dynamicsPerType = limits?.dynamics_per_type ?? MAX_DYNAMICS_PER_TYPE;
+  // Always compute dynamics with compact limits at minimum so adaptive summary
+  // can upgrade without re-computing. Full mode uses MAX_DYNAMICS_PER_TYPE.
+  const dynamicsPerType = limits
+    ? Math.max(limits.dynamics_per_type, COMPACT_LIMITS.dynamics_per_type)
+    : MAX_DYNAMICS_PER_TYPE;
   const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType, freshTopics);
 
   // Build change_points_summary: topics with CUSUM change points, sorted by recency
@@ -365,20 +381,31 @@ export function computeForecast(
     : null;
 
   if (limits) {
+    // Adaptive summary: when summary mode produces thin scenario yield (< 3),
+    // the most useful intelligence is in ranked chains, dynamics, and lifecycles.
+    // Auto-upgrade those sections to compact limits so the agent gets actionable
+    // data without needing a manual --compact retry.
+    const effectiveLimits: Record<string, number> = { ...limits };
+    if (summary && filteredScenarios.slice(0, limits.scenarios).length < 3) {
+      effectiveLimits.ranked_chains = Math.max(limits.ranked_chains, COMPACT_LIMITS.ranked_chains);
+      effectiveLimits.dynamics_per_type = Math.max(limits.dynamics_per_type, COMPACT_LIMITS.dynamics_per_type);
+      effectiveLimits.lifecycles = Math.max(limits.lifecycles, COMPACT_LIMITS.lifecycles);
+    }
+
     const result: ForecastData = {
       window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
-      ranked_chains: filteredRankedChains.slice(0, limits.ranked_chains),
-      scenarios: filteredScenarios.slice(0, limits.scenarios),
-      dynamics: filteredDynamics,
+      ranked_chains: filteredRankedChains.slice(0, effectiveLimits.ranked_chains),
+      scenarios: filteredScenarios.slice(0, effectiveLimits.scenarios),
+      dynamics: capDynamicsPerType(filteredDynamics, effectiveLimits.dynamics_per_type),
       change_points_summary: filteredChangePoints,
     };
     // Only include sections whose limit is > 0 — avoids wasted tokens
     // from empty arrays in summary mode.
-    if (limits.lifecycles > 0) result.lifecycles = filteredLifecycles.slice(0, limits.lifecycles);
-    if (limits.chains > 0) result.chains = filteredChains.slice(0, limits.chains);
-    if (limits.multiscale > 0) result.multiscale = filteredMultiscale.slice(0, limits.multiscale);
-    if (limits.transitive_chains > 0) result.transitive_chains = filteredTransitive.slice(0, limits.transitive_chains);
-    if (limits.entropy > 0) result.entropy = filteredEntropy.slice(0, limits.entropy);
+    if (effectiveLimits.lifecycles > 0) result.lifecycles = filteredLifecycles.slice(0, effectiveLimits.lifecycles);
+    if (effectiveLimits.chains > 0) result.chains = filteredChains.slice(0, effectiveLimits.chains);
+    if (effectiveLimits.multiscale > 0) result.multiscale = filteredMultiscale.slice(0, effectiveLimits.multiscale);
+    if (effectiveLimits.transitive_chains > 0) result.transitive_chains = filteredTransitive.slice(0, effectiveLimits.transitive_chains);
+    if (effectiveLimits.entropy > 0) result.entropy = filteredEntropy.slice(0, effectiveLimits.entropy);
     if (filteredContext) result.context = filteredContext;
 
     if (sectionFilter) {
@@ -407,6 +434,18 @@ export function computeForecast(
   }
 
   return ok(fullResult);
+}
+
+/** Re-cap dynamics per type after initial detection.
+ *  Used when adaptive summary upgrades the dynamics limit. */
+function capDynamicsPerType(items: DynamicItem[], maxPerType: number): DynamicItem[] {
+  const counts = new Map<string, number>();
+  return items.filter(d => {
+    const count = counts.get(d.type) ?? 0;
+    if (count >= maxPerType) return false;
+    counts.set(d.type, count + 1);
+    return true;
+  });
 }
 
 /** Strip a ForecastData to only the sections named in the filter set.
@@ -697,11 +736,12 @@ function detectChains(
     const decayFactor = Math.exp(-DECAY_LAMBDA * daysSinceRecent);
 
     // Temporal artifact detection: if both trigger and target spike predominantly
-    // on weekdays (Mon-Fri) with >85% ratio, the chain is likely a calendar cadence.
+    // on weekdays (Mon-Fri) with >75% ratio, the chain is likely a calendar cadence.
     const trigWd = row.trigger_weekday_ratio ?? 0;
     const tgtWd = row.target_weekday_ratio ?? 0;
+    const weekdayRatio = Math.round(((trigWd + tgtWd) / 2) * 100) / 100;
     const temporalPattern: 'weekday_correlated' | undefined =
-      trigWd > 0.85 && tgtWd > 0.85 ? 'weekday_correlated' : undefined;
+      trigWd > 0.75 && tgtWd > 0.75 ? 'weekday_correlated' : undefined;
 
     return {
       from_topic: row.from_topic,
@@ -719,6 +759,7 @@ function detectChains(
       decay_weighted_support: Math.round(row.support * decayFactor * 100) / 100,
       trigger_base_rate: Math.round((row.trigger_base_rate ?? 0) * 100) / 100,
       ...(temporalPattern ? { temporal_pattern: temporalPattern } : {}),
+      weekday_ratio: weekdayRatio,
     };
   });
 
@@ -763,8 +804,13 @@ function detectTransitiveChains(chains: ChainItem[]): TransitiveChainItem[] {
       const min_support = Math.min(ab.support, bc.support);
       const combined_lift = Math.round(ab.lift * bc.lift * 100) / 100;
       const cross_domain = path[0].split('.')[0] !== path[path.length - 1].split('.')[0];
+      // Geometric mean of leg confidences — calibrated [0,1] metric
+      // that penalizes chains where one leg has weak confidence.
+      const normalized_confidence = Math.round(
+        Math.sqrt(ab.confidence * bc.confidence) * 100,
+      ) / 100;
 
-      results.push({ path, total_lag_days, min_support, combined_lift, cross_domain });
+      results.push({ path, total_lag_days, min_support, combined_lift, cross_domain, normalized_confidence });
     }
   }
 
@@ -1438,6 +1484,8 @@ function projectScenariosBayesian(
       .sort((a, b) => b[1] - a[1])
       .map(([topic]) => topic);
 
+    const targetBaseRate = Math.round((baseRates.get(target) ?? 0) * 100) / 100;
+
     scenarios.push({
       target_topic: target,
       probability,
@@ -1450,16 +1498,27 @@ function projectScenariosBayesian(
       evidence_titles: evidenceTitles,
       evidence_relevance: evidenceRelevance,
       target_entropy: targetEnt,
+      target_base_rate: targetBaseRate,
     });
   }
 
   // Pre-filter: drop scenarios where ALL evidence is topically unrelated
   // (all 'low' relevance). This catches cases where the classifier misfired
   // on every supporting event — the scenario has no genuine evidence.
-  const filtered = scenarios.filter(s =>
-    s.evidence_relevance.length === 0 ||
-    s.evidence_relevance.some(r => r !== 'low'),
-  );
+  // Also drop scenarios where the target is omnipresent (base_rate > 0.8)
+  // AND evidence is weak (no 'high' relevance). Predicting that an
+  // omnipresent topic will spike is trivially true and not actionable.
+  const filtered = scenarios.filter(s => {
+    // Gate 1: all-low evidence → drop regardless of base rate
+    if (s.evidence_relevance.length > 0 && s.evidence_relevance.every(r => r === 'low')) {
+      return false;
+    }
+    // Gate 2: omnipresent target + no strong evidence → drop
+    if (s.target_base_rate > 0.8 && !s.evidence_relevance.some(r => r === 'high')) {
+      return false;
+    }
+    return true;
+  });
 
   // Sort by probability descending, take top N
   filtered.sort((a, b) => b.probability - a.probability);
