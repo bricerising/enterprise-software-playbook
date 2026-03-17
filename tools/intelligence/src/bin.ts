@@ -349,6 +349,7 @@ program
   .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
   .option('--window <days>', 'Analysis window in days (7, 14, or 30)', '30')
   .option('--compact', 'Return compact summary (top-N per section)')
+  .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
@@ -364,6 +365,7 @@ program
             dedup: opts.dedup,
             window_days: parseInt(opts.window, 10),
             compact: opts.compact ?? false,
+            summary: opts.summary ?? false,
           }),
         ),
       );

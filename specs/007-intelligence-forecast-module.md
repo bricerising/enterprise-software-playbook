@@ -112,6 +112,8 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
 intel forecast --window 7                         # 7-day analysis window (short-term forecasting)
 intel forecast --compact                          # compact output: top-N per section
 intel forecast --compact --window 7               # short-term compact forecast
+intel forecast --summary                          # minimal output: top-3 scenarios, top-5 chains, change points
+intel forecast --summary --window 7               # short-term summary forecast
 ```
 
 ### MCP Tool
@@ -128,7 +130,8 @@ intel forecast --compact --window 7               # short-term compact forecast
       "top_scenarios": { "type": "number", "description": "Max scenarios to return (default: 10)" },
       "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" },
       "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, or 30 (default: 30)" },
-      "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" }
+      "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" },
+      "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" }
     }
   }
 }
@@ -144,6 +147,7 @@ intel forecast --compact --window 7               # short-term compact forecast
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 | `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
+| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. |
 
 ---
 
@@ -160,6 +164,12 @@ interface ForecastData {
   transitive_chains: TransitiveChainItem[];
   entropy: EntropyItem[];
   dynamics: DynamicItem[];
+  change_points_summary: ChangePointSummary[];  // topics with CUSUM structural breaks, sorted by recency
+}
+
+interface ChangePointSummary {
+  topic: string;
+  days_ago: number;
 }
 ```
 
@@ -311,8 +321,13 @@ interface ChainItem {
   directionality: number;     // 0.0 - 1.0 (0.5 = symmetric, 1.0 = unidirectional)
   lag_stddev: number;         // >= 0; days of timing spread
   decay_weighted_support: number; // support × exponential decay factor (14-day half-life)
+  trigger_base_rate: number;     // fraction of window days the trigger topic spikes (0-1); >0.5 = omnipresent
 }
 ```
+
+**Trigger base rate**: Each chain exposes how frequently the trigger topic spikes relative to the analysis window. High base rates (> 0.5) indicate omnipresent topics whose chains are less informative — the correlation may simply reflect background noise rather than meaningful co-movement. Consumers should prefer chains with lower trigger base rates.
+
+**Chain sort order**: Chains are sorted by `lift DESC, support DESC` (not raw support). This surfaces rare-but-informative chains above common-but-boring ones.
 
 **Exponential decay weighting**: Each chain's support is weighted by recency using a 14-day half-life (`λ = ln(2) / 14`). The `decay_weighted_support` vs raw `support` gap reveals pattern staleness — a large gap means the co-movement hasn't recurred recently. The decay factor is computed from the most recent co-occurrence: `exp(-λ × daysSinceRecent)`.
 
@@ -362,27 +377,36 @@ Answer "what's likely to happen next" by combining active chains with statistica
 
 Only chains that are both `active` (trigger topic is currently spiking) and have `lift >= 1.5` (above-chance co-occurrence — filters spurious correlations). If no chains pass, scenarios is empty.
 
-**Step 2: Compute Bayesian posteriors**
+**Step 2: Compute Bayesian posteriors with signal enrichment**
 
-For each qualifying chain, compute a log-posterior:
+For each qualifying chain, compute an effective signal that incorporates multiple quality dimensions:
 
 ```
 base_rate = (target_spike_days / total_days)   // prior probability
-likelihood = decay_weighted_lift               // chain lift adjusted by decay factor
-cusum_discount = 0.5-1.0                       // reduced if trigger/target has recent change point
+effective_lift = chain_lift × decay_ratio × cusum_discount
+confidence_factor = √(chain_confidence)        // dampened confidence contribution
+diversity_factor = √(chain_source_diversity)   // dampened diversity contribution
+fanout_penalty = 1 / log₂(1 + trigger_fanout) // penalize omnipresent triggers
+effective_signal = effective_lift × confidence_factor × diversity_factor × fanout_penalty
 
-log_posterior += log(base_rate) + Σ log(likelihood_i × cusum_discount_i)
+log_posterior = log(base_rate) + Σ log(max(effective_signal_i, 1.01))
 ```
 
-This replaces the earlier heuristic scoring (`confidence × lift × source_diversity × ...`) with a principled Bayesian approach. Probabilities are exponentiated from log-posteriors and normalized so the highest-scoring target is 1.0.
+**Trigger fanout penalty**: A trigger that chains to N distinct targets contributes less signal than one that chains to only a few. This prevents high-base-rate topics (e.g., `lang.typescript`) from dominating all scenarios with equal weight. The penalty uses `1/log₂(1+N)` for smooth decay: fanout 1 → penalty 1.0; fanout 5 → penalty 0.39; fanout 30 → penalty 0.20.
 
-**Step 3: Aggregate by target topic**
+**Signal enrichment**: Chain confidence and source diversity are factored into the posterior (as sqrt to dampen their effect). This creates differentiation: a high-lift, high-confidence, multi-source chain produces a stronger posterior than a high-lift but low-confidence, single-source chain.
+
+**Step 3: Aggregate by target topic with temperature-scaled softmax**
 
 Multiple chains may predict the same target. Aggregate:
-- `probability` = normalized posterior (highest = 1.0; others relative)
-- `triggerTopics` = union of all trigger topics
-- `chainCount` = number of supporting chains
+- `probability` = temperature-scaled softmax: `exp((logPost - max) / T) / Σ exp((logPost_i - max) / T)` where T = 0.5
+- `triggerTopics` = sorted by per-target contribution strength (strongest first)
+- `chainCount` = number of supporting chains (capped at MAX_CHAINS_PER_TARGET = 5)
 - `timeframe` = entropy-widened window (see Step 4)
+
+**Temperature-scaled softmax** (T = 0.5): Standard softmax (T = 1.0) produces nearly uniform probabilities when log-posteriors are close. Temperature < 1.0 sharpens the distribution by effectively doubling the gap between log-posteriors. This ensures scenarios with better-supported, more-specific chains receive meaningfully higher probabilities.
+
+**Trigger topic ordering**: Rather than reporting an unsorted set of all trigger topics, each scenario's trigger list is sorted by the trigger's effective signal contribution to that specific target. This creates per-scenario differentiation even when the same triggers appear across multiple scenarios.
 
 **Step 4: Entropy-widened timeframes**
 
@@ -608,7 +632,7 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 | `classifyPhaseHMM` | H | HMM probabilistic phase classification with Gaussian emissions |
 | `detectChains` | B | SQL-based chain detection + directionality + decay weighting |
 | `detectTransitiveChains` | B2 | Adjacency-based 2-hop chain inference |
-| `projectScenarios` | C | Bayesian posterior projection with entropy widening and CUSUM discounts |
+| `projectScenariosBayesian` | C | Bayesian posterior projection with signal enrichment, fanout penalty, temperature-scaled softmax, entropy widening, and CUSUM discounts |
 | `buildMultiscaleView` | D | Acceleration vector alignment classification |
 | `computeRankedChains` | E | Active chain scoring and sorting |
 | `computeEntropy` | F | Shannon entropy per topic |
@@ -633,6 +657,7 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 | HMM override threshold | +0.15 | HMM must beat rule-based by this margin to override |
 | `MAX_CHAINS_PER_TARGET` | 5 | Maximum trigger chains contributing to a single target's posterior |
 | `MAX_DYNAMICS_PER_TYPE` | 10 | Maximum dynamics entries per type (reinforcing/delay/accumulation/dampening) |
+| `SOFTMAX_TEMPERATURE` | 0.5 | Temperature for scenario softmax; < 1.0 sharpens probability differentiation |
 
 ### Dependencies
 
@@ -665,7 +690,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 - Previous window (8–12 days ago) has low volume, creating high 7d acceleration
 - Tests the sparse-day fallback paths (d7 proxy, tiered activation)
 
-### Test Cases (20 tests, 4 describe blocks)
+### Test Cases (58 tests, 12 describe blocks)
 
 **`computeForecast` (8 tests)**:
 - Response envelope shape includes all 9 sections (including `transitive_chains`, `entropy`, `dynamics`)
@@ -730,14 +755,21 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Softmax scenario normalization | Proper softmax over all targets | Prevents all-1.0 saturation when many triggers active; produces a probability distribution summing to 1.0 |
 | Cap trigger chains per target | Max 5 chains per target | Prevents posterior accumulation from unbounded chain count; top-5 by effective lift keeps strongest signals |
 | Compact output mode | `--compact` flag | Avoids 277KB+ JSON dumps; returns top-N per section for agent-friendly output |
+| Summary output mode | `--summary` flag | Returns top-3 scenarios, top-5 ranked chains, top-3 dynamics, change points. Minimal output for fast agent synthesis. |
 | Dynamics ranking and capping | Top 10 per type, ranked by signal strength | Raw dynamics output (60+ loops, 200+ delays) is too noisy; ranking by lift/stddev/entropy surfaces most important signals |
+| Temperature-scaled softmax | T = 0.5 | Standard softmax (T=1.0) produces near-uniform probabilities when log-posteriors are similar. T=0.5 doubles differences, making top scenarios stand out. |
+| Signal enrichment in posterior | √confidence × √diversity × fanout penalty | Chains vary widely in confidence and source diversity. Incorporating these creates scenario differentiation that pure lift-based posteriors miss. |
+| Trigger fanout penalty | 1/log₂(1+N) | High-fanout triggers (chain to many targets) are less informative. Penalty suppresses omnipresent topics like lang.typescript. |
+| Chain sort by lift | ORDER BY lift DESC, support DESC | Surfaces rare-but-informative chains over common-but-boring ones. Raw support still visible for filtering. |
+| Trigger base rate field | spike_days/total_days per chain | Exposes how "omnipresent" a trigger is. Consumers can filter/deprioritize chains with trigger_base_rate > 0.5. |
+| Top-level change_points_summary | Always populated, sorted by recency | CUSUM change points are easy to overlook when buried in per-topic lifecycle data. Top-level summary ensures they're always surfaced. |
 
 ---
 
 ## Verification
 
 ```bash
-# 1. All tests pass (20 tests)
+# 1. All tests pass (58 tests)
 cd tools/intelligence && npx vitest run tests/forecast.test.ts
 
 # 2. Type-checks cleanly
@@ -762,4 +794,16 @@ intel forecast --min-support 2 | jq '.data.dynamics | length'
 
 # 8. Verify lifecycle items include change_points; phase_probabilities present only when HMM used
 intel forecast --min-support 2 | jq '.data.lifecycles[0] | {phase, phase_confidence, phase_probabilities, change_points}'
+
+# 9. Verify change_points_summary is populated and sorted by recency
+intel forecast --min-support 2 | jq '.data.change_points_summary'
+
+# 10. Verify chains include trigger_base_rate and are sorted by lift
+intel forecast --min-support 2 | jq '.data.chains[:3] | .[] | {from_topic, to_topic, lift, trigger_base_rate}'
+
+# 11. Verify scenario probabilities are differentiated (not all identical)
+intel forecast --min-support 2 | jq '[.data.scenarios[].probability] | unique | length'
+
+# 12. Verify summary mode returns minimal output
+intel forecast --summary | jq '{scenarios: (.data.scenarios | length), ranked_chains: (.data.ranked_chains | length), change_points: (.data.change_points_summary | length)}'
 ```

@@ -24,11 +24,14 @@ Success looks like: forward-looking intelligence with ranked scenarios, developm
 | "What are we likely to build next?" | **Internal** |
 | "Where is development concentrated?" | **Internal** |
 | "What external shifts should we prepare for?" | **External** |
-| "What's going to happen next?" (general) | **Combined** |
-| "What's the full picture?" | **Combined** |
+| "What's going to happen next?" (general) | **Combined** — cross-references internal velocity with external ecosystem signals |
+| "What's the full picture?" | **Combined** — produces compound insights (e.g., "heavy investment in a sinking dependency") |
+| "What's the market doing?" / "Technology landscape" | **External** |
 | "What happened recently?" | `intel` |
 | "How is our codebase structured?" | `archobs` |
 | "Plan the implementation" | `plan` |
+
+**Default to Combined mode** unless the user explicitly scopes to internal-only or external-only. Cross-referencing internal development velocity against external ecosystem signals produces compound insights that neither engine generates alone.
 
 ## Prerequisites
 
@@ -200,18 +203,21 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
 2. **Run forecast**:
    ```bash
-   intel forecast --compact
+   intel forecast --summary
    ```
-   Use `--compact` for agent consumption — returns top-N per section instead of full output (avoids 200KB+ JSON dumps).
+   Use `--summary` for agent consumption — returns only top-3 scenarios, top-5 ranked chains, top-3 dynamics, and change points. This is the preferred mode for agent workflows.
+
+   Use `--compact` when you need more detail (top-N per section) but still want reduced output.
 
    CLI defaults: `--lag-window 7 --min-support 2 --top-scenarios 10 --dedup canonical --window 30`
 
    Optional tuning:
    ```bash
-   intel forecast --compact --window 7              # short-term compact forecast
+   intel forecast --summary --window 7               # short-term summary forecast
+   intel forecast --compact                           # more detail, still bounded
    intel forecast --lag-window 5 --min-support 2 --top-scenarios 15
-   intel forecast --window 14                        # 14-day analysis window
-   intel forecast --dedup none                       # count raw events
+   intel forecast --window 14                         # 14-day analysis window
+   intel forecast --dedup none                        # count raw events
    ```
 
 3. **Interpret the response sections**:
@@ -226,6 +232,15 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `multiscale` | Per-topic alignment across 1d/7d/30d (aligned_up, aligned_down, diverging, transitioning) |
    | `entropy` | Shannon entropy per topic — low (< 0.3) = predictable; high (> 0.8) = bursty |
    | `dynamics` | Systems dynamics: reinforcing loops, delays, accumulations, dampening signals |
+   | `change_points_summary` | **HIGH PRIORITY** — topics with CUSUM structural breaks, sorted by recency. Always call these out. |
+
+   **CUSUM change points** are the highest-priority signal in the forecast output. A change point means a topic's volume trajectory shifted structurally — the historical pattern broke. When `change_points_summary` is non-empty:
+   - Always call out which topics had structural breaks and how recently
+   - A change point 0-3 days ago = very recent shift, likely still unfolding
+   - A change point with `days_ago: 1` on a topic like `ai.openai` means "OpenAI's trajectory shifted yesterday" — this is actionable intelligence
+   - Cross-reference with lifecycle phase: a change point + `decaying` phase = growth was arrested; a change point + `emerging` phase = new breakout
+
+   **Chains are sorted by lift** (above-chance co-occurrence ratio), not by raw support. High-lift chains are informative regardless of volume. Chains also include `trigger_base_rate` — values > 0.5 indicate omnipresent triggers whose chains are less informative.
 
    **Systems dynamics interpretation**:
 
@@ -287,7 +302,10 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - **Spurious correlations exist** — low-support chains (support < 3) or low source-diversity chains should be flagged as lower confidence.
 - **Decay reveals staleness** — compare `decay_weighted_support` to raw `support`. A large gap means the co-movement pattern hasn't recurred recently. Half-life is 14 days.
 - **Entropy signals predictability** — high normalized entropy (> 0.8) means the target is bursty and less predictable.
-- **CUSUM change points invalidate history** — if a trigger or target topic has a change point within the last 7 days, the scenario's effective lift is discounted.
+- **CUSUM change points invalidate history** — if a trigger or target topic has a change point within the last 7 days, the scenario's effective lift is discounted. **Always surface change points prominently** — they represent structural shifts that are easy to miss but highly actionable.
+- **Scenario probabilities reflect signal quality** — scenarios are differentiated by chain confidence, source diversity, and trigger specificity (not just lift). A scenario driven by a trigger that chains to only 3 targets ranks higher than one driven by a trigger that chains to 30 targets, because the signal is more specific.
+- **Trigger base rate reveals noise** — chains with `trigger_base_rate` > 0.5 originate from topics that spike on most days. These correlations are less informative than chains from targeted triggers. Prefer interpreting chains with lower trigger base rates.
+- **Evidence quality varies** — the topic classifier occasionally produces false positives (e.g., unrelated content tagged under a topic). When evidence titles seem off-topic, note this and weight the scenario lower.
 - **HMM vs rule-based phase** — the HMM classifier overrides the rule-based one when its confidence is 0.15+ higher. `phase_probabilities` is only present when the HMM was used, so the probabilities always agree with the assigned phase.
 - **Transitive chains compound uncertainty** — A→B→C has `min_support` (weakest link) and `combined_lift` (product), but uncertainty compounds.
 - **Cluster assignments may be stale** — if `drift.ari_prev` is low, cluster boundaries are shifting. Path-based analysis is still valid.
@@ -317,13 +335,14 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 ### External mode (forecast)
 
 - **Analysis window**: date range, events analyzed, source count
+- **Structural breaks** (ALWAYS include if non-empty): topics with CUSUM change points from `change_points_summary`, sorted by recency. These are the highest-signal items — a recent structural break means a topic's trajectory changed and historical patterns may not hold.
 - **Active triggers**: topics currently spiking that have historical chain patterns
 - **Top scenarios** (3-5):
   - **Topic**: the predicted target topic
   - **Probability**: Bayesian posterior (0-1), explain as high/medium/low
   - **Timeframe**: expected window in days (entropy-widened)
-  - **Triggers**: which active topics are driving this prediction
-  - **Evidence**: top supporting article titles (up to 3)
+  - **Triggers**: which active topics are driving this prediction (sorted by contribution strength — first trigger matters most for this specific target)
+  - **Evidence**: top supporting article titles (up to 3). Flag any evidence that looks off-topic (topic classifier false positives)
   - **Predictability**: if `target_entropy` > 0.8, note the target is bursty
   - **CUSUM discount**: if trigger/target has a recent change point, note reduced confidence
 - **Transitive chains**: noteworthy A→B→C paths, especially cross-domain
@@ -331,7 +350,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - **Entropy landscape**: topics with extreme entropy values
 - **Multi-scale alignment**: topics where all timeframes agree on direction
 - **System dynamics**: reinforcing loops, delays, accumulations, dampening
-- **Ranked chains**: top active chains by composite score
+- **Ranked chains**: top active chains by composite score. Note chains with high `trigger_base_rate` (> 0.5) as lower-confidence.
 - **Confidence notes**: data depth, source diversity, chain support levels, decay-weighted support, CUSUM discounts
 - **So what**: 1-2 sentence synthesis of the most actionable insight
 - **Recommended action**: what to watch, prepare for, or investigate further

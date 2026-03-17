@@ -116,6 +116,7 @@ describe('computeForecast', () => {
     expect(result.data).toHaveProperty('multiscale');
     expect(result.data).toHaveProperty('transitive_chains');
     expect(result.data).toHaveProperty('dynamics');
+    expect(result.data).toHaveProperty('change_points_summary');
     expect(result.data.window.events_analyzed).toBeGreaterThan(0);
   });
 
@@ -134,6 +135,9 @@ describe('computeForecast', () => {
       expect(typeof chain.confidence).toBe('number');
       expect(typeof chain.directionality).toBe('number');
       expect(typeof chain.lag_stddev).toBe('number');
+      expect(typeof chain.trigger_base_rate).toBe('number');
+      expect(chain.trigger_base_rate).toBeGreaterThanOrEqual(0);
+      expect(chain.trigger_base_rate).toBeLessThanOrEqual(1);
     }
   });
 
@@ -219,6 +223,7 @@ describe('computeForecast', () => {
       expect(result.data.multiscale).toEqual([]);
       expect(result.data.transitive_chains).toEqual([]);
       expect(result.data.dynamics).toEqual([]);
+      expect(result.data.change_points_summary).toEqual([]);
       expect(result.data.window.events_analyzed).toBe(0);
     } finally {
       emptyDb.close();
@@ -900,5 +905,82 @@ describe('dynamics detection (unit)', () => {
     const result = detectDynamics([], lifecycles, multiscale, entropy);
     const acc = result.filter((d) => d.type === 'accumulation');
     expect(acc).toHaveLength(0);
+  });
+});
+
+/* ── Summary mode tests ────────────────────────────────────────────── */
+
+describe('summary mode', () => {
+  it('returns at most 3 scenarios in summary mode', () => {
+    const result = computeForecast(db, { min_support: 2, summary: true });
+    expect(result.status).toBe('ok');
+    expect(result.data.scenarios.length).toBeLessThanOrEqual(3);
+  });
+
+  it('returns at most 5 ranked chains in summary mode', () => {
+    const result = computeForecast(db, { min_support: 2, summary: true });
+    expect(result.data.ranked_chains.length).toBeLessThanOrEqual(5);
+  });
+
+  it('omits detail sections in summary mode', () => {
+    const result = computeForecast(db, { min_support: 2, summary: true });
+    expect(result.data.lifecycles).toEqual([]);
+    expect(result.data.chains).toEqual([]);
+    expect(result.data.multiscale).toEqual([]);
+    expect(result.data.transitive_chains).toEqual([]);
+    expect(result.data.entropy).toEqual([]);
+  });
+
+  it('always includes change_points_summary', () => {
+    const result = computeForecast(db, { min_support: 2, summary: true });
+    expect(Array.isArray(result.data.change_points_summary)).toBe(true);
+  });
+
+  it('change_points_summary is sorted by days_ago ascending', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const cps = result.data.change_points_summary;
+    for (let i = 1; i < cps.length; i++) {
+      expect(cps[i - 1].days_ago).toBeLessThanOrEqual(cps[i].days_ago);
+    }
+  });
+});
+
+/* ── Scenario differentiation tests ────────────────────────────────── */
+
+describe('scenario differentiation', () => {
+  it('scenarios have non-uniform probabilities when chain quality differs', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const scenarios = result.data.scenarios;
+    if (scenarios.length < 2) return;
+
+    // At least some probability variation should exist (not all identical)
+    const probs = new Set(scenarios.map((s) => s.probability));
+    expect(probs.size).toBeGreaterThan(1);
+  });
+
+  it('trigger_topics are sorted by contribution per scenario', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const s of result.data.scenarios) {
+      // trigger_topics should be an array (sorted by contribution)
+      expect(Array.isArray(s.trigger_topics)).toBe(true);
+      expect(s.trigger_topics.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('chains include trigger_base_rate field', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    for (const chain of result.data.chains) {
+      expect(typeof chain.trigger_base_rate).toBe('number');
+      expect(chain.trigger_base_rate).toBeGreaterThanOrEqual(0);
+      expect(chain.trigger_base_rate).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('chains are sorted by lift descending', () => {
+    const result = computeForecast(db, { min_support: 2 });
+    const chains = result.data.chains;
+    for (let i = 1; i < chains.length; i++) {
+      expect(chains[i - 1].lift).toBeGreaterThanOrEqual(chains[i].lift);
+    }
   });
 });

@@ -35,6 +35,11 @@ const CUSUM_H_SIGMA = 4.0;
  *  A change point 0 days ago → full discount; at the horizon → no discount. */
 const CUSUM_DISCOUNT_HORIZON_DAYS = 7;
 
+/** Softmax temperature for scenario projection. Values < 1.0 sharpen the
+ *  probability distribution so top scenarios differentiate from the rest.
+ *  1.0 = standard softmax; 0.5 = doubled log-posterior differences. */
+const SOFTMAX_TEMPERATURE = 0.5;
+
 /** HMM-style Gaussian emission model parameters.
  *  Each phase has expected accelerations at each window and a spread. */
 const PHASE_EMISSIONS: Record<
@@ -50,6 +55,11 @@ const PHASE_EMISSIONS: Record<
 
 /* ── Interfaces ─────────────────────────────────────────────────────── */
 
+export interface ChangePointSummary {
+  topic: string;
+  days_ago: number;
+}
+
 export interface ForecastData {
   window: { start: string; end: string; events_analyzed: number };
   lifecycles: LifecycleItem[];
@@ -60,6 +70,7 @@ export interface ForecastData {
   transitive_chains: TransitiveChainItem[];
   entropy: EntropyItem[];
   dynamics: DynamicItem[];
+  change_points_summary: ChangePointSummary[];
 }
 
 export interface LifecycleItem {
@@ -84,6 +95,9 @@ export interface ChainItem {
   directionality: number;
   lag_stddev: number;
   decay_weighted_support: number;
+  /** Fraction of window days on which the trigger topic spikes (0-1).
+   *  High values (> 0.5) indicate omnipresent topics whose chains are less informative. */
+  trigger_base_rate: number;
 }
 
 export interface TransitiveChainItem {
@@ -146,6 +160,9 @@ export interface ComputeForecastOpts {
   window_days?: number;
   /** When true, return a compact summary (top-N per section) instead of full output. */
   compact?: boolean;
+  /** When true, return a minimal summary (top-3 scenarios, top-5 chains, top-3 dynamics,
+   *  change points) for fast agent consumption. Implies compact. */
+  summary?: boolean;
 }
 
 /* ── Main entry ─────────────────────────────────────────────────────── */
@@ -162,6 +179,18 @@ const COMPACT_LIMITS = {
   dynamics_per_type: 5,
 } as const;
 
+/** Summary mode limits — aggressive reduction for fast agent synthesis. */
+const SUMMARY_LIMITS = {
+  lifecycles: 0,
+  chains: 0,
+  ranked_chains: 5,
+  scenarios: 3,
+  multiscale: 0,
+  transitive_chains: 0,
+  entropy: 0,
+  dynamics_per_type: 1,
+} as const;
+
 export function computeForecast(
   db: Database.Database,
   opts: ComputeForecastOpts = {},
@@ -172,7 +201,8 @@ export function computeForecast(
   const minSupport = opts.min_support ?? 2;
   const topScenarios = opts.top_scenarios ?? 10;
   const useDedup = opts.dedup !== 'none';
-  const compact = opts.compact ?? false;
+  const summary = opts.summary ?? false;
+  const compact = summary || (opts.compact ?? false);
 
   // Overall analysis window (default 30 days)
   const windowDays = opts.window_days ?? 30;
@@ -209,20 +239,31 @@ export function computeForecast(
 
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
-  const dynamicsPerType = compact ? COMPACT_LIMITS.dynamics_per_type : MAX_DYNAMICS_PER_TYPE;
+  const limits = summary ? SUMMARY_LIMITS : (compact ? COMPACT_LIMITS : null);
+  const dynamicsPerType = limits?.dynamics_per_type ?? MAX_DYNAMICS_PER_TYPE;
   const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType);
 
-  if (compact) {
+  // Build change_points_summary: topics with CUSUM change points, sorted by recency
+  const changePointsSummary: ChangePointSummary[] = [];
+  for (const lc of lifecycles) {
+    for (const daysAgo of lc.change_points) {
+      changePointsSummary.push({ topic: lc.topic, days_ago: daysAgo });
+    }
+  }
+  changePointsSummary.sort((a, b) => a.days_ago - b.days_ago);
+
+  if (limits) {
     return ok({
       window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
-      lifecycles: lifecycles.slice(0, COMPACT_LIMITS.lifecycles),
-      chains: chains.slice(0, COMPACT_LIMITS.chains),
-      ranked_chains: ranked_chains.slice(0, COMPACT_LIMITS.ranked_chains),
-      scenarios: scenarios.slice(0, COMPACT_LIMITS.scenarios),
-      multiscale: multiscale.slice(0, COMPACT_LIMITS.multiscale),
-      transitive_chains: transitive_chains.slice(0, COMPACT_LIMITS.transitive_chains),
-      entropy: entropy.slice(0, COMPACT_LIMITS.entropy),
+      lifecycles: lifecycles.slice(0, limits.lifecycles),
+      chains: chains.slice(0, limits.chains),
+      ranked_chains: ranked_chains.slice(0, limits.ranked_chains),
+      scenarios: scenarios.slice(0, limits.scenarios),
+      multiscale: multiscale.slice(0, limits.multiscale),
+      transitive_chains: transitive_chains.slice(0, limits.transitive_chains),
+      entropy: entropy.slice(0, limits.entropy),
       dynamics,
+      change_points_summary: changePointsSummary,
     });
   }
 
@@ -236,6 +277,7 @@ export function computeForecast(
     transitive_chains,
     entropy,
     dynamics,
+    change_points_summary: changePointsSummary,
   });
 }
 
@@ -441,7 +483,8 @@ function detectChains(
              AVG((JULIANDAY(b.day) - JULIANDAY(a.day)) * (JULIANDAY(b.day) - JULIANDAY(a.day)))
              - AVG(JULIANDAY(b.day) - JULIANDAY(a.day)) * AVG(JULIANDAY(b.day) - JULIANDAY(a.day))
            )) AS lag_stddev,
-           MAX(b.day) AS most_recent_day
+           MAX(b.day) AS most_recent_day,
+           sa.spike_days * 1.0 / tw.total_days AS trigger_base_rate
     FROM daily_volumes a
     JOIN daily_volumes b
       ON b.day > a.day
@@ -452,7 +495,7 @@ function detectChains(
     CROSS JOIN total_window tw
     GROUP BY a.topic, b.topic
     HAVING support >= ?
-    ORDER BY support DESC
+    ORDER BY lift DESC, support DESC
   `;
 
   const chainRows = db.prepare(chainSql).all(
@@ -469,6 +512,7 @@ function detectChains(
     confidence: number;
     lag_stddev: number | null;
     most_recent_day: string;
+    trigger_base_rate: number;
   }>;
 
   if (chainRows.length === 0) return [];
@@ -518,6 +562,7 @@ function detectChains(
       directionality: 1.0, // placeholder, computed below
       lag_stddev: Math.round((row.lag_stddev ?? 0) * 100) / 100,
       decay_weighted_support: Math.round(row.support * decayFactor * 100) / 100,
+      trigger_base_rate: Math.round((row.trigger_base_rate ?? 0) * 100) / 100,
     };
   });
 
@@ -1035,12 +1080,22 @@ function projectScenariosBayesian(
     }
   }
 
-  // Bayesian aggregation: for each target, posterior ∝ prior × ∏(lift_i × decay_factor_i)
-  // Pre-sort chains per target by effective lift so we can cap at MAX_CHAINS_PER_TARGET
+  // Compute trigger fan-out: how many distinct targets each trigger reaches.
+  // High-fanout triggers (chain to everything) are less informative than
+  // targeted ones, so we penalize them in the posterior.
+  const triggerFanout = new Map<string, number>();
+  for (const chain of activeChains) {
+    triggerFanout.set(chain.from_topic, (triggerFanout.get(chain.from_topic) ?? 0) + 1);
+  }
+
+  // Bayesian aggregation: for each target, posterior ∝ prior × ∏(signal_i)
+  // where signal_i incorporates lift, decay, confidence, source diversity,
+  // and trigger fanout penalty.
+  // Pre-sort chains per target by effective signal so we can cap at MAX_CHAINS_PER_TARGET
   // to prevent posterior saturation when many triggers are simultaneously active.
   const chainsByTarget = new Map<string, Array<{
     chain: typeof activeChains[0];
-    effectiveLift: number;
+    effectiveSignal: number;
     lagMin: number;
     lagMax: number;
   }>>();
@@ -1050,7 +1105,7 @@ function projectScenariosBayesian(
     const lagMin = Math.max(0, chain.avg_lag_days - 2 * stddev);
     const lagMax = chain.avg_lag_days + 2 * stddev;
 
-    // Use decay-weighted lift as the likelihood ratio
+    // Use decay-weighted lift as the base likelihood ratio
     const decayRatio = chain.support > 0
       ? chain.decay_weighted_support / chain.support
       : 1;
@@ -1067,8 +1122,20 @@ function projectScenariosBayesian(
       effectiveLift *= cpDiscount;
     }
 
+    // Enrich signal with confidence and source diversity so chains with
+    // stronger evidence produce higher posteriors and differentiate scenarios.
+    const confidenceFactor = Math.sqrt(Math.max(chain.confidence, 0.01));
+    const diversityFactor = Math.sqrt(Math.max(chain.source_diversity, 0.01));
+
+    // Fanout penalty: triggers that chain to many targets are less informative
+    // than targeted ones. Uses inverse-log to smoothly penalize high fanout.
+    const fanout = triggerFanout.get(chain.from_topic) ?? 1;
+    const fanoutPenalty = 1 / Math.log2(1 + fanout);
+
+    const effectiveSignal = effectiveLift * confidenceFactor * diversityFactor * fanoutPenalty;
+
     const existing = chainsByTarget.get(chain.to_topic);
-    const entry = { chain, effectiveLift, lagMin, lagMax };
+    const entry = { chain, effectiveSignal, lagMin, lagMax };
     if (existing) {
       existing.push(entry);
     } else {
@@ -1080,7 +1147,7 @@ function projectScenariosBayesian(
     string,
     {
       logPosterior: number;
-      triggerTopics: Set<string>;
+      triggerContributions: Map<string, number>;
       chainCount: number;
       avgLagMin: number;
       avgLagMax: number;
@@ -1088,42 +1155,44 @@ function projectScenariosBayesian(
   >();
 
   for (const [target, entries] of chainsByTarget) {
-    // Sort by effective lift descending, keep only top N chains per target
-    entries.sort((a, b) => b.effectiveLift - a.effectiveLift);
+    // Sort by effective signal descending, keep only top N chains per target
+    entries.sort((a, b) => b.effectiveSignal - a.effectiveSignal);
     const capped = entries.slice(0, MAX_CHAINS_PER_TARGET);
 
     const prior = baseRates.get(target) ?? 0.05;
     let logPosterior = Math.log(prior);
-    const triggerTopics = new Set<string>();
+    const triggerContributions = new Map<string, number>();
     let avgLagMin = Infinity;
     let avgLagMax = -Infinity;
 
-    for (const { chain, effectiveLift, lagMin, lagMax } of capped) {
-      logPosterior += Math.log(Math.max(effectiveLift, 1.01));
-      triggerTopics.add(chain.from_topic);
+    for (const { chain, effectiveSignal, lagMin, lagMax } of capped) {
+      logPosterior += Math.log(Math.max(effectiveSignal, 1.01));
+      // Track max contribution per trigger for sorting
+      const existing = triggerContributions.get(chain.from_topic) ?? 0;
+      triggerContributions.set(chain.from_topic, Math.max(existing, effectiveSignal));
       avgLagMin = Math.min(avgLagMin, lagMin);
       avgLagMax = Math.max(avgLagMax, lagMax);
     }
 
     targetMap.set(target, {
       logPosterior,
-      triggerTopics,
+      triggerContributions,
       chainCount: capped.length,
       avgLagMin,
       avgLagMax,
     });
   }
 
-  // Convert log-posteriors to normalized probabilities via softmax.
-  // This produces a proper probability distribution that sums to 1.0,
-  // preventing saturation when many triggers are simultaneously active.
+  // Convert log-posteriors to normalized probabilities via temperature-scaled softmax.
+  // Temperature < 1.0 sharpens the distribution so top scenarios stand out.
+  // This produces a proper probability distribution that sums to 1.0.
   const entries = [...targetMap.entries()];
   const maxLogPost = Math.max(...entries.map(([, d]) => d.logPosterior));
 
-  // Compute softmax denominator: Σ exp(logPost_i - maxLogPost)
+  // Compute softmax denominator: Σ exp((logPost_i - maxLogPost) / T)
   let softmaxSum = 0;
   for (const [, data] of entries) {
-    softmaxSum += Math.exp(data.logPosterior - maxLogPost);
+    softmaxSum += Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE);
   }
 
   // Fetch evidence titles
@@ -1139,9 +1208,9 @@ function projectScenariosBayesian(
 
   const scenarios: ScenarioItem[] = [];
   for (const [target, data] of entries) {
-    // Softmax normalization: exp(logPost - maxLogPost) / Σexp(logPost_i - maxLogPost)
+    // Temperature-scaled softmax: exp((logPost - max) / T) / Σexp((logPost_i - max) / T)
     const probability = Math.round(
-      (Math.exp(data.logPosterior - maxLogPost) / softmaxSum) * 100,
+      (Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE) / softmaxSum) * 100,
     ) / 100;
 
     const titleRows = titleStmt.all(
@@ -1163,6 +1232,12 @@ function projectScenariosBayesian(
     const widenedMin = Math.max(0, center - halfWidth * entropyFactor);
     const widenedMax = center + halfWidth * entropyFactor;
 
+    // Sort trigger topics by their contribution to this specific target's
+    // posterior (strongest first), so triggers differ per scenario.
+    const sortedTriggers = [...data.triggerContributions.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([topic]) => topic);
+
     scenarios.push({
       target_topic: target,
       probability,
@@ -1170,7 +1245,7 @@ function projectScenariosBayesian(
         Math.round(widenedMin * 10) / 10,
         Math.round(widenedMax * 10) / 10,
       ],
-      trigger_topics: [...data.triggerTopics],
+      trigger_topics: sortedTriggers,
       supporting_chains: data.chainCount,
       evidence_titles: evidenceTitles,
       target_entropy: targetEnt,

@@ -115,6 +115,7 @@ const TOOL_DEFINITIONS = [
         dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
         window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
+        summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
       },
     },
   },
@@ -207,6 +208,7 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             dedup: params.dedup as string | undefined,
             window_days: params.window_days as number | undefined,
             compact: params.compact as boolean | undefined,
+            summary: params.summary as boolean | undefined,
           });
           break;
 
