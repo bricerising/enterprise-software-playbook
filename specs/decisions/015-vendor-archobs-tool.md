@@ -8,7 +8,7 @@
 The playbook already includes an `archobs` skill (`skills/archobs/SKILL.md`) that describes the workflow and metric interpretation for architecture observability analysis. The implementation — a Python CLI called `archobs` — lived in a separate `architecture-observability` repository.
 
 - **Goal**: Eliminate doc-to-implementation drift, simplify adoption for consumers who vendor the playbook, and establish a pattern for bundling tool subprojects.
-- **Constraints**: The tool has heavier Python dependencies (NumPy, Pandas, PyArrow) than the playbook's existing CI. The tool is MIT-licensed; the playbook is Apache-2.0.
+- **Constraints**: The tool has heavier Python dependencies (NumPy, Pandas, PyArrow) than the playbook's existing CI. Both the tool and the playbook are Apache-2.0 licensed.
 - **Anti-goals**: Converting the playbook into a monolithic Python package. Forcing all playbook consumers to install Python dependencies.
 - **Boundary + time horizon**: This decision applies to tool subprojects under `tools/`. Review in 6 months to see if more tools follow this pattern.
 - **Actors + incentives**: Playbook maintainers want a single source of truth; app teams vendoring the playbook want the tool included without managing a second dependency.
@@ -23,12 +23,12 @@ The playbook already includes an `archobs` skill (`skills/archobs/SKILL.md`) tha
 
 ## Decision
 
-Option A: vendor the archobs tool into `tools/archobs/` as a self-contained Python subproject with its own `pyproject.toml`, MIT license, and tests. The playbook skill docs reference the bundled tool as the preferred install path.
+Option A: vendor the archobs tool into `tools/archobs/` as a self-contained Python subproject with its own `pyproject.toml`, Apache-2.0 license, and tests. The playbook skill docs reference the bundled tool as the preferred install path.
 
 Rationale:
 - The playbook already recommends vendoring itself into app repos; including the tool makes that path complete.
 - The tool's `pyproject.toml` keeps it installable independently — no coupling to playbook structure.
-- MIT-into-Apache-2.0 inclusion is well-established (ASF Category A).
+- Same license as the playbook (Apache-2.0) — no license compatibility concerns.
 
 ## Kill criteria / reversal trigger
 

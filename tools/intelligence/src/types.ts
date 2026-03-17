@@ -30,7 +30,7 @@ export type IntelErrorCode =
   | 'INVALID_CURSOR'
   | 'INTERNAL_ERROR';
 
-export type SourceType = 'rss' | 'hackernews' | 'lobsters' | 'edgar';
+export type SourceType = 'rss' | 'hackernews' | 'lobsters' | 'edgar' | 'earnings';
 
 export interface StoredEvent {
   id: number;

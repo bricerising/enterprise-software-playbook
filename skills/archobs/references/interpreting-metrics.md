@@ -76,6 +76,18 @@ Ratio of cross-boundary edges to total edges touching the cluster. Related to le
 
 Lower conductance = healthier boundary.
 
+### `recent_file_changes_30d` / `recent_file_changes_90d`
+
+Count of file-change events (rows in `commits.parquet`) within the 30-day or 90-day window, grouped by cluster. These count **file-change events**, not distinct commits — a single commit touching 5 files in a cluster adds 5 to the count. For distinct commit counts per cluster, use `archobs show velocity` which reports `distinct_commits` via `.nunique()` on `commit_sha`.
+
+### `external_inbound_rank` (0.0 - 1.0)
+
+Percentile rank of `external_inbound_weight` across all clusters. A rank of 0.95 means this cluster has higher inbound coupling than 95% of other clusters — it is a gravitational center.
+
+- **> 0.90**: Strong gravitational center — other clusters are pulled toward this one. Consider decomposition.
+- **> 0.75**: Moderate hub — acceptable if the cluster has clear ownership and a stable interface.
+- **< 0.50**: Normal coupling — not a structural attractor.
+
 ### `risk_mean` / `risk_max`
 
 Average and maximum file-level risk within the cluster. Clusters with high `risk_max` contain at least one problematic file.
@@ -88,9 +100,20 @@ Query with `archobs show drift --format json` (or read `.archobs/drift.parquet` 
 
 Measures how much the cluster assignments changed between adjacent time windows. Compares consecutive snapshots of the subsystem map.
 
+**Point-in-time thresholds:**
 - **> 0.80**: Stable — architecture is not reshuffling.
 - **0.50 - 0.80**: Moderate drift — some subsystem boundaries are shifting.
 - **< 0.50**: Unstable — the subsystem map is changing significantly. Avoid broad moves until boundaries stabilize.
+
+**Multi-window trend patterns** (when 3+ drift windows are available, the trajectory of ARI is more informative than any single value):
+
+| Pattern | Example | Interpretation |
+|---------|---------|---------------|
+| Rising (low → high) | 0.38 → 0.58 → 0.77 | **Stabilizing after restructuring** — boundaries are converging. Safe to plan architectural moves. |
+| Falling (high → low) | 0.82 → 0.60 → 0.42 | **Actively destabilizing** — boundaries are dissolving. Investigate what's driving structural change before refactoring. |
+| Oscillating | 0.50 → 0.72 → 0.48 | **Unstable equilibrium** — architecture hasn't settled. Cluster assignments are unreliable for planning. |
+| Plateau (high) | 0.85 → 0.83 → 0.81 | **Stable architecture** — safe to use cluster assignments for trajectory analysis and planning. |
+| Plateau (low) | 0.35 → 0.38 → 0.33 | **Persistently unstable** — the codebase may lack natural boundaries. Consider whether the clustering resolution is appropriate. |
 
 ### `modularity` (0.0 - 1.0)
 
@@ -100,12 +123,14 @@ Global graph modularity for the time-windowed snapshot. Declining modularity ove
 
 Number of detected clusters per time window. Significant fluctuation suggests the architecture is not converging on stable subsystems.
 
+**Declining cluster_count in young repos**: For repos with less than ~12 months of history, cluster_count often drops dramatically across drift windows (e.g. 593 → 384 → 148 → 66). This is **not** architectural consolidation — it is an artifact of increasing co-change signal density. Early windows have sparse commit history, producing weak co-change edges where Leiden creates many tiny clusters. As more history accumulates, edges strengthen and clusters consolidate naturally. In these cases, the ARI trend is the reliable structural signal; cluster_count in early windows is noise.
+
 ## Artifacts Reference
 
 | Artifact | Format | Contents |
 |----------|--------|----------|
 | `files.parquet` | Parquet | File inventory: path, language, loc, size |
-| `commits.parquet` | Parquet | Git commit-file edges with timestamps |
+| `commits.parquet` | Parquet | Git commit-file edges with timestamps and message (first 80 chars of subject line) |
 | `git_stats.parquet` | Parquet | Per-file: commit count, last commit timestamp |
 | `imports.parquet` | Parquet | Resolved dependency edges: source, target |
 | `co_edges.parquet` | Parquet | Co-change edges with decay-weighted strength |

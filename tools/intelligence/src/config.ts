@@ -36,6 +36,13 @@ const FeedSchema = z.discriminatedUnion('source', [
     poll_interval: z.number().positive().optional(),
     entities: z.array(z.string()).optional(),
   }),
+  z.object({
+    source: z.literal('earnings'),
+    name: z.string(),
+    tickers: z.array(z.string()).optional(),
+    form_types: z.array(z.string()).optional().default(['10-K', '10-Q']),
+    poll_interval: z.number().positive().optional(),
+  }),
 ]);
 
 const CollectorSchema = z.object({
@@ -81,14 +88,14 @@ function expandHome(p: string): string {
  * - edgar_contact required if any EDGAR feeds exist
  * - edgar_max_rps <= 10
  */
-function validateEdgar(config: IntelConfig): string[] {
+function validateSec(config: IntelConfig): string[] {
   const errors: string[] = [];
-  const hasEdgar = config.feeds.some((f) => f.source === 'edgar');
+  const hasSec = config.feeds.some((f) => f.source === 'edgar' || f.source === 'earnings');
 
-  if (hasEdgar) {
+  if (hasSec) {
     if (!config.collector.edgar_contact) {
       errors.push(
-        'collector.edgar_contact is required when EDGAR feeds are configured. ' +
+        'collector.edgar_contact is required when EDGAR or earnings feeds are configured. ' +
           'SEC EDGAR requires a contact email in the User-Agent header.',
       );
     }
@@ -135,8 +142,8 @@ export function loadConfig(configPath?: string): IntelConfig {
     parsed.topics_file = expandHome(parsed.topics_file);
   }
 
-  // Validate EDGAR constraints
-  const edgarErrors = validateEdgar(parsed);
+  // Validate SEC constraints (EDGAR + earnings)
+  const edgarErrors = validateSec(parsed);
   if (edgarErrors.length > 0) {
     throw new Error(`Configuration errors:\n${edgarErrors.map((e) => `  - ${e}`).join('\n')}`);
   }

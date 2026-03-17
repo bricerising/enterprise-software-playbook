@@ -341,11 +341,30 @@ class AnalysisRun:
             "top_leaky_clusters": self.config.reporting.top_leaky_clusters,
         }
 
+        # Enrich cluster_metrics with recent file-change counts
+        cluster_metrics_df = _enrich_cluster_commit_counts(
+            cluster_metrics_df, commit_files_df, file_metrics_df,
+        )
+
+        # Compute canonical cluster labels once and store in cluster_metrics
+        cluster_metrics_df = _attach_canonical_labels(
+            cluster_metrics_df, file_metrics_df,
+        )
+
         # Build graph snapshot
         graph_snapshot = build_report_graph_snapshot(
             files_df, fused_df, clusters_df, file_metrics_df, cluster_metrics_df,
         )
         unresolved_df = deps_result.unresolved_imports()
+
+        # Persist graph edges with cluster annotations (cluster_a/cluster_b)
+        if not graph_snapshot.edges_df.empty:
+            write_parquet(graph_snapshot.edges_df, self.store.base_path, "graph_edges")
+
+        # Compute velocity for suggestion engine context
+        velocity_df = _compute_velocity_summary(
+            commit_files_df, file_metrics_df, cluster_metrics_df,
+        )
 
         # Build a prepared analysis view for report rendering
         prepared = _PreparedAnalysisView(
@@ -357,6 +376,7 @@ class AnalysisRun:
             summary_base=summary_base,
             graph_snapshot=graph_snapshot,
             unresolved_df=unresolved_df,
+            velocity_df=velocity_df,
         )
 
         # Render report
@@ -400,6 +420,7 @@ class _PreparedAnalysisView:
     summary_base: dict[str, object]
     graph_snapshot: object
     unresolved_df: pd.DataFrame
+    velocity_df: pd.DataFrame | None = None
 
     @property
     def analysis(self):
@@ -423,6 +444,158 @@ class _PreparedAnalysisView:
             "cluster_count": int(self.summary_base.get("cluster_count", 0)),
             "modularity": float(self.summary_base.get("modularity", 0.0)),
         }
+
+
+# ---------------------------------------------------------------------------
+# Cluster commit enrichment
+# ---------------------------------------------------------------------------
+
+
+def _enrich_cluster_commit_counts(
+    cluster_metrics_df: pd.DataFrame,
+    commit_files_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Add recent_file_changes_30d and recent_file_changes_90d to cluster metrics.
+
+    These count file-change events (rows in commit_files), not distinct commits.
+    For distinct commit counts, use ``show velocity`` which reports
+    ``distinct_commits`` via ``.nunique()`` on ``commit_sha``.
+    """
+    if commit_files_df.empty or file_metrics_df.empty or cluster_metrics_df.empty:
+        cluster_metrics_df = cluster_metrics_df.copy()
+        cluster_metrics_df["recent_file_changes_30d"] = 0
+        cluster_metrics_df["recent_file_changes_90d"] = 0
+        return cluster_metrics_df
+
+    # Build path-to-cluster mapping from file_metrics
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commit_files_df.merge(path_cluster, on="path", how="inner")
+
+    if merged.empty:
+        cluster_metrics_df = cluster_metrics_df.copy()
+        cluster_metrics_df["recent_file_changes_30d"] = 0
+        cluster_metrics_df["recent_file_changes_90d"] = 0
+        return cluster_metrics_df
+
+    max_ts = int(merged["commit_ts"].max())
+    cutoff_30 = max_ts - (30 * 86400)
+    cutoff_90 = max_ts - (90 * 86400)
+
+    counts_30 = (
+        merged[merged["commit_ts"] >= cutoff_30]
+        .groupby("cluster_id")["commit_ts"]
+        .count()
+        .rename("recent_file_changes_30d")
+    )
+    counts_90 = (
+        merged[merged["commit_ts"] >= cutoff_90]
+        .groupby("cluster_id")["commit_ts"]
+        .count()
+        .rename("recent_file_changes_90d")
+    )
+
+    result = cluster_metrics_df.copy()
+    result = result.merge(counts_30, on="cluster_id", how="left")
+    result = result.merge(counts_90, on="cluster_id", how="left")
+    result["recent_file_changes_30d"] = result["recent_file_changes_30d"].fillna(0).astype(int)
+    result["recent_file_changes_90d"] = result["recent_file_changes_90d"].fillna(0).astype(int)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Velocity summary for suggestion engine
+# ---------------------------------------------------------------------------
+
+
+def _compute_velocity_summary(
+    commit_files_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    cluster_metrics_df: pd.DataFrame,
+    window: int = 30,
+) -> pd.DataFrame | None:
+    """Compute a 30-day velocity summary with acceleration for the suggestion engine."""
+    if commit_files_df.empty or file_metrics_df.empty:
+        return None
+
+    path_cluster = file_metrics_df[["path", "cluster_id"]].drop_duplicates("path")
+    merged = commit_files_df.merge(path_cluster, on="path", how="inner")
+    if merged.empty:
+        return None
+
+    max_ts = int(merged["commit_ts"].max())
+    cutoff = max_ts - (window * 86400)
+    prior_cutoff = cutoff - (window * 86400)
+    current = merged[merged["commit_ts"] >= cutoff]
+    prior = merged[(merged["commit_ts"] >= prior_cutoff) & (merged["commit_ts"] < cutoff)]
+
+    def _agg(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return pd.DataFrame(columns=["cluster_id", "distinct_commits", "added_count", "file_change_count"])
+        grouped = df.groupby("cluster_id").agg(
+            distinct_commits=("commit_sha", "nunique"),
+            file_change_count=("commit_ts", "count"),
+            added_count=("status", lambda s: (s == "A").sum()),
+            modified_count=("status", lambda s: (s == "M").sum()),
+            deleted_count=("status", lambda s: (s == "D").sum()),
+        ).reset_index()
+        total = grouped["added_count"] + grouped["modified_count"] + grouped["deleted_count"]
+        total = total.replace(0, 1)
+        grouped["growth_ratio"] = grouped["added_count"] / total
+        return grouped
+
+    velocity = _agg(current)
+    if velocity.empty:
+        return None
+
+    prior_velocity = _agg(prior)
+    prior_map = dict(zip(prior_velocity["cluster_id"], prior_velocity["distinct_commits"])) if not prior_velocity.empty else {}
+    velocity["prior_commit_count"] = velocity["cluster_id"].map(prior_map).fillna(0).astype(int)
+    velocity["acceleration"] = velocity.apply(
+        lambda r: round(r["distinct_commits"] / max(r["prior_commit_count"], 1), 2), axis=1,
+    )
+
+    # Add canonical labels if available
+    if "label" in cluster_metrics_df.columns:
+        label_map = dict(zip(cluster_metrics_df["cluster_id"].astype(int), cluster_metrics_df["label"]))
+        velocity["label"] = velocity["cluster_id"].map(label_map).fillna("")
+
+    return velocity
+
+
+# ---------------------------------------------------------------------------
+# Canonical cluster labels
+# ---------------------------------------------------------------------------
+
+
+def _attach_canonical_labels(
+    cluster_metrics_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compute a canonical label per cluster and store it in the dataframe.
+
+    All ``show`` commands then read the same ``label`` column instead of
+    regenerating labels independently (which could produce inconsistent
+    results depending on the paths subset each command happens to use).
+    """
+    if cluster_metrics_df.empty or "paths" not in cluster_metrics_df.columns:
+        result = cluster_metrics_df.copy()
+        if "label" not in result.columns:
+            result["label"] = ""
+        return result
+
+    from archobs.display import _build_risk_weights, _extract_paths_list, _generate_cluster_label
+
+    risk_weights = _build_risk_weights(file_metrics_df)
+    labels: list[str] = []
+    for _, row in cluster_metrics_df.iterrows():
+        all_paths = _extract_paths_list(row.get("paths", ""))
+        csize = int(row["size"]) if "size" in row.index else None
+        labels.append(_generate_cluster_label(all_paths, weights=risk_weights, cluster_size=csize))
+
+    result = cluster_metrics_df.copy()
+    result["label"] = labels
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import {
   APPLICATION_ID,
   checkSqliteVersion,
   getLastPragmaVerifications,
+  getMigrations,
 } from '../src/db.js';
 import Database from 'better-sqlite3';
 
@@ -50,7 +51,8 @@ describe('openWriter', () => {
   it('applies migrations and sets user_version', () => {
     const db = openWriter(dbPath);
     const version = db.pragma('user_version', { simple: true });
-    expect(version).toBe(1);
+    const latestVersion = Math.max(...getMigrations().map((m) => m.version));
+    expect(version).toBe(latestVersion);
 
     // Verify tables exist
     const tables = db
@@ -164,7 +166,8 @@ describe('ensureSchema', () => {
     ensureSchema(db);
     ensureSchema(db); // Should not throw
     const version = db.pragma('user_version', { simple: true });
-    expect(version).toBe(1);
+    const latestVersion = Math.max(...getMigrations().map((m) => m.version));
+    expect(version).toBe(latestVersion);
     db.close();
   });
 });

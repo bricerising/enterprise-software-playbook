@@ -26,14 +26,29 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - impacted boundaries/contracts (HTTP/gRPC/events/WS/data model)
    - what is explicitly *out of scope*
 4. **Load archobs data** (required): Run `archobs show all --format json` to get risk scores, cluster health, and drift in one shot. Files with `risk > 0.5` and clusters with `leakage > 0.20` should appear earlier in the task order. Drift data (`ari_prev < 0.50`) flags areas to avoid broad moves in. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
+4b. **Risk Amplification** (conditional — run when any high-risk files/clusters from archobs touch external dependencies or technology choices):
+
+   ```bash
+   intel forecast    # lifecycle phases for relevant dependencies
+   ```
+
+   **Cross-reference matrix**:
+   | Archobs signal | Forecast signal | Interpretation | Priority adjustment |
+   |---|---|---|---|
+   | High risk (>0.5) | reinforcing loop | Compound risk — structural debt accelerating | Prioritize first |
+   | High risk (>0.5) | stable / decaying | Structural debt, stable ecosystem | Schedule normally |
+   | High leakage (>0.20) | diverging lifecycles | Boundary spans ecosystems moving in different directions | Prioritize boundary extraction |
+   | Low risk | emerging / accelerating | Emerging opportunity | Plan adoption path before coupling grows organically |
+   | High coupling to dependency | decaying phase | Dependency is dying — extraction is urgent | Elevate to P0 |
+
 5. Identify the primary risk(s) (pick 1–3): correctness, migration, partial failure, security/privacy, performance, operability.
 5. Add a compact decision table (2–3 options including a no-change baseline):
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
 6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? Cross-reference with risk amplification from step 4b (if applicable). *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? Cross-reference with risk amplification from step 4b (if applicable). *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 7. Choose the minimum up-front artifacts:

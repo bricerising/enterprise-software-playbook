@@ -5,6 +5,7 @@ import { RssAdapter } from './adapters/rss.js';
 import { HackerNewsAdapter } from './adapters/hackernews.js';
 import { LobstersAdapter } from './adapters/lobsters.js';
 import { EdgarAdapter } from './adapters/edgar.js';
+import { EarningsAdapter } from './adapters/earnings.js';
 import { classify, loadTopics } from './topic-classifier.js';
 import { loadCheckpoint, saveCheckpoint, updateCollectorHealth } from './checkpoints.js';
 import { fetchContent } from './content-fetcher.js';
@@ -61,6 +62,14 @@ function createAdapter(feed: FeedConfig, config: IntelConfig, db: Database.Datab
         name: feed.name,
         form_types: feed.form_types,
         entities: feed.entities,
+        edgar_contact: config.collector.edgar_contact!,
+        edgar_max_rps: config.collector.edgar_max_rps,
+      });
+    case 'earnings':
+      return new EarningsAdapter({
+        name: feed.name,
+        tickers: feed.tickers,
+        form_types: feed.form_types,
         edgar_contact: config.collector.edgar_contact!,
         edgar_max_rps: config.collector.edgar_max_rps,
       });

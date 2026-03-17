@@ -14,6 +14,8 @@ import { querySources } from '../queries/sources.js';
 import { queryTopics } from '../queries/topics.js';
 import { queryStats } from '../queries/stats.js';
 import { buildPack } from '../queries/pack.js';
+import { computeForecast } from '../queries/forecast.js';
+
 
 const TOOL_DEFINITIONS = [
   {
@@ -101,6 +103,25 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'intel_forecast',
+    description: 'Predict likely next developments using Bayesian scenario projection, exponential decay weighting, entropy scoring, CUSUM change-point detection, and HMM lifecycle classification',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        lag_window_days: { type: 'number', description: 'Max days between chain links (default: 7)' },
+        min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 2)' },
+        top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
+        dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
+        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
+        compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
+        summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
+        with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },
+        topics: { type: 'array', items: { type: 'string' }, description: 'Filter output to specific topic IDs (e.g., ["ai.openai", "hw.gpu"])' },
+        sections: { type: 'array', items: { type: 'string' }, description: 'Include only these sections (e.g., ["lifecycles", "entropy"])' },
+      },
+    },
+  },
 ];
 
 export async function startMcpServer(dbPath: string): Promise<void> {
@@ -179,6 +200,21 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             since: params.since as string | undefined,
             top: params.top as number | undefined,
             maxEvents: params.max_events as number | undefined,
+          });
+          break;
+
+        case 'intel_forecast':
+          result = computeForecast(db, {
+            lag_window_days: params.lag_window_days as number | undefined,
+            min_support: params.min_support as number | undefined,
+            top_scenarios: params.top_scenarios as number | undefined,
+            dedup: params.dedup as string | undefined,
+            window_days: params.window_days as number | undefined,
+            compact: params.compact as boolean | undefined,
+            summary: params.summary as boolean | undefined,
+            with_context: params.with_context as boolean | undefined,
+            topics: params.topics as string[] | undefined,
+            sections: params.sections as string[] | undefined,
           });
           break;
 

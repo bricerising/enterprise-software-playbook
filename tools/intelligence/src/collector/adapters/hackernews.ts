@@ -53,7 +53,9 @@ export class HackerNewsAdapter implements SourceAdapter {
   }
 
   async *fetch(checkpoint: Checkpoint | null): AsyncGenerator<RawEvent> {
-    const cursorId = checkpoint ? parseInt(checkpoint.cursor, 10) : 0;
+    const cursorId = checkpoint
+      ? parseInt(checkpoint.cursor.replace(/^hn:/, ''), 10) || 0
+      : 0;
     const seenIds = new Set<number>();
     let maxItemId = cursorId;
 
@@ -77,6 +79,7 @@ export class HackerNewsAdapter implements SourceAdapter {
       const toFetch = storyIds
         .filter((id) => id > cursorId && !seenIds.has(id))
         .slice(0, this.maxItems);
+
 
       for (const itemId of toFetch) {
         seenIds.add(itemId);

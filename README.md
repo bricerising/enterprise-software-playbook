@@ -50,8 +50,8 @@ Please review this enterprise web application.
 - [`skills/architecture/`](skills/architecture/SKILL.md): Choose the smallest system pattern(s) for cross-service pressures.
 - [`skills/design/`](skills/design/SKILL.md): Choose the smallest code pattern(s) for in-process design pressures.
 - [`skills/archobs/`](skills/archobs/SKILL.md): Measure coupling, boundary health, and risk hotspots before architecture or refactoring decisions.
-- [`skills/intel/`](skills/intel/SKILL.md): Query collected intelligence signals — trends, search, events, evidence packs — from curated feeds.
-- [`skills/brief/`](skills/brief/SKILL.md): Shape intel signals into audience-aware briefs (executive, engineering, decision, daily digest).
+- [`skills/intel/`](skills/intel/SKILL.md): Gather and shape intelligence signals from collected feeds into audience-aware output (practitioner, executive, engineering, decision, daily digest).
+- [`skills/forecast/`](skills/forecast/SKILL.md): Predict likely next developments from internal development patterns (git history, archobs clusters) and external signals (intel feeds).
 
 **Standardize (make it consistent)**
 

@@ -51,6 +51,33 @@ Use one (or both) of these:
 
 ## Workflow
 
+0. **Load archobs data** (before spec writing begins):
+   ```bash
+   archobs show clusters --format json
+   archobs show risks --format json
+   ```
+
+   **Use in spec writing**:
+   - Ensure spec contracts honor existing cluster boundaries. If the spec introduces a new boundary that cuts across a cluster with `cohesion > 0.60`, flag the conflict — the spec is fighting natural structure.
+   - Files with `risk > 0.5` in the spec's scope warrant stricter acceptance criteria and testing requirements.
+   - Clusters with `leakage > 0.20` that the spec touches may need explicit boundary contracts (interface types, Facade).
+
+   If archobs artifacts are missing: run `archobs report` or note as a gap. Do not block spec writing on archobs — the spec can be amended when data becomes available.
+
+0b. **Versioning guidance from forecast** (conditional — run when the spec pins an external dependency contract such as an API version, SDK, or protocol):
+
+   ```bash
+   intel forecast    # lifecycle phase for the dependency
+   ```
+
+   **Decision mapping**:
+   | Lifecycle phase | Versioning strategy |
+   |---|---|
+   | accelerating | Design for version negotiation — expect API churn, use flexible contracts |
+   | stable | Pin versions confidently — stable API surface |
+   | decaying | Include migration timeline in spec — plan for replacement |
+   | emerging | Use narrow contract surface — only pin what you use today |
+
 1. Decide the scope:
    - One service? write/update the service spec bundle.
    - Cross-service or product-wide? write/update a system spec.
@@ -76,8 +103,8 @@ Use one (or both) of these:
    - what is optimized vs knowingly worsened
    - kill criteria / reversal trigger
 8. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(attach to decision table)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? *(attach to decision table)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? Cross-reference with archobs data from step 0 and versioning guidance from step 0b (if applicable). *(attach to decision table)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? Cross-reference with archobs data from step 0 and versioning guidance from step 0b (if applicable). *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 9. Add a measurement ladder:

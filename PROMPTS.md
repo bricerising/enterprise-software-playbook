@@ -99,13 +99,50 @@ Run the full workflow: collect signals, rank by relevance, and synthesize into a
 ### Shape intel into an audience-aware brief
 
 ```text
-Use brief (read skills/brief/SKILL.md).
+Use intel (read skills/intel/SKILL.md).
 
-Audience: <executive | engineering | decision | digest>
+Audience: <practitioner | executive | engineering | decision | daily digest | architecture decision>
 Topic: <what the brief is about>
 Goal: Synthesize intel signals into a reader-ready brief tailored to the target audience.
 
 Filter and rank signals through the audience lens and produce a brief readable in under 2 minutes.
+```
+
+### Forecast external technology shifts
+
+```text
+Use forecast (read skills/forecast/SKILL.md).
+
+What external technology shifts should we be watching? Run a forecast (external mode)
+and tell me what's likely to happen next, what's driving it, and what we should prepare for.
+```
+
+### Predict next features from development patterns
+
+```text
+Use forecast (read skills/forecast/SKILL.md).
+
+Run archobs on this repo, then run forecast in internal mode. What areas are most
+active, what kinds of changes are happening, and what features are likely next?
+```
+
+### Sprint planning with development trajectory
+
+```text
+Use forecast (read skills/forecast/SKILL.md).
+
+I'm planning next sprint. Run forecast in internal mode over the last 14 days.
+Where is momentum concentrated and what does the pattern suggest we should build next?
+```
+
+### Full situational awareness
+
+```text
+Use forecast (read skills/forecast/SKILL.md).
+
+Give me full situational awareness on this codebase: architecture health, development
+trajectory, external forecast, and compound risks. Run forecast in combined mode.
+What should we prioritize?
 ```
 
 ### Choose an in-process/design pattern

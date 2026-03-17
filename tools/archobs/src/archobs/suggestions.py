@@ -27,10 +27,13 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _cluster_scope_paths(file_metrics_df: pd.DataFrame, cluster_id: int, limit: int = 4) -> str:
+def _cluster_scope_paths(file_metrics_df: pd.DataFrame, cluster_id: int, limit: int = 4, exclude: str | None = None) -> str:
     if file_metrics_df.empty or "cluster_id" not in file_metrics_df:
         return f"cluster {cluster_id}"
-    scoped = file_metrics_df[file_metrics_df["cluster_id"] == cluster_id].sort_values(
+    scoped = file_metrics_df[file_metrics_df["cluster_id"] == cluster_id]
+    if exclude is not None:
+        scoped = scoped[scoped["path"] != exclude]
+    scoped = scoped.sort_values(
         ["risk", "xnbr", "hubness"],
         ascending=[False, False, False],
     )
@@ -86,10 +89,46 @@ def _humanize_path_token(token: str) -> str:
     return " ".join(cleaned[-2:])
 
 
+_GENERIC_DOMAIN_STEMS = frozenset({
+    # Directory structure
+    "src", "lib", "test", "tests", "spec", "utils", "helpers", "common", "shared",
+    "index", "main", "app", "apps", "config", "setup", "fixtures", "mocks", "stubs",
+    # Type/schema layers
+    "types", "interfaces", "models", "schemas", "dto", "entities",
+    # Framework-structural (must match _GENERIC_STEMS in display.py)
+    "controllers", "services", "routes", "middleware", "modules", "core",
+    "packages", "init", "__init__",
+    # Test subdirectories
+    "unit", "integration", "factories",
+})
+
+
+def _extract_domain_keywords(paths: list[str]) -> set[str]:
+    """Extract domain keywords from file paths for cross-cluster matching."""
+    keywords: set[str] = set()
+    for p in paths:
+        parts = Path(p).parts
+        for part in parts:
+            stem = part.split(".")[0].replace("-", "_").split("_")[0].lower()
+            if stem and len(stem) > 2 and stem not in _GENERIC_DOMAIN_STEMS:
+                keywords.add(stem)
+    return keywords
+
+
 def _humanize_area_label(label: str) -> str:
-    parts = [part.strip() for part in label.split("+") if part.strip()]
+    # Remove trailing truncation markers from cluster labels (e.g. '(test unit and unit contro...")')
+    cleaned_label = re.sub(r"\s*\([^)]*\.\.\.[\"']?\)\s*$", "", label).strip()
+    # Also strip standalone trailing "..." from _generate_cluster_label truncation
+    cleaned_label = re.sub(r"\.{3,}$", "", cleaned_label).strip()
+    if not cleaned_label:
+        cleaned_label = label
+    parts = [part.strip() for part in cleaned_label.split("+") if part.strip()]
     human = [_humanize_path_token(part) for part in parts[:2]]
-    return " and ".join(part for part in human if part).strip() or label
+    result = " and ".join(part for part in human if part).strip()
+    # Guard: if humanization produced an empty or ellipsis-only string, fall back
+    if not result or result.replace(".", "").strip() == "":
+        return label.replace("...", "").strip() or "this area"
+    return result
 
 
 def _collapse_duplicate_words(text: str) -> str:
@@ -186,6 +225,7 @@ def _rule_based_change_suggestions(
     drift_df: pd.DataFrame,
     boundary_profiles: list[dict[str, object]] | None = None,
     limit: int = 4,
+    velocity_df: pd.DataFrame | None = None,
 ) -> list[dict[str, str]]:
     suggestions: list[dict[str, str]] = []
     node_count = int(summary.get("node_count", 0))
@@ -204,12 +244,82 @@ def _rule_based_change_suggestions(
             }
         )
 
+    # Build velocity lookup for cross-referencing with structural suggestions
+    _velocity_by_cluster: dict[int, int] = {}
+    if velocity_df is not None and not velocity_df.empty and "file_change_count" in velocity_df.columns:
+        for _, vr in velocity_df.iterrows():
+            _velocity_by_cluster[int(vr["cluster_id"])] = int(vr["file_change_count"])
+
     if not cluster_metrics_df.empty:
-        leaky = cluster_metrics_df.sort_values(["leakage", "risk_max"], ascending=[False, False]).iloc[0]
-        if float(leaky["leakage"]) >= 0.20:
+        leaky_candidates = cluster_metrics_df.sort_values(
+            ["leakage", "risk_max"], ascending=[False, False],
+        )
+        leaky_candidates = leaky_candidates[leaky_candidates["leakage"].astype(float) >= 0.20]
+
+        # Detect convergent leakage: multiple leaky clusters whose top neighbor is the same target
+        top_leaky = leaky_candidates.head(3)
+        neighbor_targets: dict[int, list[tuple[int, float, dict | None]]] = defaultdict(list)
+        for _, leaky in top_leaky.iterrows():
             cluster_id = int(leaky["cluster_id"])
             profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
             neighbor = profile["neighbors"][0] if profile and profile["neighbors"] else None
+            target_id = int(neighbor["cluster_id"]) if neighbor else -1
+            neighbor_targets[target_id].append((cluster_id, float(leaky["leakage"]), profile))
+
+        # Check for convergent hub: 2+ leaky clusters pointing at the same target
+        convergent_hubs: set[int] = set()
+        for target_id, sources in neighbor_targets.items():
+            if target_id >= 0 and len(sources) >= 2:
+                convergent_hubs.add(target_id)
+                source_ids = [s[0] for s in sources]
+                max_leakage = max(s[1] for s in sources)
+                # Build a consolidated "decompose the attractor" suggestion
+                target_profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == target_id), None)
+                target_name = _humanize_area_label(str(target_profile["label"])) if target_profile else f"cluster {target_id}"
+                source_names = []
+                scope_paths: list[str] = []
+                for cid, _, prof in sources:
+                    if prof:
+                        source_names.append(_humanize_area_label(str(prof["label"])))
+                        scope_paths.extend(list(prof["paths"][:2]))
+                    else:
+                        source_names.append(f"cluster {cid}")
+                if target_profile and target_profile.get("paths"):
+                    scope_paths = list(target_profile["paths"][:3]) + scope_paths[:3]
+                source_list = ", ".join(source_names)
+                # Cross-reference with velocity for urgency context
+                target_changes = _velocity_by_cluster.get(target_id, 0)
+                velocity_note = (
+                    f" This area also had {target_changes} file changes in the last 30 days, making this structurally urgent."
+                    if target_changes > 0 else ""
+                )
+                suggestions.append(
+                    {
+                        "priority": "High" if max_leakage >= 0.40 else "Medium",
+                        "title": f"Decompose {target_name} — it attracts {len(sources)} clusters",
+                        "why": (
+                            f"Clusters {', '.join(str(s) for s in source_ids)} all leak primarily toward {target_name} (cluster {target_id}). "
+                            f"This convergent pull indicates {target_name} is a gravitational center, not {len(sources)} independent boundary problems."
+                            f"{velocity_note}"
+                        ),
+                        "change": (
+                            f"Break {target_name} into narrower modules so that {source_list} each depend on a focused interface instead of one monolithic area."
+                        ),
+                        "scope": ", ".join(scope_paths[:6]),
+                    }
+                )
+
+        # Emit individual boundary suggestions only for clusters NOT part of a convergent hub
+        for _, leaky in top_leaky.iterrows():
+            cluster_id = int(leaky["cluster_id"])
+            profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
+            neighbor = profile["neighbors"][0] if profile and profile["neighbors"] else None
+            target_id = int(neighbor["cluster_id"]) if neighbor else -1
+
+            # Skip if this cluster's target was already covered by a convergent hub suggestion
+            if target_id in convergent_hubs:
+                continue
+
             if profile and neighbor:
                 source_label = str(profile["label"])
                 target_label = str(neighbor["label"])
@@ -217,9 +327,14 @@ def _rule_based_change_suggestions(
                 target_name = _humanize_area_label(target_label)
                 boundary_scope = ", ".join(list(profile["paths"][:2]) + list(neighbor["paths"][:2]))
                 title = f"Separate {source_name} from {target_name}"
+                cluster_changes = _velocity_by_cluster.get(cluster_id, 0)
+                churn_note = (
+                    f" It also had {cluster_changes} file changes in the last 30 days."
+                    if cluster_changes > 0 else ""
+                )
                 why = (
                     f"Cluster {cluster_id} leaks {float(leaky['leakage']):.0%} of its weighted relationships, and its strongest outward pull is toward "
-                    f"{target_name} (edge weight {float(neighbor['weight']):.2f})."
+                    f"{target_name} (edge weight {float(neighbor['weight']):.2f}).{churn_note}"
                 )
                 change = (
                     f"Create an explicit boundary between {source_name} and {target_name}, so one side consumes a stable contract instead of reaching across the seam directly."
@@ -245,22 +360,50 @@ def _rule_based_change_suggestions(
         path = str(top_file["path"])
         cluster_id = int(top_file.get("cluster_id", -1))
         area_name = _humanize_path_token(path)
+        has_high_volatility = "volatility" in top_file.index and float(top_file.get("volatility", 0)) >= 0.8
         if float(top_file["xnbr"]) >= 0.35:
+            # Boost to High if also highly volatile (being changed constantly AND risky)
+            base_priority = "High" if float(top_file["xnbr"]) >= 0.50 else "Medium"
+            if has_high_volatility and base_priority == "Medium":
+                base_priority = "High"
+            volatility_note = " It also has very high volatility, meaning it is being changed constantly." if has_high_volatility else ""
+
+            # Try to identify specific concerns from boundary_profiles
+            change_text = "Separate orchestration and shared boundary logic from the domain logic so this file stops acting as a conceptual bridge between subsystems."
+            if boundary_profiles and cluster_id >= 0:
+                profile = next((item for item in boundary_profiles if int(item["cluster_id"]) == cluster_id), None)
+                if profile and profile.get("neighbors"):
+                    neighbor_descriptions = []
+                    for neighbor in profile["neighbors"][:3]:
+                        neighbor_label = _humanize_area_label(str(neighbor.get("label", "")))
+                        if neighbor_label:
+                            neighbor_descriptions.append(
+                                f"{neighbor_label} (cluster {int(neighbor['cluster_id'])})"
+                            )
+                    if neighbor_descriptions:
+                        concerns = " and ".join(neighbor_descriptions)
+                        change_text = (
+                            f"Extract logic linked to {concerns} into separate modules "
+                            f"so this file stops acting as a conceptual bridge between subsystems."
+                        )
+
             suggestions.append(
                 {
-                    "priority": "High" if float(top_file["xnbr"]) >= 0.50 else "Medium",
+                    "priority": base_priority,
                     "title": f"Break apart mixed responsibilities in {area_name}",
-                    "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.",
-                    "change": "Separate orchestration and shared boundary logic from the domain logic so this file stops acting as a conceptual bridge between subsystems.",
-                    "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3)}",
+                    "why": f"This area has a cross-boundary neighbor ratio of {float(top_file['xnbr']):.0%}, so it is semantically aligned with more than one concern.{volatility_note}",
+                    "change": change_text,
+                    "scope": f"{path} plus nearby files in {_cluster_scope_paths(file_metrics_df, cluster_id, limit=3, exclude=path)}",
                 }
             )
         elif float(top_file["hubness"]) >= 0.45:
+            hub_priority = "High" if has_high_volatility else "Medium"
+            volatility_note = " It is also highly volatile, compounding the blast radius." if has_high_volatility else ""
             suggestions.append(
                 {
-                    "priority": "Medium",
+                    "priority": hub_priority,
                     "title": f"Reduce direct fan-in around {area_name}",
-                    "why": "This area is currently one of the strongest hubs in the graph, which increases blast radius when it changes.",
+                    "why": f"This area is currently one of the strongest hubs in the graph, which increases blast radius when it changes.{volatility_note}",
                     "change": "Extract leaf helpers or add a narrower entrypoint so downstream files depend on one stable surface instead of this file's full implementation.",
                     "scope": path,
                 }
@@ -287,15 +430,160 @@ def _rule_based_change_suggestions(
     if not drift_df.empty and drift_ari_column is not None:
         lowest = drift_df.sort_values(drift_ari_column, ascending=True).iloc[0]
         if float(lowest[drift_ari_column]) < 0.50:
+            # Check the ARI trend (last 2 windows) to determine if architecture is stabilizing
+            ari_values = drift_df[drift_ari_column].tolist()
+            trend_rising = len(ari_values) >= 2 and ari_values[-1] > ari_values[-2]
+            if trend_rising and ari_values[-1] >= 0.60:
+                # ARI is rising and recent value is reasonable — downgrade to Low
+                drift_priority = "Low"
+                trend_note = f" However, the trend is stabilizing (recent ARI {float(ari_values[-1]):.2f})."
+            else:
+                drift_priority = "Medium"
+                trend_note = ""
+            # Identify likely migrating files: top xnbr files are the best
+            # proxy for files that bridge clusters and may be reshuffling.
+            drift_scope_paths: list[str] = []
+            if not file_metrics_df.empty and "xnbr" in file_metrics_df.columns:
+                top_xnbr = file_metrics_df.sort_values("xnbr", ascending=False).head(4)
+                drift_scope_paths = [str(p) for p in top_xnbr["path"].tolist()]
+            drift_scope = ", ".join(drift_scope_paths) if drift_scope_paths else "the highest-xnbr files in the codebase"
             suggestions.append(
                 {
-                    "priority": "Medium",
+                    "priority": drift_priority,
                     "title": "Stabilize cluster naming and ownership before the next large move",
-                    "why": f"The weakest drift window has ARI {float(lowest[drift_ari_column]):.2f}, which suggests the subsystem map is changing quickly over time.",
+                    "why": f"The weakest drift window has ARI {float(lowest[drift_ari_column]):.2f}, which suggests the subsystem map is changing quickly over time.{trend_note}",
                     "change": "Avoid broad package moves until the unstable area has a clearer owner and a narrower boundary, otherwise future changes will continue to reshuffle the same files.",
-                    "scope": "the lowest-stability cluster window in the drift table",
+                    "scope": drift_scope,
                 }
             )
+
+    # Velocity-aware suggestions: high-acceleration clusters need early boundaries
+    if velocity_df is not None and not velocity_df.empty and "acceleration" in velocity_df.columns:
+        for _, vel_row in velocity_df.iterrows():
+            accel = float(vel_row.get("acceleration", 0))
+            growth = float(vel_row.get("growth_ratio", 0))
+            cid = int(vel_row["cluster_id"])
+            label = str(vel_row.get("label", f"cluster {cid}"))
+            if not label or label == "nan":
+                label = f"cluster {cid}"
+            area = _humanize_area_label(label) if label != f"cluster {cid}" else label
+            scope = _cluster_scope_paths(file_metrics_df, cid)
+
+            # Skip test-only clusters — boundary suggestions aren't actionable for
+            # test infrastructure. But cross-reference with production clusters: if a
+            # test-only cluster shares domain keywords with a production cluster's
+            # added_paths, emit a boundary suggestion targeting the production cluster.
+            is_test_only = False
+            if not file_metrics_df.empty and "cluster_id" in file_metrics_df.columns:
+                cluster_paths = file_metrics_df[file_metrics_df["cluster_id"] == cid]["path"].tolist()
+                if cluster_paths:
+                    test_ratio = sum(
+                        1 for p in cluster_paths
+                        if "/test/" in str(p) or "/tests/" in str(p) or ".test." in str(p) or ".spec." in str(p)
+                    ) / len(cluster_paths)
+                    if test_ratio > 0.8:
+                        is_test_only = True
+
+            if is_test_only:
+                # Extract domain keywords from this test cluster's paths
+                test_keywords = _extract_domain_keywords(cluster_paths)
+                if test_keywords:
+                    # Find a production cluster whose added_paths share domain keywords
+                    for _, other_row in velocity_df.iterrows():
+                        other_cid = int(other_row["cluster_id"])
+                        if other_cid == cid:
+                            continue
+                        other_paths = file_metrics_df[file_metrics_df["cluster_id"] == other_cid]["path"].tolist()
+                        if not other_paths:
+                            continue
+                        other_test_ratio = sum(
+                            1 for p in other_paths
+                            if "/test/" in str(p) or "/tests/" in str(p) or ".test." in str(p) or ".spec." in str(p)
+                        ) / len(other_paths)
+                        if other_test_ratio > 0.8:
+                            continue  # skip other test clusters
+                        other_keywords = _extract_domain_keywords(other_paths)
+                        shared = test_keywords & other_keywords
+                        if shared:
+                            other_label = str(other_row.get("label", f"cluster {other_cid}"))
+                            if not other_label or other_label == "nan":
+                                other_label = f"cluster {other_cid}"
+                            other_area = _humanize_area_label(other_label) if other_label != f"cluster {other_cid}" else other_label
+                            other_scope = _cluster_scope_paths(file_metrics_df, other_cid)
+                            domain = ", ".join(sorted(shared)[:3])
+                            suggestions.append(
+                                {
+                                    "priority": "Medium",
+                                    "title": f"Define boundary for {domain} domain in {other_area}",
+                                    "why": (
+                                        f"Test cluster {cid} (test-only, {accel:.1f}x acceleration) shares the {domain} domain with "
+                                        f"production cluster {other_cid}. The test investment signals committed feature work — "
+                                        f"define boundaries in the production code now."
+                                    ),
+                                    "change": (
+                                        f"Define explicit module boundaries and public interfaces for {domain} in {other_area} "
+                                        f"before the test-backed feature ships."
+                                    ),
+                                    "scope": other_scope,
+                                }
+                            )
+                            break  # one suggestion per test cluster
+                continue
+
+            added_count = int(vel_row.get("added_count", 0))
+
+            if accel >= 1.5 and growth >= 0.3:
+                suggestions.append(
+                    {
+                        "priority": "Medium",
+                        "title": f"Establish boundaries in {area} early — it is actively growing",
+                        "why": (
+                            f"Cluster {cid} has {accel:.1f}x acceleration and {growth:.0%} new files. "
+                            f"This area is actively expanding — defining boundaries now is cheaper than retrofitting later."
+                        ),
+                        "change": (
+                            f"Define explicit module boundaries and public interfaces for {area} before the next wave of additions."
+                        ),
+                        "scope": scope,
+                    }
+                )
+            elif added_count >= 20 and growth < 0.3:
+                # Absolute added_count threshold: 20+ new files is significant even
+                # if growth_ratio is below 30% (happens in large clusters).
+                suggestions.append(
+                    {
+                        "priority": "Medium",
+                        "title": f"Establish boundaries in {area} — {added_count} new files added",
+                        "why": (
+                            f"Cluster {cid} added {added_count} files in the last window. "
+                            f"The growth ratio ({growth:.0%}) is diluted by cluster size, but the absolute volume of new code "
+                            f"warrants boundary definition before it becomes entangled."
+                        ),
+                        "change": (
+                            f"Define explicit module boundaries and public interfaces for {area} before the new additions become tightly coupled."
+                        ),
+                        "scope": scope,
+                    }
+                )
+            elif accel <= 0.5 and growth < 0.1:
+                # Stable/declining area — safe for refactoring
+                if not cluster_metrics_df.empty:
+                    cluster_row = cluster_metrics_df[cluster_metrics_df["cluster_id"] == cid]
+                    if not cluster_row.empty and float(cluster_row.iloc[0].get("leakage", 0)) >= 0.20:
+                        suggestions.append(
+                            {
+                                "priority": "Low",
+                                "title": f"Refactor {area} now while it is stable",
+                                "why": (
+                                    f"Cluster {cid} has low acceleration ({accel:.1f}x) and minimal new files — "
+                                    f"development has slowed, making this a safe window for structural cleanup."
+                                ),
+                                "change": (
+                                    f"Address the leaky boundary in {area} while the area is not under active development."
+                                ),
+                                "scope": scope,
+                            }
+                        )
 
     if not suggestions:
         suggestions.append(
@@ -589,6 +877,7 @@ def build_change_suggestions(
     limit: int = 4,
     codex_timeout_seconds: int = 45,
     claude_timeout_seconds: int = 45,
+    velocity_df: pd.DataFrame | None = None,
 ) -> tuple[list[dict[str, str]], str, str | None]:
     normalized = provider.lower().strip()
     if normalized == "off":
@@ -642,6 +931,7 @@ def build_change_suggestions(
                 drift_df,
                 boundary_profiles,
                 limit,
+                velocity_df=velocity_df,
             )
         )
         if normalized == "auto":
@@ -656,6 +946,7 @@ def build_change_suggestions(
             drift_df,
             boundary_profiles,
             limit,
+            velocity_df=velocity_df,
         )
     )
     return suggestions, "rules", None

@@ -510,6 +510,7 @@ def build_report_artifacts(
         limit=suggestion_count,
         codex_timeout_seconds=codex_timeout_seconds,
         claude_timeout_seconds=claude_timeout_seconds,
+        velocity_df=getattr(prepared_analysis, "velocity_df", None),
     )
     summary["suggestion_engine"] = used_engine
     summary["suggestion_error"] = error

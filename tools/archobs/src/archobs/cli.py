@@ -34,7 +34,18 @@ def _check_dependencies() -> None:
 
 
 @app.callback(invoke_without_command=True)
-def _app_callback(ctx: typer.Context) -> None:
+def _app_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", help="Show version and exit."),
+) -> None:
+    if version:
+        from importlib.metadata import version as pkg_version
+
+        try:
+            typer.echo(f"archobs {pkg_version('archobs')}")
+        except Exception:
+            typer.echo("archobs (version unknown — not installed as package)")
+        raise typer.Exit()
     if ctx.invoked_subcommand is not None:
         _check_dependencies()
 
@@ -231,13 +242,14 @@ def show_risks(
     min_risk: float | None = typer.Option(None, help="Minimum risk score filter."),
     min_xnbr: float | None = typer.Option(None, help="Minimum xnbr filter."),
     min_hubness: float | None = typer.Option(None, help="Minimum hubness filter."),
+    min_volatility: float | None = typer.Option(None, help="Minimum volatility filter."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     from archobs.display import format_risks, read_file_metrics
 
     df = read_file_metrics(out)
-    text = format_risks(df, top=top, fmt=fmt, min_risk=min_risk, min_xnbr=min_xnbr, min_hubness=min_hubness)
+    text = format_risks(df, top=top, fmt=fmt, min_risk=min_risk, min_xnbr=min_xnbr, min_hubness=min_hubness, min_volatility=min_volatility)
     _write_or_print(text, out_path)
 
 
@@ -256,6 +268,38 @@ def show_clusters(
     _write_or_print(text, out_path)
 
 
+@show_app.command("cluster-files")
+def show_cluster_files(
+    cluster_id: int = typer.Argument(help="Cluster ID to inspect."),
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(20, "--top-paths", help="Number of files to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show files belonging to a specific cluster, sorted by risk."""
+    from archobs.display import format_cluster_files, read_file_metrics
+
+    df = read_file_metrics(out)
+    text = format_cluster_files(df, cluster_id, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("files")
+def show_files(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top: int = typer.Option(0, help="Number of top files to show (0 = all)."),
+    min_risk: float | None = typer.Option(None, help="Minimum risk score filter."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Dump all file metrics with cluster assignments."""
+    from archobs.display import format_files, read_file_metrics
+
+    df = read_file_metrics(out)
+    text = format_files(df, top=top, fmt=fmt, min_risk=min_risk)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("drift")
 def show_drift(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
@@ -264,8 +308,95 @@ def show_drift(
 ) -> None:
     from archobs.display import format_drift, read_drift
 
+    # Read configured window count from config if available
+    configured_windows: int | None = None
+    config_path = out / "config.json"
+    if config_path.exists():
+        import json as _json
+        try:
+            cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+            configured_windows = cfg.get("clustering", {}).get("drift_window_count")
+        except (ValueError, KeyError):
+            pass
+
     df = read_drift(out)
-    text = format_drift(df, fmt=fmt)
+    text = format_drift(df, fmt=fmt, configured_windows=configured_windows)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("velocity")
+def show_velocity(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    window: int = typer.Option(30, help="Window size in days."),
+    compare: bool = typer.Option(False, help="Compare current window to prior window."),
+    include_added_paths: bool | None = typer.Option(None, "--include-added-paths/--no-added-paths", help="Include recently added file paths per cluster. Defaults to True for JSON output, False for table/csv."),
+    min_acceleration: float | None = typer.Option(None, "--min-acceleration", help="Minimum acceleration filter (requires --compare)."),
+    min_growth_ratio: float | None = typer.Option(None, "--min-growth-ratio", help="Minimum growth_ratio filter."),
+    sort_by: str = typer.Option("distinct_commits", "--sort", help="Sort column: distinct_commits, file_change_count, acceleration, growth_ratio."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show per-cluster velocity metrics from commit history."""
+    from archobs.display import format_velocity, read_cluster_metrics, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    cluster_metrics_df = read_cluster_metrics(out)
+    resolved_added_paths = include_added_paths if include_added_paths is not None else (fmt == "json")
+    text = format_velocity(
+        commits_df, file_metrics_df, cluster_metrics_df,
+        window=window, compare=compare, include_added_paths=resolved_added_paths, fmt=fmt,
+        min_acceleration=min_acceleration, min_growth_ratio=min_growth_ratio,
+        sort_by=sort_by,
+    )
+    _write_or_print(text, out_path)
+
+
+@show_app.command("commits")
+def show_commits(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    since: int | None = typer.Option(None, "--since", help="Only show commits within this many days."),
+    top: int = typer.Option(0, help="Number of commits to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show commit-level data with cluster annotations."""
+    from archobs.display import format_commits, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    text = format_commits(commits_df, file_metrics_df, since=since, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("edges")
+def show_edges(
+    cluster_id: int | None = typer.Argument(None, help="Cluster ID to inspect edges for. Omit when using --top-active."),
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    top_active: int | None = typer.Option(None, "--top-active", help="Auto-select top-N most active clusters by file_change_count (from velocity data)."),
+    max_neighbors: int = typer.Option(0, "--max-neighbors", help="Limit neighbor clusters returned per queried cluster (0 = unlimited). Useful for large hub clusters with 15+ neighbors."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show cross-cluster edge relationships for a given cluster."""
+    from archobs.display import format_edges, format_edges_top_active, read_cluster_metrics, read_commits, read_file_metrics, read_graph_edges
+
+    if cluster_id is None and top_active is None:
+        typer.echo("Error: provide a cluster_id argument or use --top-active N.", err=True)
+        raise typer.Exit(code=1)
+
+    graph_edges_df = read_graph_edges(out)
+    cluster_metrics_df = read_cluster_metrics(out)
+    file_metrics_df = read_file_metrics(out)
+
+    if top_active is not None:
+        commits_df = read_commits(out)
+        text = format_edges_top_active(
+            graph_edges_df, cluster_metrics_df, file_metrics_df, commits_df,
+            top_active=top_active, max_neighbors=max_neighbors, fmt=fmt,
+        )
+    else:
+        text = format_edges(graph_edges_df, cluster_metrics_df, file_metrics_df, cluster_id, max_neighbors=max_neighbors, fmt=fmt)
     _write_or_print(text, out_path)
 
 
@@ -282,16 +413,54 @@ def show_summary(
     _write_or_print(text, out_path)
 
 
+@show_app.command("suggestions")
+def show_suggestions(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    limit: int = typer.Option(0, help="Max suggestions to show (0 = all)."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show suggestions from suggestions.json."""
+    from archobs.display import format_suggestions, read_suggestions
+
+    data = read_suggestions(out)
+    text = format_suggestions(data, limit=limit, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
+@show_app.command("hot-files")
+def show_hot_files(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    window: int = typer.Option(30, help="Window size in days."),
+    top: int = typer.Option(10, help="Number of hottest files to show."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show hottest files by raw commit count in the window, with cluster assignments."""
+    from archobs.display import format_hot_files, read_commits, read_file_metrics
+
+    commits_df = read_commits(out)
+    file_metrics_df = read_file_metrics(out)
+    text = format_hot_files(commits_df, file_metrics_df, window=window, top=top, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("all")
 def show_all(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
-    top: int = typer.Option(10, help="Number of top entries per section."),
+    top: int = typer.Option(0, help="Number of top entries per section (0 = all). Shorthand for --top-risks and --top-clusters."),
+    top_risks: int | None = typer.Option(None, "--top-risks", help="Number of top-risk files (overrides --top)."),
+    top_clusters: int | None = typer.Option(None, "--top-clusters", help="Number of top clusters (overrides --top)."),
+    compact: bool = typer.Option(False, "--compact", help="Agent-friendly compact output: 5 risks, 10 clusters, velocity without added_paths, edges for top-3 clusters only. Target <50KB."),
     fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
     out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
 ) -> None:
     from archobs.display import format_all
 
-    text = format_all(out, top=top, fmt=fmt)
+    if compact:
+        top_risks = top_risks if top_risks is not None else 5
+        top_clusters = top_clusters if top_clusters is not None else 10
+    text = format_all(out, top=top, top_risks=top_risks, top_clusters=top_clusters, fmt=fmt, compact=compact)
     _write_or_print(text, out_path)
 
 

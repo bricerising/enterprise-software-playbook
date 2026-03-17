@@ -10,13 +10,16 @@ This reduces decision friction: an agent can follow a reliable loop without deba
 
 ### Define (what are we building?)
 
-Intent and boundaries:
+Intent, boundaries, and context:
 
 - Auto-routing across this library in conversational mode (`workflow`)
 - Turn intent into an executable task list (`plan`)
 - Specs and contracts (`spec`)
 - System-pattern selection for cross-service pressures (`architecture`)
 - Code-pattern selection for in-process pressures (`design`)
+- Empirical coupling, boundary health, and risk data from the codebase (`archobs`)
+- Current external signals from collected feeds, with audience-aware output (`intel`)
+- Forward-looking prediction from internal development patterns and external signals (`forecast`)
 
 ### Standardize (make it consistent)
 
@@ -72,18 +75,22 @@ These terms describe *scope*, but the repo groups skills by *workflow stage*.
 
 Unless you have a strong reason to deviate:
 
-1. `plan` (for non-trivial work)
-2. `spec` (when boundary contracts/semantics change)
-3. `architecture` (if cross-service/system pressure exists)
-4. `platform` (if multiple services need the same boundary behavior)
-5. `typescript` (or the relevant language style guide)
-6. `resilience`
-7. `security`
-8. `observability`
-9. `testing`
-10. `finish`
+1. `archobs` (run early — downstream Define skills depend on risk scores and boundary leakage)
+2. `plan` (for non-trivial work)
+3. `spec` (when boundary contracts/semantics change)
+4. `architecture` (if cross-service/system pressure exists)
+5. `design` (if in-process pattern pressure exists)
+6. `platform` (if multiple services need the same boundary behavior)
+7. `typescript` (or the relevant language style guide)
+8. `resilience`
+9. `security`
+10. `observability`
+11. `testing`
+12. `finish`
 
-In-process pattern application (`apply-*-patterns`) is usually a supporting step during implementation, not the starting point.
+`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
+
+The sequence is a guideline, not rigid — `workflow` applies proportionality-based skipping (e.g., skip `architecture` unless cross-service, skip `platform` unless 2+ services duplicate boundary logic).
 
 ## Acceptance
 

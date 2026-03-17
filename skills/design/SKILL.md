@@ -22,14 +22,35 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 1. Decide whether the context is **scriptic vs systemic** (short-lived script vs long-lived system). Set policies for boundary validation, error semantics, and ownership/lifetimes.
 2. Restate the problem as: **what varies** and **what must stay stable** (API, data model, timing, performance).
+2b. **Pattern Longevity Check** (conditional — run when the selected pattern wraps or isolates an external dependency):
+
+   ```bash
+   intel forecast    # lifecycle phase for the wrapped dependency
+   ```
+
+   **Decision mapping** (lifecycle phase → pattern adjustment):
+   | Lifecycle phase | Pattern guidance |
+   |---|---|
+   | decaying | Adapter/Facade is urgent — isolate the dying dependency, prepare swap interface |
+   | accelerating | Lighter wrapping — the API is still finding its shape; heavy abstraction fights upstream changes |
+   | stable | Any pattern works — optimize for internal coupling concerns from archobs |
+   | emerging | Adapter with narrow surface — expect rapid breaking changes |
+
+   **Compound signal** (archobs × forecast):
+   | Archobs signal | Forecast signal | Implication |
+   |---|---|---|
+   | High xnbr + external dependency | decaying | Urgent extraction candidate — the bridge is to a sinking island |
+   | High hubness + external dependency | accelerating | Monitor — high fan-in to a moving target risks cascading breakage |
+   | High leakage between clusters | diverging lifecycles | Split is natural — the ecosystems are pulling apart |
+
 3. Identify the main pressure:
    - **Creation** pressure: hard-to-test construction, many variants, environment-specific families.
    - **Structure** pressure: wrapping/combining objects, incompatible interfaces, indirection, memory sharing.
    - **Behavior** pressure: pluggable algorithms, eventing, pipelines, undo, state-dependent behavior.
 4. Pick 1 primary pattern (avoid "pattern soup"). Add a 2nd only if it addresses a different pressure.
 5. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
-   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? *(include in output trade-offs)*
-   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? *(include in output trade-offs)*
+   - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? Cross-reference with pattern longevity check from step 2b (if applicable). *(include in output trade-offs)*
+   - **Second-Order Effects**: What happens next week / next quarter / next year? What new coupling or failure mode does this create? If this pattern choice fails in 6-12 months, what likely caused failure? Cross-reference with pattern longevity check from step 2b (if applicable). *(include in output trade-offs)*
    - **Opportunity Cost**: What are we saying "no" to with this pattern choice? Are we favoring this due to sunk cost, familiarity, or novelty? *(include in output trade-offs)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 6. Validate with 2 examples: a "happy path" and a likely future change.

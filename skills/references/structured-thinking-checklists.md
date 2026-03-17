@@ -62,3 +62,17 @@ Skills not listed above (`testing`, `security`, `resilience`, `observability`, `
 - `architecture` is the only exception for Probe #2 attachment: it writes Second-Order Effects to the system sketch (not the decision table). Do not duplicate it in both places.
 - `debug` is listed as primary for Learning Loop (#5) because incident resolution produces learning output, but debug's capture-learnings step (step 6) addresses systemic gaps discovered during triage (missing telemetry, retries without idempotency) rather than probe #5's outcome-vs-expectation format. For formal learning capture after incident resolution, debug flags a follow-up using the Retrospective template.
 - For Learning Loop (#5), owner-backed control actions are conditional: include them when expectations diverge; otherwise include a brief explicit no-action rationale.
+
+## Empirical grounding (optional)
+
+When `intel forecast` data is available and the work domain overlaps with tracked intelligence topics, forecast output can provide quantitative evidence for qualitative probes:
+
+| Probe | Forecast section | What it provides |
+|---|---|---|
+| #1 Assumptions | `lifecycles`, `chains` (decay gap) | Validates trajectory assumptions; decay gap reveals stale patterns |
+| #2 Second-Order Effects | `transitive_chains`, `scenarios` | Empirical causal chains and quantified downstream probabilities |
+| #3 Feedback Loops | `dynamics` | Data-backed reinforcing loops, delays, accumulations, dampening |
+| #4 Opportunity Cost | `entropy`, `multiscale` | High-entropy diverging topics as potential missed opportunities |
+| #5 Learning Loop | `dynamics` vs previous forecast | Did predicted dynamics materialize? |
+
+This is not mandatory. Use when the intelligence domain is relevant to the work.
