@@ -607,10 +607,16 @@ describe('Bayesian scenario projection', () => {
     }
   });
 
-  it('highest probability scenario is 1.0 (normalized)', () => {
+  it('scenario probabilities sum to ~1.0 (softmax normalized)', () => {
     const result = computeForecast(db, { min_support: 2 });
     if (result.data.scenarios.length > 0) {
-      expect(result.data.scenarios[0].probability).toBe(1.0);
+      const sum = result.data.scenarios.reduce((acc, s) => acc + s.probability, 0);
+      // Allow rounding tolerance: each probability is rounded to 2 decimal places
+      expect(sum).toBeGreaterThan(0.9);
+      expect(sum).toBeLessThanOrEqual(1.1);
+      // Highest probability is the first entry (sorted descending)
+      expect(result.data.scenarios[0].probability).toBeGreaterThan(0);
+      expect(result.data.scenarios[0].probability).toBeLessThanOrEqual(1);
     }
   });
 
@@ -650,7 +656,7 @@ describe('Bayesian scenario projection', () => {
 
   it('CUSUM discount keeps probabilities in valid range', () => {
     // Even with CUSUM discounting active, probabilities must still be 0-1
-    // and the highest must still normalize to 1.0
+    // and sum to ~1.0 (softmax normalization)
     const result = computeForecast(db, { min_support: 2 });
     const scenarios = result.data.scenarios;
     for (const s of scenarios) {
@@ -658,7 +664,9 @@ describe('Bayesian scenario projection', () => {
       expect(s.probability).toBeLessThanOrEqual(1);
     }
     if (scenarios.length > 0) {
-      expect(scenarios[0].probability).toBe(1.0);
+      const sum = scenarios.reduce((acc, s) => acc + s.probability, 0);
+      expect(sum).toBeGreaterThan(0.9);
+      expect(sum).toBeLessThanOrEqual(1.1);
     }
   });
 });

@@ -347,6 +347,8 @@ program
   .option('--min-support <n>', 'Min co-occurrences for valid chain', '2')
   .option('--top-scenarios <n>', 'Max scenarios to return', '10')
   .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
+  .option('--window <days>', 'Analysis window in days (7, 14, or 30)', '30')
+  .option('--compact', 'Return compact summary (top-N per section)')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
@@ -360,6 +362,8 @@ program
             min_support: parseInt(opts.minSupport, 10),
             top_scenarios: parseInt(opts.topScenarios, 10),
             dedup: opts.dedup,
+            window_days: parseInt(opts.window, 10),
+            compact: opts.compact ?? false,
           }),
         ),
       );

@@ -113,6 +113,8 @@ const TOOL_DEFINITIONS = [
         min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 2)' },
         top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
         dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
+        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
+        compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
       },
     },
   },
@@ -203,6 +205,8 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             min_support: params.min_support as number | undefined,
             top_scenarios: params.top_scenarios as number | undefined,
             dedup: params.dedup as string | undefined,
+            window_days: params.window_days as number | undefined,
+            compact: params.compact as boolean | undefined,
           });
           break;
 

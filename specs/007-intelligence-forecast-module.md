@@ -104,11 +104,14 @@ All computation is read-only against the existing `events` and `event_topics` ta
 ### CLI
 
 ```
-intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios
+intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios, 30d window
 intel forecast --lag-window 14                    # 14-day lag window for chain detection
 intel forecast --min-support 2                    # lower threshold for sparse data
 intel forecast --top-scenarios 5                  # limit scenario output
 intel forecast --dedup none                       # skip canonical_url dedup (count all events)
+intel forecast --window 7                         # 7-day analysis window (short-term forecasting)
+intel forecast --compact                          # compact output: top-N per section
+intel forecast --compact --window 7               # short-term compact forecast
 ```
 
 ### MCP Tool
@@ -123,7 +126,9 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
       "lag_window_days": { "type": "number", "description": "Max days between chain links (default: 7)" },
       "min_support": { "type": "number", "description": "Min co-occurrences for valid chain (default: 2)" },
       "top_scenarios": { "type": "number", "description": "Max scenarios to return (default: 10)" },
-      "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" }
+      "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" },
+      "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, or 30 (default: 30)" },
+      "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" }
     }
   }
 }
@@ -137,6 +142,8 @@ intel forecast --dedup none                       # skip canonical_url dedup (co
 | `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted |
 | `top_scenarios` | number | 10 | Cap on scenario results returned |
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
+| `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
+| `compact` | boolean | false | When true, return top-N per section for reduced output size |
 
 ---
 
@@ -624,6 +631,8 @@ tools/intelligence/tests/forecast.test.ts     — 20 tests across 4 describe blo
 | `CUSUM_H_SIGMA` | 4.0 | CUSUM threshold parameter |
 | `CUSUM_DISCOUNT_HORIZON_DAYS` | 7 | Window within which change points discount chain reliability |
 | HMM override threshold | +0.15 | HMM must beat rule-based by this margin to override |
+| `MAX_CHAINS_PER_TARGET` | 5 | Maximum trigger chains contributing to a single target's posterior |
+| `MAX_DYNAMICS_PER_TYPE` | 10 | Maximum dynamics entries per type (reinforcing/delay/accumulation/dampening) |
 
 ### Dependencies
 
@@ -706,7 +715,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 
 | Decision | Selected | Rationale |
 |----------|----------|-----------|
-| Fixed 30-day analysis window | 30 days | Matches existing data retention default; covers multiple weekly cycles |
+| Configurable analysis window | 7, 14, or 30 days (default 30) | Different planning horizons need different windows; 30d covers multiple weekly cycles, 7d useful for short-term forecasting |
 | 4-window lifecycle (1d/7d/14d/30d) | 4 windows | Balances granularity with computation cost; 14d adds mid-term signal |
 | Spike day threshold = 3 events | 3 | Filters noise from single stray events; tunable via data density |
 | Lift >= 1.5 for scenarios | 1.5 | Excludes below-chance and borderline chains; conservative filter |
@@ -718,6 +727,10 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Directionality via support ratio | support(A→B) / (A→B + B→A) | Simple, interpretable, computable from existing data |
 | Transitive chains 2-hop only | A→B→C | 3+ hops would multiply noise; 2 hops catches key propagation |
 | Cross-domain priority in ranking | Sort cross-domain first | Novel cross-domain signals (e.g., ai→aws) are more actionable |
+| Softmax scenario normalization | Proper softmax over all targets | Prevents all-1.0 saturation when many triggers active; produces a probability distribution summing to 1.0 |
+| Cap trigger chains per target | Max 5 chains per target | Prevents posterior accumulation from unbounded chain count; top-5 by effective lift keeps strongest signals |
+| Compact output mode | `--compact` flag | Avoids 277KB+ JSON dumps; returns top-N per section for agent-friendly output |
+| Dynamics ranking and capping | Top 10 per type, ranked by signal strength | Raw dynamics output (60+ loops, 200+ delays) is too noisy; ranking by lift/stddev/entropy surfaces most important signals |
 
 ---
 

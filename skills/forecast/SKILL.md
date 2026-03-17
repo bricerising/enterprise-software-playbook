@@ -200,14 +200,18 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
 2. **Run forecast**:
    ```bash
-   intel forecast
+   intel forecast --compact
    ```
-   CLI defaults: `--lag-window 7 --min-support 3 --top-scenarios 10 --dedup canonical`
+   Use `--compact` for agent consumption — returns top-N per section instead of full output (avoids 200KB+ JSON dumps).
+
+   CLI defaults: `--lag-window 7 --min-support 2 --top-scenarios 10 --dedup canonical --window 30`
 
    Optional tuning:
    ```bash
+   intel forecast --compact --window 7              # short-term compact forecast
    intel forecast --lag-window 5 --min-support 2 --top-scenarios 15
-   intel forecast --dedup none    # count raw events
+   intel forecast --window 14                        # 14-day analysis window
+   intel forecast --dedup none                       # count raw events
    ```
 
 3. **Interpret the response sections**:
@@ -234,7 +238,10 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
 4. **Deepen on high-probability scenarios**:
    ```bash
-   intel search "<target_topic>" --since 7d --limit 10
+   # Free-text search (FTS5 syntax) — use natural language, not topic IDs
+   intel search "AI agents" --since 7d --limit 10
+   # Or filter by exact topic ID using --topic flag
+   intel events --topic ai.agents --since 7d --limit 10
    intel events --id <event_id>
    ```
 

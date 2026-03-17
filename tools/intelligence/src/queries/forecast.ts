@@ -133,14 +133,34 @@ export interface DynamicItem {
   interpretation: string;
 }
 
+/** Maximum trigger chains that contribute to any single target's posterior.
+ *  Prevents posterior saturation when many triggers are simultaneously active. */
+const MAX_CHAINS_PER_TARGET = 5;
+
 export interface ComputeForecastOpts {
   lag_window_days?: number;
   min_support?: number;
   top_scenarios?: number;
   dedup?: string;
+  /** Overall analysis window in days (default: 30). Accepted values: 7, 14, 30. */
+  window_days?: number;
+  /** When true, return a compact summary (top-N per section) instead of full output. */
+  compact?: boolean;
 }
 
 /* ── Main entry ─────────────────────────────────────────────────────── */
+
+/** Compact mode limits per section. */
+const COMPACT_LIMITS = {
+  lifecycles: 15,
+  chains: 15,
+  ranked_chains: 10,
+  scenarios: 10,
+  multiscale: 15,
+  transitive_chains: 10,
+  entropy: 15,
+  dynamics_per_type: 5,
+} as const;
 
 export function computeForecast(
   db: Database.Database,
@@ -152,42 +172,62 @@ export function computeForecast(
   const minSupport = opts.min_support ?? 2;
   const topScenarios = opts.top_scenarios ?? 10;
   const useDedup = opts.dedup !== 'none';
+  const compact = opts.compact ?? false;
+
+  // Overall analysis window (default 30 days)
+  const windowDays = opts.window_days ?? 30;
+  const windowMs = windowDays * 86_400_000;
 
   const now = Date.now();
-  const window30dStart = sinceISO(WINDOWS[3].ms);
+  const windowStart = sinceISO(windowMs);
   const end = formatISO(new Date(now));
 
   // Count events in analysis window
   const countSql = `
     SELECT COUNT(*) AS cnt FROM events WHERE fetched_at >= ?
   `;
-  const { cnt: eventsAnalyzed } = db.prepare(countSql).get(window30dStart) as { cnt: number };
+  const { cnt: eventsAnalyzed } = db.prepare(countSql).get(windowStart) as { cnt: number };
 
   const lifecycles = computeLifecycles(db, now, useDedup);
 
   // G. CUSUM change-point detection — merge into lifecycle items
-  const changePointMap = detectChangePoints(db, window30dStart, useDedup);
+  const changePointMap = detectChangePoints(db, windowStart, useDedup);
   for (const lc of lifecycles) {
     lc.change_points = changePointMap.get(lc.topic) ?? [];
   }
 
-  const chains = detectChains(db, window30dStart, lagWindowDays, minSupport, useDedup, lifecycles);
+  const chains = detectChains(db, windowStart, lagWindowDays, minSupport, useDedup, lifecycles);
   const transitive_chains = detectTransitiveChains(chains);
 
   // F. Entropy scoring
-  const entropy = computeEntropy(db, window30dStart, useDedup);
+  const entropy = computeEntropy(db, windowStart, useDedup);
 
   // J. Bayesian scenario projection (replaces heuristic scoring)
   const scenarios = projectScenariosBayesian(
-    db, chains, lifecycles, entropy, window30dStart, topScenarios, useDedup,
+    db, chains, lifecycles, entropy, windowStart, topScenarios, useDedup,
   );
 
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
-  const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy);
+  const dynamicsPerType = compact ? COMPACT_LIMITS.dynamics_per_type : MAX_DYNAMICS_PER_TYPE;
+  const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType);
+
+  if (compact) {
+    return ok({
+      window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
+      lifecycles: lifecycles.slice(0, COMPACT_LIMITS.lifecycles),
+      chains: chains.slice(0, COMPACT_LIMITS.chains),
+      ranked_chains: ranked_chains.slice(0, COMPACT_LIMITS.ranked_chains),
+      scenarios: scenarios.slice(0, COMPACT_LIMITS.scenarios),
+      multiscale: multiscale.slice(0, COMPACT_LIMITS.multiscale),
+      transitive_chains: transitive_chains.slice(0, COMPACT_LIMITS.transitive_chains),
+      entropy: entropy.slice(0, COMPACT_LIMITS.entropy),
+      dynamics,
+    });
+  }
 
   return ok({
-    window: { start: window30dStart, end, events_analyzed: eventsAnalyzed },
+    window: { start: windowStart, end, events_analyzed: eventsAnalyzed },
     lifecycles,
     chains,
     ranked_chains,
@@ -363,7 +403,7 @@ function classifyPhase(
 
 function detectChains(
   db: Database.Database,
-  window30dStart: string,
+  windowStart: string,
   lagWindowDays: number,
   minSupport: number,
   useDedup: boolean,
@@ -416,7 +456,7 @@ function detectChains(
   `;
 
   const chainRows = db.prepare(chainSql).all(
-    window30dStart,
+    windowStart,
     lagWindowDays,
     minSupport,
   ) as Array<{
@@ -606,7 +646,7 @@ function computeRankedChains(
 
 function computeEntropy(
   db: Database.Database,
-  window30dStart: string,
+  windowStart: string,
   useDedup: boolean,
 ): EntropyItem[] {
   const volumeExpr = useDedup
@@ -620,7 +660,7 @@ function computeEntropy(
     WHERE ${PUB_TS} >= ?
     GROUP BY et.topic, ${PUB_DAY}
   `;
-  const rows = db.prepare(sql).all(window30dStart) as Array<{
+  const rows = db.prepare(sql).all(windowStart) as Array<{
     topic: string;
     day: string;
     volume: number;
@@ -666,17 +706,34 @@ function computeEntropy(
 
 /* ── F2. Systems dynamics detection ────────────────────────────────── */
 
+/** Maximum dynamics entries per type. Keeps output manageable for synthesis. */
+const MAX_DYNAMICS_PER_TYPE = 10;
+
 export function detectDynamics(
   chains: ChainItem[],
   lifecycles: LifecycleItem[],
   multiscale: MultiscaleItem[],
   entropy: EntropyItem[],
+  maxPerType: number = MAX_DYNAMICS_PER_TYPE,
 ): DynamicItem[] {
+  // Rank each type by signal strength, then cap
+  const loops = detectReinforcingLoops(chains);
+  loops.sort((a, b) => (b.metric.secondary_value ?? 0) - (a.metric.secondary_value ?? 0)); // by mutual lift
+
+  const delays = detectDelays(chains);
+  delays.sort((a, b) => (a.metric.secondary_value ?? Infinity) - (b.metric.secondary_value ?? Infinity)); // by tightest lag_stddev
+
+  const accum = detectAccumulations(lifecycles, multiscale, entropy);
+  accum.sort((a, b) => b.metric.value - a.metric.value); // by normalized_entropy
+
+  const damp = detectDampening(lifecycles);
+  damp.sort((a, b) => a.metric.value - b.metric.value); // by most recent change point
+
   return [
-    ...detectReinforcingLoops(chains),
-    ...detectDelays(chains),
-    ...detectAccumulations(lifecycles, multiscale, entropy),
-    ...detectDampening(lifecycles),
+    ...loops.slice(0, maxPerType),
+    ...delays.slice(0, maxPerType),
+    ...accum.slice(0, maxPerType),
+    ...damp.slice(0, maxPerType),
   ];
 }
 
@@ -782,7 +839,7 @@ function detectDampening(lifecycles: LifecycleItem[]): DynamicItem[] {
 
 function detectChangePoints(
   db: Database.Database,
-  window30dStart: string,
+  windowStart: string,
   useDedup: boolean,
 ): Map<string, number[]> {
   const volumeExpr = useDedup
@@ -797,7 +854,7 @@ function detectChangePoints(
     GROUP BY et.topic, ${PUB_DAY}
     ORDER BY et.topic, day
   `;
-  const rows = db.prepare(sql).all(window30dStart) as Array<{
+  const rows = db.prepare(sql).all(windowStart) as Array<{
     topic: string;
     day: string;
     volume: number;
@@ -923,7 +980,7 @@ function projectScenariosBayesian(
   chains: ChainItem[],
   lifecycles: LifecycleItem[],
   entropyItems: EntropyItem[],
-  window30dStart: string,
+  windowStart: string,
   topN: number,
   useDedup: boolean,
 ): ScenarioItem[] {
@@ -955,8 +1012,8 @@ function projectScenariosBayesian(
     GROUP BY dv.topic
   `;
   const baseRateRows = db.prepare(baseRateSql).all(
-    window30dStart,
-    window30dStart,
+    windowStart,
+    windowStart,
   ) as Array<{ topic: string; spike_days: number; total_days: number }>;
 
   const baseRates = new Map<string, number>();
@@ -979,16 +1036,14 @@ function projectScenariosBayesian(
   }
 
   // Bayesian aggregation: for each target, posterior ∝ prior × ∏(lift_i × decay_factor_i)
-  const targetMap = new Map<
-    string,
-    {
-      logPosterior: number;
-      triggerTopics: Set<string>;
-      chainCount: number;
-      avgLagMin: number;
-      avgLagMax: number;
-    }
-  >();
+  // Pre-sort chains per target by effective lift so we can cap at MAX_CHAINS_PER_TARGET
+  // to prevent posterior saturation when many triggers are simultaneously active.
+  const chainsByTarget = new Map<string, Array<{
+    chain: typeof activeChains[0];
+    effectiveLift: number;
+    lagMin: number;
+    lagMax: number;
+  }>>();
 
   for (const chain of activeChains) {
     const stddev = chain.lag_stddev || 0;
@@ -1012,28 +1067,64 @@ function projectScenariosBayesian(
       effectiveLift *= cpDiscount;
     }
 
-    const existing = targetMap.get(chain.to_topic);
+    const existing = chainsByTarget.get(chain.to_topic);
+    const entry = { chain, effectiveLift, lagMin, lagMax };
     if (existing) {
-      existing.logPosterior += Math.log(Math.max(effectiveLift, 1.01));
-      existing.triggerTopics.add(chain.from_topic);
-      existing.chainCount += 1;
-      existing.avgLagMin = Math.min(existing.avgLagMin, lagMin);
-      existing.avgLagMax = Math.max(existing.avgLagMax, lagMax);
+      existing.push(entry);
     } else {
-      const prior = baseRates.get(chain.to_topic) ?? 0.05;
-      targetMap.set(chain.to_topic, {
-        logPosterior: Math.log(prior) + Math.log(Math.max(effectiveLift, 1.01)),
-        triggerTopics: new Set([chain.from_topic]),
-        chainCount: 1,
-        avgLagMin: lagMin,
-        avgLagMax: lagMax,
-      });
+      chainsByTarget.set(chain.to_topic, [entry]);
     }
   }
 
-  // Convert log-posteriors to normalized probabilities
+  const targetMap = new Map<
+    string,
+    {
+      logPosterior: number;
+      triggerTopics: Set<string>;
+      chainCount: number;
+      avgLagMin: number;
+      avgLagMax: number;
+    }
+  >();
+
+  for (const [target, entries] of chainsByTarget) {
+    // Sort by effective lift descending, keep only top N chains per target
+    entries.sort((a, b) => b.effectiveLift - a.effectiveLift);
+    const capped = entries.slice(0, MAX_CHAINS_PER_TARGET);
+
+    const prior = baseRates.get(target) ?? 0.05;
+    let logPosterior = Math.log(prior);
+    const triggerTopics = new Set<string>();
+    let avgLagMin = Infinity;
+    let avgLagMax = -Infinity;
+
+    for (const { chain, effectiveLift, lagMin, lagMax } of capped) {
+      logPosterior += Math.log(Math.max(effectiveLift, 1.01));
+      triggerTopics.add(chain.from_topic);
+      avgLagMin = Math.min(avgLagMin, lagMin);
+      avgLagMax = Math.max(avgLagMax, lagMax);
+    }
+
+    targetMap.set(target, {
+      logPosterior,
+      triggerTopics,
+      chainCount: capped.length,
+      avgLagMin,
+      avgLagMax,
+    });
+  }
+
+  // Convert log-posteriors to normalized probabilities via softmax.
+  // This produces a proper probability distribution that sums to 1.0,
+  // preventing saturation when many triggers are simultaneously active.
   const entries = [...targetMap.entries()];
   const maxLogPost = Math.max(...entries.map(([, d]) => d.logPosterior));
+
+  // Compute softmax denominator: Σ exp(logPost_i - maxLogPost)
+  let softmaxSum = 0;
+  for (const [, data] of entries) {
+    softmaxSum += Math.exp(data.logPosterior - maxLogPost);
+  }
 
   // Fetch evidence titles
   const titleSql = `
@@ -1048,14 +1139,14 @@ function projectScenariosBayesian(
 
   const scenarios: ScenarioItem[] = [];
   for (const [target, data] of entries) {
-    // Normalize: exp(logPost - maxLogPost) / Σexp(logPost - maxLogPost)
-    const probability = maxLogPost === data.logPosterior
-      ? 1.0
-      : Math.round(Math.exp(data.logPosterior - maxLogPost) * 100) / 100;
+    // Softmax normalization: exp(logPost - maxLogPost) / Σexp(logPost_i - maxLogPost)
+    const probability = Math.round(
+      (Math.exp(data.logPosterior - maxLogPost) / softmaxSum) * 100,
+    ) / 100;
 
     const titleRows = titleStmt.all(
       target,
-      window30dStart,
+      windowStart,
       MAX_TITLES_PER_SCENARIO,
     ) as Array<{ title: string | null }>;
 
