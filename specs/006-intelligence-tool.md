@@ -920,7 +920,7 @@ feeds:
     name: SEC Earnings
     form_types: [10-K, 10-Q]
     poll_interval: 900
-    entities: ["AMZN", "GOOG", "MSFT", "AAPL", "META", "NVDA"]
+    tickers: ["AMZN", "GOOG", "MSFT", "AAPL", "META", "NVDA"]
 
 # Topic classification
 topics_file: ~/.config/intel/topics.yaml   # or embed inline

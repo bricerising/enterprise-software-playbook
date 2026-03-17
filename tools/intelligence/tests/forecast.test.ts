@@ -560,36 +560,38 @@ describe('CUSUM change-point detection', () => {
 /* ── HMM probabilistic phase classifier tests ─────────────────────── */
 
 describe('HMM phase classifier', () => {
-  it('all lifecycles include phase_probabilities', () => {
+  it('phase_probabilities only present when HMM was used', () => {
     const result = computeForecast(db, { min_support: 2 });
     for (const lc of result.data.lifecycles) {
-      expect(lc.phase_probabilities).toBeDefined();
-      const phases = ['emerging', 'accelerating', 'peaking', 'decaying', 'stable'];
-      for (const phase of phases) {
-        expect(typeof lc.phase_probabilities[phase]).toBe('number');
-        expect(lc.phase_probabilities[phase]).toBeGreaterThanOrEqual(0);
-        expect(lc.phase_probabilities[phase]).toBeLessThanOrEqual(1);
+      if (lc.phase_probabilities) {
+        // When present, must have all five phases
+        const phases = ['emerging', 'accelerating', 'peaking', 'decaying', 'stable'];
+        for (const phase of phases) {
+          expect(typeof lc.phase_probabilities[phase]).toBe('number');
+          expect(lc.phase_probabilities[phase]).toBeGreaterThanOrEqual(0);
+          expect(lc.phase_probabilities[phase]).toBeLessThanOrEqual(1);
+        }
       }
     }
   });
 
-  it('phase probabilities sum to approximately 1.0', () => {
+  it('phase probabilities sum to approximately 1.0 when present', () => {
     const result = computeForecast(db, { min_support: 2 });
     for (const lc of result.data.lifecycles) {
+      if (!lc.phase_probabilities) continue;
       const sum = Object.values(lc.phase_probabilities).reduce((a, b) => a + b, 0);
       expect(sum).toBeCloseTo(1.0, 1);
     }
   });
 
-  it('assigned phase has highest or near-highest probability', () => {
+  it('assigned phase matches highest probability when phase_probabilities present', () => {
     const result = computeForecast(db, { min_support: 2 });
     for (const lc of result.data.lifecycles) {
-      // The assigned phase should be consistent with probabilities
-      // (either from rule-based or HMM, but phase_probabilities always comes from HMM)
-      const maxProb = Math.max(...Object.values(lc.phase_probabilities));
-      // The assigned phase is either the HMM best or the rule-based one,
-      // so we just verify probabilities are valid
-      expect(maxProb).toBeGreaterThan(0);
+      if (!lc.phase_probabilities) continue;
+      // When HMM was used, the assigned phase should be the HMM best
+      const entries = Object.entries(lc.phase_probabilities);
+      const best = entries.reduce((a, b) => (b[1] > a[1] ? b : a));
+      expect(lc.phase).toBe(best[0]);
     }
   });
 });
@@ -814,7 +816,6 @@ describe('dynamics detection (unit)', () => {
     topic: 'test.topic',
     phase: 'stable',
     phase_confidence: 0.8,
-    phase_probabilities: { emerging: 0.1, accelerating: 0.1, peaking: 0.1, decaying: 0.1, stable: 0.6 },
     volumes: { '1d': 5, '7d': 20, '14d': 40, '30d': 80 },
     accelerations: { '1d': 0, '7d': 0, '14d': 0, '30d': 0 },
     change_points: [],

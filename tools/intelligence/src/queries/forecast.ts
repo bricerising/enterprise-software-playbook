@@ -66,7 +66,7 @@ export interface LifecycleItem {
   topic: string;
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;
-  phase_probabilities: Record<string, number>;
+  phase_probabilities?: Record<string, number>;
   volumes: Record<string, number>;
   accelerations: Record<string, number>;
   change_points: number[];
@@ -293,7 +293,9 @@ function computeLifecycles(
       topic,
       phase,
       phase_confidence: confidence,
-      phase_probabilities: hmmResult.probabilities,
+      // Only include HMM posterior when it was actually used for classification;
+      // avoids confusing consumers with probabilities that disagree with the assigned phase.
+      ...(useHmm ? { phase_probabilities: hmmResult.probabilities } : {}),
       volumes,
       accelerations: accels,
       change_points: [], // populated after lifecycle computation

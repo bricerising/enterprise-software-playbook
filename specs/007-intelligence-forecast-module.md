@@ -204,14 +204,14 @@ interface LifecycleItem {
   topic: string;
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;          // 0.33 - 1.0
-  phase_probabilities: Record<string, number>; // HMM posterior per phase (emerging: 0.6, stable: 0.3, ...)
+  phase_probabilities?: Record<string, number>; // HMM posterior per phase; only present when HMM was used
   volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N }
   accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N }
   change_points: number[];           // days ago when CUSUM detected structural breaks
 }
 ```
 
-**HMM hybrid classification**: The rule-based classifier (described below) is supplemented by an HMM probabilistic classifier using Gaussian emission models with log-sum-exp posterior normalization. The HMM overrides the rule-based phase when its confidence is substantially higher (+0.15). `phase_probabilities` exposes the full HMM posterior. When the top two phases are within 0.15, present both possibilities.
+**HMM hybrid classification**: The rule-based classifier (described below) is supplemented by an HMM probabilistic classifier using Gaussian emission models with log-sum-exp posterior normalization. The HMM overrides the rule-based phase when its confidence is substantially higher (+0.15). `phase_probabilities` is only present when the HMM classifier was actually used, so consumers never see probabilities that disagree with the assigned phase.
 
 **CUSUM change-point detection**: For each topic, a CUSUM algorithm (sensitivity k=0.5σ, threshold h=4.0σ) detects structural breaks in daily volume. Change points within the last 7 days discount chain reliability in scenario projection (50-100% of original lift depending on recency).
 
@@ -578,7 +578,7 @@ The HMM overrides the rule-based classification when its confidence is substanti
 
 ### Output
 
-`phase_probabilities` in `LifecycleItem` — a record mapping each phase to its posterior probability (sums to ~1.0).
+`phase_probabilities` in `LifecycleItem` — when present, a record mapping each phase to its posterior probability (sums to ~1.0). Only included when the HMM classifier was used (i.e., its confidence exceeded the rule-based classifier by >0.15).
 
 ---
 
@@ -747,6 +747,6 @@ intel forecast --min-support 2 | jq '.data.scenarios[0] | {timeframe_days, targe
 intel forecast --min-support 2 | jq '.data.entropy | length'
 intel forecast --min-support 2 | jq '.data.dynamics | length'
 
-# 8. Verify lifecycle items include phase_probabilities and change_points
-intel forecast --min-support 2 | jq '.data.lifecycles[0] | {phase, phase_probabilities, change_points}'
+# 8. Verify lifecycle items include change_points; phase_probabilities present only when HMM used
+intel forecast --min-support 2 | jq '.data.lifecycles[0] | {phase, phase_confidence, phase_probabilities, change_points}'
 ```

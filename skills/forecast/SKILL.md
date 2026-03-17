@@ -281,7 +281,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - **Decay reveals staleness** — compare `decay_weighted_support` to raw `support`. A large gap means the co-movement pattern hasn't recurred recently. Half-life is 14 days.
 - **Entropy signals predictability** — high normalized entropy (> 0.8) means the target is bursty and less predictable.
 - **CUSUM change points invalidate history** — if a trigger or target topic has a change point within the last 7 days, the scenario's effective lift is discounted.
-- **HMM vs rule-based phase** — the HMM classifier overrides the rule-based one when its confidence is 0.15+ higher. When `phase_probabilities` show two phases within 0.15 of each other, present both possibilities.
+- **HMM vs rule-based phase** — the HMM classifier overrides the rule-based one when its confidence is 0.15+ higher. `phase_probabilities` is only present when the HMM was used, so the probabilities always agree with the assigned phase.
 - **Transitive chains compound uncertainty** — A→B→C has `min_support` (weakest link) and `combined_lift` (product), but uncertainty compounds.
 - **Cluster assignments may be stale** — if `drift.ari_prev` is low, cluster boundaries are shifting. Path-based analysis is still valid.
 - **30-day retention limits** — the system only sees patterns within its retention window.

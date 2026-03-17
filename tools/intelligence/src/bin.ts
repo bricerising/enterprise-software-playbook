@@ -344,7 +344,7 @@ program
   .command('forecast')
   .description('Predict likely next developments from event chain patterns')
   .option('--lag-window <days>', 'Max days between chain links', '7')
-  .option('--min-support <n>', 'Min co-occurrences for valid chain', '3')
+  .option('--min-support <n>', 'Min co-occurrences for valid chain', '2')
   .option('--top-scenarios <n>', 'Max scenarios to return', '10')
   .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
   .action((opts) => {
