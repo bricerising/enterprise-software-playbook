@@ -6,7 +6,7 @@ import { HackerNewsAdapter } from './adapters/hackernews.js';
 import { LobstersAdapter } from './adapters/lobsters.js';
 import { EdgarAdapter } from './adapters/edgar.js';
 import { EarningsAdapter } from './adapters/earnings.js';
-import { classify, loadTopics } from './topic-classifier.js';
+import { classify, loadTopics, type ClassifiedTopic } from './topic-classifier.js';
 import { loadCheckpoint, saveCheckpoint, updateCollectorHealth } from './checkpoints.js';
 import { fetchContent } from './content-fetcher.js';
 import { canonicalizeUrl } from '../util/url.js';
@@ -97,7 +97,7 @@ WHERE events.content IS NULL AND excluded.content IS NOT NULL
 `;
 
 const UPSERT_TOPICS_SQL = `
-INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?);
+INSERT OR IGNORE INTO event_topics (event_id, topic, confidence) VALUES (?, ?, ?);
 `;
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -112,15 +112,15 @@ export async function runCollector(opts: CollectorOpts): Promise<void> {
   const { config, once = false } = opts;
   const batchSize = config.collector.batch_size || DEFAULT_BATCH_SIZE;
 
-  // Load topics
-  loadTopics(config.topics_file);
-
   // Open writer connection
   const db = openWriter(config.database, {
     synchronous: config.collector.synchronous,
     walAutocheckpoint: config.collector.wal_autocheckpoint,
     journalSizeLimit: config.collector.journal_size_limit_bytes,
   });
+
+  // Load topics (pass db for learned topic weights)
+  loadTopics(config.topics_file, db);
 
   // Check for unclean shutdown via stale PID file
   const { running, pid } = ControlClient.isDaemonRunning();
@@ -175,7 +175,7 @@ export async function runCollector(opts: CollectorOpts): Promise<void> {
       const events: Array<{
         raw: RawEvent;
         canonical_url: string | null;
-        topics: string[];
+        topics: ClassifiedTopic[];
         content: string | null;
         contentFlags: string[];
       }> = [];
@@ -242,7 +242,7 @@ export async function runCollector(opts: CollectorOpts): Promise<void> {
               event.raw.author,
               event.raw.published_at,
               now,
-              JSON.stringify(event.topics),
+              JSON.stringify(event.topics.map(t => t.id)),
               JSON.stringify(event.raw.tags),
               event.raw.score,
               event.raw.comments,
@@ -252,9 +252,9 @@ export async function runCollector(opts: CollectorOpts): Promise<void> {
                 : null,
             );
 
-            // Insert topic index rows
+            // Insert topic index rows with confidence
             for (const topic of event.topics) {
-              upsertTopicsStmt.run(event.raw.event_id, topic);
+              upsertTopicsStmt.run(event.raw.event_id, topic.id, topic.confidence);
             }
           }
 

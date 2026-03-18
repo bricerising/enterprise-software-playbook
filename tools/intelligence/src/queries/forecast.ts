@@ -1450,12 +1450,13 @@ function projectScenariosBayesian(
     softmaxSum += Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE);
   }
 
-  // Fetch evidence titles with topic_count for relevance scoring.
-  // Events assigned to fewer topics have more specific classification,
-  // so their titles are more likely genuinely relevant to the target topic.
+  // Fetch evidence titles with topic_count and classifier confidence for
+  // combined relevance scoring. Events with higher classifier confidence
+  // for the target topic AND fewer total topics are most relevant.
   const titleSql = `
     SELECT e.title,
-           (SELECT COUNT(*) FROM event_topics et2 WHERE et2.event_id = e.event_id) AS topic_count
+           (SELECT COUNT(*) FROM event_topics et2 WHERE et2.event_id = e.event_id) AS topic_count,
+           et.confidence AS topic_confidence
     FROM event_topics et
     JOIN events e ON e.event_id = et.event_id
     WHERE et.topic = ? AND ${PUB_TS} >= ?
@@ -1475,13 +1476,21 @@ function projectScenariosBayesian(
       target,
       windowStart,
       MAX_TITLES_PER_SCENARIO,
-    ) as Array<{ title: string | null; topic_count: number }>;
+    ) as Array<{ title: string | null; topic_count: number; topic_confidence: number }>;
 
     const evidenceEntries = titleRows
-      .map((r) => ({
-        text: sanitizeSnippet(r.title, { maxLength: 200 }).text,
-        relevance: (r.topic_count <= 2 ? 'high' : r.topic_count <= 4 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
-      }))
+      .map((r) => {
+        // Combined relevance: classifier confidence × topic-count discount
+        const topicConfidence = r.topic_confidence ?? 1.0;
+        const topicCountFactor = r.topic_count <= 2 ? 1.0 : r.topic_count <= 4 ? 0.7 : 0.4;
+        const combinedScore = topicConfidence * topicCountFactor;
+        const relevance: 'high' | 'medium' | 'low' =
+          combinedScore >= 0.7 ? 'high' : combinedScore >= 0.4 ? 'medium' : 'low';
+        return {
+          text: sanitizeSnippet(r.title, { maxLength: 200 }).text,
+          relevance,
+        };
+      })
       .filter((e) => e.text.length > 0);
     const evidenceTitles = evidenceEntries.map((e) => e.text);
     const evidenceRelevance = evidenceEntries.map((e) => e.relevance);
@@ -1587,6 +1596,215 @@ function buildTopicContext(
 
   // Sort by topic for stable output
   results.sort((a, b) => a.topic.localeCompare(b.topic));
+  return results;
+}
+
+/* ── Forecast snapshot & learning ───────────────────────────────────── */
+
+/** Snapshot retention: auto-delete snapshots older than 90 days. */
+const SNAPSHOT_RETENTION_DAYS = 90;
+
+/** Minimum evaluated outcomes before updating topic weight. */
+const MIN_OUTCOMES_FOR_WEIGHT = 5;
+
+export interface SnapshotResult {
+  snapshot_id: number;
+  scenarios_saved: number;
+  snapshots_pruned: number;
+}
+
+/**
+ * Save a forecast snapshot for later evaluation. Persists top scenarios
+ * into forecast_snapshots + forecast_outcomes (outcome = NULL = pending).
+ * Also prunes snapshots older than 90 days.
+ */
+export function saveSnapshot(
+  db: Database.Database,
+  scenarios: ScenarioItem[],
+  windowDays: number,
+): SnapshotResult {
+  // Insert snapshot
+  const insertSnapshot = db.prepare(`
+    INSERT INTO forecast_snapshots (window_days, scenarios)
+    VALUES (?, ?)
+  `);
+  const insertOutcome = db.prepare(`
+    INSERT OR IGNORE INTO forecast_outcomes (snapshot_id, target_topic, predicted_probability)
+    VALUES (?, ?, ?)
+  `);
+
+  const result = db.transaction(() => {
+    const info = insertSnapshot.run(windowDays, JSON.stringify(scenarios));
+    const snapshotId = info.lastInsertRowid as number;
+
+    let saved = 0;
+    for (const s of scenarios) {
+      insertOutcome.run(snapshotId, s.target_topic, s.probability);
+      saved++;
+    }
+
+    // Retention: delete snapshots older than 90 days
+    const cutoff = formatISO(new Date(Date.now() - SNAPSHOT_RETENTION_DAYS * 86_400_000));
+    const deleteOutcomes = db.prepare(`
+      DELETE FROM forecast_outcomes WHERE snapshot_id IN (
+        SELECT snapshot_id FROM forecast_snapshots WHERE created_at < ?
+      )
+    `);
+    const deleteSnapshots = db.prepare(`
+      DELETE FROM forecast_snapshots WHERE created_at < ?
+    `);
+    deleteOutcomes.run(cutoff);
+    const pruneInfo = deleteSnapshots.run(cutoff);
+
+    return {
+      snapshot_id: snapshotId,
+      scenarios_saved: saved,
+      snapshots_pruned: pruneInfo.changes,
+    };
+  })();
+
+  return result;
+}
+
+export interface EvaluateResult {
+  evaluated: number;
+  skipped: number;
+  weights_updated: number;
+}
+
+/**
+ * Evaluate pending forecast outcomes and update topic weights.
+ *
+ * For each pending outcome (outcome IS NULL):
+ * - Check if target_topic had a spike day (volume >= 3) within the predicted
+ *   timeframe since snapshot creation
+ * - Set outcome = 1 (observed) or 0 (not observed, timeframe elapsed)
+ * - Skip if timeframe hasn't elapsed yet
+ *
+ * Then update topic_weights using Laplace-smoothed precision:
+ *   precision = (TP + 1) / (TP + FP + 2)
+ *   weight = 0.5 + 0.5 × precision
+ */
+export function evaluateForecasts(db: Database.Database): EvaluateResult {
+  const now = Date.now();
+
+  // Fetch pending outcomes with snapshot metadata
+  const pendingSql = `
+    SELECT fo.outcome_id, fo.snapshot_id, fo.target_topic, fo.predicted_probability,
+           fs.created_at, fs.scenarios
+    FROM forecast_outcomes fo
+    JOIN forecast_snapshots fs ON fs.snapshot_id = fo.snapshot_id
+    WHERE fo.outcome IS NULL
+  `;
+  const pendingRows = db.prepare(pendingSql).all() as Array<{
+    outcome_id: number;
+    snapshot_id: number;
+    target_topic: string;
+    predicted_probability: number;
+    created_at: string;
+    scenarios: string;
+  }>;
+
+  const updateOutcome = db.prepare(`
+    UPDATE forecast_outcomes
+    SET outcome = ?, evaluated_at = ?
+    WHERE outcome_id = ?
+  `);
+
+  // Check for spike days (volume >= 3) for a topic in a date range
+  const spikeSql = `
+    SELECT COUNT(DISTINCT ${PUB_DAY}) AS spike_days
+    FROM event_topics et
+    JOIN events e ON e.event_id = et.event_id
+    WHERE et.topic = ?
+      AND ${PUB_TS} >= ?
+      AND ${PUB_TS} < ?
+    GROUP BY ${PUB_DAY}
+    HAVING COUNT(*) >= 3
+  `;
+  const spikeStmt = db.prepare(spikeSql);
+
+  let evaluated = 0;
+  let skipped = 0;
+  const nowISO = formatISO(new Date(now));
+
+  const results = db.transaction(() => {
+    for (const row of pendingRows) {
+      // Parse scenario to get timeframe
+      const scenarios = JSON.parse(row.scenarios) as ScenarioItem[];
+      const scenario = scenarios.find(s => s.target_topic === row.target_topic);
+      if (!scenario) {
+        // Scenario not found in snapshot — mark as not observed
+        updateOutcome.run(0, nowISO, row.outcome_id);
+        evaluated++;
+        continue;
+      }
+
+      const createdAt = new Date(row.created_at).getTime();
+      const maxDays = scenario.timeframe_days[1];
+      const deadlineMs = createdAt + maxDays * 86_400_000;
+
+      if (now < deadlineMs) {
+        // Timeframe hasn't elapsed yet — skip
+        skipped++;
+        continue;
+      }
+
+      // Check if topic had a spike day within the predicted timeframe
+      const windowStart = formatISO(new Date(createdAt));
+      const windowEnd = formatISO(new Date(deadlineMs));
+      const spikeRows = spikeStmt.all(row.target_topic, windowStart, windowEnd) as Array<{
+        spike_days: number;
+      }>;
+      const observed = spikeRows.length > 0 ? 1 : 0;
+
+      updateOutcome.run(observed, nowISO, row.outcome_id);
+      evaluated++;
+    }
+
+    // Update topic weights from all evaluated outcomes
+    const weightSql = `
+      SELECT target_topic,
+             SUM(CASE WHEN outcome = 1 THEN 1 ELSE 0 END) AS tp,
+             SUM(CASE WHEN outcome = 0 THEN 1 ELSE 0 END) AS fp,
+             COUNT(*) AS total
+      FROM forecast_outcomes
+      WHERE outcome IS NOT NULL
+      GROUP BY target_topic
+    `;
+    const weightRows = db.prepare(weightSql).all() as Array<{
+      target_topic: string;
+      tp: number;
+      fp: number;
+      total: number;
+    }>;
+
+    const upsertWeight = db.prepare(`
+      INSERT INTO topic_weights (topic_id, weight, true_positives, false_positives, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(topic_id) DO UPDATE SET
+        weight = excluded.weight,
+        true_positives = excluded.true_positives,
+        false_positives = excluded.false_positives,
+        updated_at = excluded.updated_at
+    `);
+
+    let weightsUpdated = 0;
+    for (const row of weightRows) {
+      if (row.total < MIN_OUTCOMES_FOR_WEIGHT) continue;
+
+      // Laplace-smoothed precision: (TP + 1) / (TP + FP + 2)
+      const precision = (row.tp + 1) / (row.tp + row.fp + 2);
+      // Weight maps [0,1] → [0.5, 1.0]
+      const weight = Math.round((0.5 + 0.5 * precision) * 1000) / 1000;
+
+      upsertWeight.run(row.target_topic, weight, row.tp, row.fp, nowISO);
+      weightsUpdated++;
+    }
+
+    return { evaluated, skipped, weights_updated: weightsUpdated };
+  })();
+
   return results;
 }
 

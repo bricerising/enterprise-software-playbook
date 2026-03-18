@@ -30,8 +30,11 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    ```bash
    intel stats
    intel trends --since 24h
+   intel trends --since 7d          # sustained momentum (add for medium/long-term questions)
    ```
    Verify `total_events` is substantial (100+) and data spans multiple days.
+
+   **Match trends window to the question's time horizon.** The 24h trends identify which chain triggers are currently active (the activation model fires on 24h volume >= 3). But for medium-to-long-term questions ("what's next in the market?", "what should we prepare for?"), 24h trends alone over-weight daily noise and miss sustained signals. Add a 7d trends query to distinguish genuine momentum from single-day spikes. For short-term questions ("what's happening right now?"), 24h alone is sufficient.
 
 2. **Run forecast**:
    ```bash
@@ -142,6 +145,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 7. **Cross-reference with current trends** (skip if already run in step 1):
    ```bash
    intel trends --since 24h
+   intel trends --since 7d          # if medium/long-term question
    ```
 
 8. **Synthesize** using the output template in the main skill document.

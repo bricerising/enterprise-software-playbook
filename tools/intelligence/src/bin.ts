@@ -13,7 +13,7 @@ import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
-import { computeForecast } from './queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast.js';
 import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
@@ -340,7 +340,7 @@ program
   });
 
 // --- forecast ---
-program
+const forecast = program
   .command('forecast')
   .description('Predict likely next developments from event chain patterns')
   .option('--lag-window <days>', 'Max days between chain links', '7')
@@ -353,31 +353,77 @@ program
   .option('--with-context', 'Inline top event titles per change point and top chain topic')
   .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.openai,hw.gpu)')
   .option('--section <sections>', 'Comma-separated sections to include (e.g., lifecycles,entropy)')
+  .option('--snapshot', 'Save forecast snapshot for later evaluation')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
       const dbPath = getDbPath(config, program.opts().db);
       const fmt = program.opts().format ?? 'json';
+      const windowDays = parseInt(opts.window, 10);
 
-      const result = sqliteBusyRetry(() =>
-        withReader(dbPath, (db) =>
-          computeForecast(db, {
+      if (opts.snapshot) {
+        // Snapshot requires a writer connection
+        const writer = openWriter(dbPath);
+        try {
+          const result = computeForecast(writer, {
             lag_window_days: parseInt(opts.lagWindow, 10),
             min_support: parseInt(opts.minSupport, 10),
             top_scenarios: parseInt(opts.topScenarios, 10),
             dedup: opts.dedup,
-            window_days: parseInt(opts.window, 10),
+            window_days: windowDays,
             compact: opts.compact ?? false,
             summary: opts.summary ?? false,
             with_context: opts.withContext ?? false,
             topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
             sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
-          }),
-        ),
-      );
-      output(result, fmt);
+          });
+          const snap = saveSnapshot(writer, result.data.scenarios, windowDays);
+          output(ok({ forecast: result.data, snapshot: snap }), fmt);
+        } finally {
+          writer.close();
+        }
+      } else {
+        const result = sqliteBusyRetry(() =>
+          withReader(dbPath, (db) =>
+            computeForecast(db, {
+              lag_window_days: parseInt(opts.lagWindow, 10),
+              min_support: parseInt(opts.minSupport, 10),
+              top_scenarios: parseInt(opts.topScenarios, 10),
+              dedup: opts.dedup,
+              window_days: windowDays,
+              compact: opts.compact ?? false,
+              summary: opts.summary ?? false,
+              with_context: opts.withContext ?? false,
+              topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
+              sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
+            }),
+          ),
+        );
+        output(result, fmt);
+      }
     } catch (err) {
       handleError(err, 'read');
+    }
+  });
+
+forecast
+  .command('evaluate')
+  .description('Evaluate pending forecast outcomes and update topic weights')
+  .action(() => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const writer = openWriter(dbPath);
+      try {
+        const result = evaluateForecasts(writer);
+        output(ok(result), fmt);
+      } finally {
+        writer.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
     }
   });
 

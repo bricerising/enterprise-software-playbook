@@ -24,7 +24,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 - Quantitative price/volume forecasting (this is topic-level signal analysis, not financial modeling)
 - Machine learning or LLM-based prediction (HMM classification is the only probabilistic model; everything else is statistical/algorithmic)
 - Real-time streaming computation (runs on-demand against the SQLite database)
-- Backtesting framework (forecasts are forward-looking snapshots, not evaluated against outcomes)
+- Full backtesting framework (the snapshot evaluation mechanism enables forward-looking outcome tracking but does not support retroactive backtesting against historical data)
 
 ## Scope
 
@@ -33,11 +33,13 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 | Lifecycle classification from multi-window acceleration (rule-based + HMM hybrid) | Custom lifecycle phase definitions |
 | Chain detection with statistical rigor (lift, confidence, directionality, decay weighting) | User-defined chain rules or overrides |
 | Transitive chain inference from direct chains | Chains longer than 2 hops (A→B→C) |
-| Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Scenario evaluation or accuracy tracking |
+| Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Full retroactive backtesting against historical data |
 | Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d/90d |
 | Entropy-based surprise scoring per topic | Custom entropy thresholds |
 | CUSUM change-point detection for structural breaks | Real-time streaming CUSUM |
 | Systems dynamics detection (reinforcing loops, delays, accumulations, dampening) | Full causal modeling or simulation |
+| Confidence-weighted topic classification with learned weights | Negative example training or embedding-based classification |
+| Forecast snapshot → evaluate → weight update learning loop | Automated continuous evaluation (manual via `intel forecast evaluate`) |
 
 ---
 
@@ -83,7 +85,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-All computation is read-only against the existing `events` and `event_topics` tables. No new tables or schema changes. The module is a single function (`computeForecast`) that returns the standard `IntelResponse<ForecastData>` envelope. Temporal queries use `COALESCE(published_at, fetched_at)` so bulk ingests don't compress real-world timelines.
+Core forecast computation is read-only against the `events` and `event_topics` tables. The learning loop adds three new tables (`forecast_snapshots`, `forecast_outcomes`, `topic_weights`) and a `confidence` column on `event_topics` (migration 004). The main entry point is `computeForecast()` which returns the standard `IntelResponse<ForecastData>` envelope. `saveSnapshot()` and `evaluateForecasts()` handle the write-path learning loop. Temporal queries use `COALESCE(published_at, fetched_at)` so bulk ingests don't compress real-world timelines.
 
 ### Execution Flow
 
@@ -117,6 +119,8 @@ intel forecast --summary --window 7               # short-term summary forecast
 intel forecast --topics ai.openai,hw.gpu          # filter output to specific topics
 intel forecast --section lifecycles,entropy        # include only specific sections
 intel forecast --topics ai.openai --section lifecycles,entropy --compact  # combined filtering
+intel forecast --snapshot                    # save snapshot for later evaluation
+intel forecast evaluate                      # evaluate pending outcomes and update topic weights
 ```
 
 ### MCP Tool
@@ -640,13 +644,132 @@ The HMM overrides the rule-based classification when its confidence is substanti
 
 ---
 
+## I. Confidence-Weighted Classification
+
+### Purpose
+
+The topic classifier performs binary keyword/regex matching — a topic either matches or it doesn't. A tangential mention of "bedrock" scores identically to a deep-dive article about Amazon Bedrock. Confidence-weighted classification adds a per-tag confidence score in [0, 1] so downstream consumers (evidence relevance, chain detection) can distinguish strong matches from weak ones.
+
+### Algorithm
+
+The confidence formula combines four signals already present in the match path:
+
+```
+base = 0.5 + min(keywordHits - 1, 3) × 0.1 + regexHits × 0.05    (capped at 0.8)
+contextBoost = context_required && passed ? 1.25 : 1.0
+priorityFactor = 0.6 + 0.4 × (priority / 100)
+raw_confidence = min(1.0, base × contextBoost × priorityFactor)
+final_confidence = min(1.0, raw_confidence × topic_weight)
+```
+
+- **base**: starts at 0.5 for a single keyword hit; each additional keyword hit adds 0.1 (up to +0.3); each regex hit adds 0.05. Capped at 0.8 to leave room for context and priority boosts.
+- **contextBoost**: topics with `context_required: true` that pass context validation get a 25% boost (reward for passing the disambiguation gate).
+- **priorityFactor**: maps topic priority (0-100) into a [0.6, 1.0] multiplier. High-priority topics get a confidence boost.
+- **topic_weight**: learned weight from the feedback loop (default 1.0). Topics with poor forecast accuracy trend toward 0.5.
+
+### Schema
+
+```sql
+ALTER TABLE event_topics ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0;
+```
+
+Backward-compatible: existing rows default to 1.0. New events receive computed confidence values.
+
+### Interface Changes
+
+- `classify()` returns `ClassifiedTopic[]` (array of `{ id: string; confidence: number }`) instead of `string[]`
+- `classifyIds()` provides backward-compatible `string[]` return type
+- `loadTopics()` accepts optional DB handle to load `topic_weights` into an in-memory Map
+
+### Evidence Relevance Upgrade
+
+Evidence relevance in scenario projection now uses a combined score:
+
+```
+combinedScore = topicConfidence × topicCountFactor
+relevance = combinedScore >= 0.7 ? 'high' : combinedScore >= 0.4 ? 'medium' : 'low'
+```
+
+Where `topicCountFactor` is: 1.0 (1-2 topics), 0.7 (3-4 topics), 0.4 (5 topics). This replaces the previous topic-count-only heuristic with a score that accounts for both classifier confidence and tag specificity.
+
+---
+
+## J2. Forecast Learning Loop
+
+### Purpose
+
+Close the feedback loop: snapshot forecasts, evaluate outcomes, and adjust per-topic weights based on historical accuracy. Topics with accurate forecasts get higher classifier confidence; topics with many false positives get discounted.
+
+### Snapshot Mechanism
+
+`intel forecast --snapshot` saves the current forecast for later evaluation:
+
+1. Insert all scenarios into `forecast_snapshots` (JSON blob) + one `forecast_outcomes` row per scenario (outcome = NULL = pending)
+2. Auto-delete snapshots older than 90 days (retention cleanup)
+
+### Evaluation
+
+`intel forecast evaluate` evaluates pending outcomes:
+
+1. For each pending outcome (outcome IS NULL):
+   - Check if `target_topic` had a spike day (volume >= 3) within the predicted timeframe since snapshot creation
+   - Set `outcome = 1` (observed) or `outcome = 0` (not observed, timeframe elapsed)
+   - Skip if timeframe hasn't elapsed yet
+
+### Weight Update
+
+After evaluation, topic weights are updated using Laplace-smoothed precision:
+
+```
+precision = (TP + 1) / (TP + FP + 2)     // Laplace smoothing, default = 0.5
+weight = 0.5 + 0.5 × precision            // Maps [0,1] → [0.5, 1.0]
+```
+
+- Topics with many accurate forecasts → weight trends toward 1.0
+- Topics with many false positives → weight trends toward 0.5 (50% discount, never fully silenced)
+- Topics with no data → default ~0.75 (neutral)
+- Minimum 5 evaluated outcomes before updating weight (avoids swinging on sparse data)
+
+### Schema
+
+```sql
+CREATE TABLE forecast_snapshots (
+    snapshot_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    window_days   INTEGER NOT NULL,
+    scenarios     TEXT NOT NULL CHECK (json_valid(scenarios))
+);
+
+CREATE TABLE forecast_outcomes (
+    outcome_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id   INTEGER NOT NULL REFERENCES forecast_snapshots(snapshot_id),
+    target_topic  TEXT NOT NULL,
+    predicted_probability REAL NOT NULL,
+    outcome       INTEGER,  -- NULL=pending, 1=observed, 0=not observed
+    evaluated_at  TEXT,
+    UNIQUE(snapshot_id, target_topic)
+);
+
+CREATE TABLE topic_weights (
+    topic_id        TEXT PRIMARY KEY,
+    weight          REAL NOT NULL DEFAULT 1.0,
+    true_positives  INTEGER NOT NULL DEFAULT 0,
+    false_positives INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+```
+
+---
+
 ## Implementation
 
 ### File Structure
 
 ```
-tools/intelligence/src/queries/forecast.ts    — all algorithm code (~1300 lines)
-tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe blocks
+tools/intelligence/src/queries/forecast.ts    — forecast computation + snapshot + evaluation
+tools/intelligence/src/collector/topic-classifier.ts — confidence-weighted classification
+tools/intelligence/migrations/004-confidence-learning.sql — schema migration
+tools/intelligence/tests/forecast.test.ts     — tests
 ```
 
 ### Internal Functions
@@ -665,6 +788,8 @@ tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe bl
 | `computeEntropy` | F | Shannon entropy per topic |
 | `detectDynamics` | F2 | Systems thinking pattern detection |
 | `detectChangePoints` | G | CUSUM change-point detection per topic |
+| `saveSnapshot` | J2 | Persist forecast scenarios for later evaluation |
+| `evaluateForecasts` | J2 | Evaluate pending outcomes and update topic weights |
 
 ### Constants
 
@@ -810,6 +935,9 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Weekday ratio field | Avg weekday fraction always present on chains | `weekday_ratio` (0-1) enables programmatic calendar artifact assessment. Binary `temporal_pattern` flag threshold lowered from 0.85 to 0.75. |
 | Normalized transitive confidence | Geometric mean of leg confidences | `normalized_confidence = sqrt(conf_AB * conf_BC)` — calibrated [0,1] metric for comparing transitive chain strength without raw combined_lift inflation. |
 | Adaptive summary mode | Auto-upgrade thin sections when scenario yield < 3 | Summary mode upgrades ranked_chains, dynamics, lifecycles to compact limits when fewer than 3 scenarios qualify. Eliminates manual --compact retry round-trip. |
+| Confidence-weighted tagging | Classifier emits confidence per tag | Replaces binary match with 4-signal confidence formula (keyword density, regex hits, context validation, priority). Stored in `event_topics.confidence`. |
+| Forecast learning loop | Snapshot → evaluate → weight update | Laplace-smoothed precision per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. `--snapshot` flag (not automatic) + 90-day retention. |
+| Combined evidence relevance | topicConfidence × topicCountFactor | Replaces topic-count-only heuristic with combined score that accounts for classifier confidence and tag specificity. |
 
 ---
 
@@ -869,7 +997,7 @@ intel forecast --min-support 2 | jq '[.data.ranked_chains[].from_topic] | group_
 
 | Limitation | Impact | Mitigation |
 |---|---|---|
-| **Classifier noise** | Topic classifier over-tags high-volume topics (e.g. `lang.typescript`, `infra.gpu`), inflating volume counts and producing misleading evidence (e.g., "Home Assistant waters my plants" tagged as TypeScript). | Evidence pre-filter drops all-low-relevance scenarios; `target_base_rate` filter catches omnipresent targets. Consumers must still cross-check evidence titles against scenario topics. |
+| **Classifier noise** | Topic classifier over-tags high-volume topics (e.g. `lang.typescript`, `infra.gpu`), inflating volume counts and producing misleading evidence (e.g., "Home Assistant waters my plants" tagged as TypeScript). | Confidence-weighted classification now scores each tag assignment 0-1 based on keyword density, regex hits, context validation, and priority. Evidence relevance uses the combined confidence × topic-count score. The forecast learning loop further adjusts weights based on historical accuracy. Evidence pre-filter drops all-low-relevance scenarios; `target_base_rate` filter catches omnipresent targets. |
 | **120-day retention window** | Can detect quarterly trends and seasonal cycles within a single quarter, but cannot detect year-over-year patterns or multi-year trends. Effective horizon is "what's happening now, what's about to happen, and how does the current quarter compare to the last." | 90d lifecycle window leverages the extended retention for phase classification. For longer-horizon analysis, supplement with analyst reports and historical research. |
 | **Co-movement ≠ causation** | Chains detect statistical co-occurrence patterns, not causal mechanisms. High lift means "more than random" but does not imply A causes B. | Weekday-ratio filter catches some calendar artifacts. Consumers must treat chains as correlation signals and seek explanatory mechanisms before acting. |
 | **Source bias** | 128 sources skew toward developer communities (Hacker News), vendor announcements (AWS/Azure/GCP blogs), and financial news (Seeking Alpha, Yahoo Finance). Enterprise procurement signals, analyst reports behind paywalls (Gartner, Forrester, IDC), and non-English-language markets are underweighted. | Coverage gaps are blind spots, not absence of activity. Source diversity metric partially compensates by discounting single-source chains. |
@@ -905,8 +1033,8 @@ The current 128-source feed set is strong for developer community signals but ha
 
 ### Classifier precision improvements
 
-The topic classifier's broad tagging of high-volume topics (documented in Known Limitations) could be mitigated by:
+Confidence-weighted tagging is now implemented (see section I). Remaining improvements:
 
-1. **Confidence-weighted tagging** — Emit classifier confidence per topic assignment, allowing downstream filtering by precision rather than binary inclusion
-2. **Negative examples** — Train the classifier with explicit "not this topic" examples for commonly over-tagged categories
-3. **Title-topic coherence scoring** — Post-hoc validation that evidence titles are semantically related to the scenario's target topic, using embedding similarity
+1. **Negative examples** — Train the classifier with explicit "not this topic" examples for commonly over-tagged categories
+2. **Title-topic coherence scoring** — Post-hoc validation that evidence titles are semantically related to the scenario's target topic, using embedding similarity
+3. **Confidence-weighted chain volumes** — Use confidence scores in chain detection volume computation (opt-in; currently only affects evidence relevance)
