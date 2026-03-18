@@ -347,7 +347,7 @@ program
   .option('--min-support <n>', 'Min co-occurrences for valid chain', '2')
   .option('--top-scenarios <n>', 'Max scenarios to return', '10')
   .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
-  .option('--window <days>', 'Analysis window in days (7, 14, or 30)', '30')
+  .option('--window <days>', 'Analysis window in days (7, 14, 30, 60, 90, or 120)', '120')
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .option('--with-context', 'Inline top event titles per change point and top chain topic')

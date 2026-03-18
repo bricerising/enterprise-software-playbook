@@ -121,7 +121,7 @@ describe('computeForecast', () => {
   });
 
   it('detects chains with correct support counts', () => {
-    const result = computeForecast(db, { min_support: 2 });
+    const result = computeForecast(db, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
 
@@ -190,6 +190,7 @@ describe('computeForecast', () => {
       expect(typeof ms.d1_accel).toBe('number');
       expect(typeof ms.d7_accel).toBe('number');
       expect(typeof ms.d30_accel).toBe('number');
+      expect(typeof ms.d90_accel).toBe('number');
     }
   });
 
@@ -395,7 +396,7 @@ describe('sparse-day fallbacks', () => {
 
 describe('chain statistical fields', () => {
   it('lift and confidence are finite and in expected ranges', () => {
-    const result = computeForecast(db, { min_support: 2 });
+    const result = computeForecast(db, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
 
@@ -782,7 +783,7 @@ describe('published_at temporal analysis', () => {
       }
     }
 
-    const result = computeForecast(pubDb, { min_support: 2 });
+    const result = computeForecast(pubDb, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
   });
@@ -841,8 +842,8 @@ describe('dynamics detection (unit)', () => {
     topic: 'test.topic',
     phase: 'stable',
     phase_confidence: 0.8,
-    volumes: { '1d': 5, '7d': 20, '14d': 40, '30d': 80 },
-    accelerations: { '1d': 0, '7d': 0, '14d': 0, '30d': 0 },
+    volumes: { '1d': 5, '7d': 20, '14d': 40, '30d': 80, '90d': 200 },
+    accelerations: { '1d': 0, '7d': 0, '14d': 0, '30d': 0, '90d': 0 },
     change_points: [],
     ...overrides,
   });
@@ -853,6 +854,7 @@ describe('dynamics detection (unit)', () => {
     d1_accel: 0.5,
     d7_accel: 0.3,
     d30_accel: 0.2,
+    d90_accel: 0.1,
     ...overrides,
   });
 
@@ -935,7 +937,7 @@ describe('summary mode', () => {
   });
 
   it('omits detail sections entirely in summary mode', () => {
-    const result = computeForecast(db, { min_support: 2, summary: true });
+    const result = computeForecast(db, { min_support: 2, summary: true, window_days: 30 });
     // Zero-limited sections should be omitted from the response (not empty arrays)
     expect(result.data.lifecycles).toBeUndefined();
     expect(result.data.chains).toBeUndefined();
@@ -1120,7 +1122,7 @@ describe('with_context', () => {
   });
 
   it('context works with summary mode', () => {
-    const result = computeForecast(db, { min_support: 2, summary: true, with_context: true });
+    const result = computeForecast(db, { min_support: 2, summary: true, with_context: true, window_days: 30 });
     expect(result.status).toBe('ok');
     expect(result.data.context).toBeDefined();
     // Summary sections should still be omitted

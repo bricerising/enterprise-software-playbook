@@ -113,7 +113,7 @@ const TOOL_DEFINITIONS = [
         min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 2)' },
         top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
         dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
-        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
+        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, 30, 60, 90, or 120 (default: 120)' },
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
         summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
         with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },

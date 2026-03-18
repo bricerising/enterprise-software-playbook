@@ -6,7 +6,7 @@ Predict likely next developments from collected intelligence feeds using statist
 
 The external engine combines seven analysis engines:
 
-1. **Lifecycle positioning** — rule-based + HMM probabilistic phase classification across 4 time windows (1d/7d/14d/30d). Five phases: emerging, accelerating, peaking, decaying, stable. HMM uses Gaussian emission models with log-sum-exp posterior normalization; overrides rule-based when confidence is substantially higher (+0.15).
+1. **Lifecycle positioning** — rule-based + HMM probabilistic phase classification across 5 time windows (1d/7d/14d/30d/90d). Five phases: emerging, accelerating, peaking, decaying, stable. HMM uses Gaussian emission models with log-sum-exp posterior normalization; overrides rule-based when confidence is substantially higher (+0.15).
 2. **Chain detection** — discovers topic co-movement patterns (A spikes -> B spikes within N days) with lift, confidence, directionality, and lag stddev. Uses `COALESCE(published_at, fetched_at)` for temporal analysis.
 3. **Transitive chains** — extends direct chains to A->B->C paths with combined lift and cross-domain detection. Capped at 100 results.
 4. **Exponential decay weighting** — weights chain support by recency (14-day half-life).
@@ -43,7 +43,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
    Use `--with-context` to inline top event titles per change point topic and top ranked chain topic. This saves a full round-trip of `intel search` deepening calls by embedding narrative context directly in the forecast response.
 
-   CLI defaults: `--lag-window 7 --min-support 2 --top-scenarios 10 --dedup canonical --window 30`
+   CLI defaults: `--lag-window 7 --min-support 2 --top-scenarios 10 --dedup canonical --window 120`
 
    Optional tuning:
    ```bash
@@ -76,7 +76,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `ranked_chains` | Active chains scored and sorted (cross-domain first, then composite score with base-rate discount), capped at 50. Per-trigger cap of 3 ensures diverse trigger representation. |
    | `transitive_chains` | A->B->C paths with combined lift and weakest-link support |
    | `scenarios` | Bayesian posterior probabilities, entropy-widened timeframes, trigger chains, evidence with relevance hints |
-   | `multiscale` | Per-topic alignment across 1d/7d/30d (aligned_up, aligned_down, diverging, transitioning) |
+   | `multiscale` | Per-topic alignment across 1d/7d/30d/90d (aligned_up, aligned_down, diverging, transitioning) |
    | `entropy` | Shannon entropy per topic — low (< 0.3) = predictable; high (> 0.8) = bursty |
    | `dynamics` | Systems dynamics: reinforcing loops, delays, accumulations (with freshness gate), dampening signals |
    | `change_points_summary` | **HIGH PRIORITY** — topics with CUSUM structural breaks, sorted by recency. Always call these out. |
@@ -107,7 +107,22 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `accumulation` | aligned_up + emerging/accelerating + rising entropy + freshness gate | Pressure building without release. Requires recent published_at events (not backfill). Ask: what is the threshold event? |
    | `dampening` | Decaying phase + recent CUSUM change point | Something arrested growth. Ask: natural limit, policy change, or competing signal? |
 
-4. **Deepen on high-probability scenarios** (skip if `--with-context` was used — context is already inlined):
+4. **Assess structural limitations before synthesis**:
+
+   The external engine is a **technology momentum detector** — it identifies where engineering attention is concentrating before it becomes consensus. Understand what it can and cannot tell you:
+
+   | What it measures | What it doesn't measure |
+   |---|---|
+   | Coverage volume and acceleration | Revenue, margins, or enterprise adoption |
+   | Topic co-movement timing | Causal mechanisms (why A predicts B) |
+   | Lifecycle phase (attention curve position) | Product-market fit or technical maturity |
+   | Cross-domain signal propagation | Signals behind paywalls (Gartner, Forrester) |
+   | Developer community attention (HN, RSS, blogs) | Enterprise procurement decisions |
+   | English-language technology discourse | Non-English markets and communities |
+
+   **Compensating for blind spots**: When the forecast surfaces a high-probability scenario or structural break, ask "what signals would I need from outside this system to validate this?" For enterprise-relevant decisions, supplement with analyst reports, job posting trends, and financial data. The system's 120-day retention window with 90d lifecycle timescale enables quarterly trend detection, but cannot detect year-over-year patterns or multi-year trends.
+
+5. **Deepen on high-probability scenarios** (skip if `--with-context` was used — context is already inlined):
    ```bash
    # Free-text search (FTS5 syntax) — use natural language, not topic IDs
    intel search "AI agents" --since 7d --limit 10
@@ -116,7 +131,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    intel events --id <event_id>
    ```
 
-5. **Deepen on accumulation signals**: When the dynamics section shows `accumulation` entries (pressure building without release), these need context to be actionable. The key question is: "what is the threshold event?" Search for recent content on the accumulating topic to identify what could trigger a release:
+6. **Deepen on accumulation signals**: When the dynamics section shows `accumulation` entries (pressure building without release), these need context to be actionable. The key question is: "what is the threshold event?" Search for recent content on the accumulating topic to identify what could trigger a release:
    ```bash
    # For each accumulation topic, search for recent context
    intel search "kubernetes security" --since 7d --limit 10
@@ -124,11 +139,11 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    ```
    Look for: policy announcements, vulnerability disclosures, conference deadlines, or competitive moves that could serve as the threshold event. Accumulations without an identifiable trigger are noted but lower-priority.
 
-6. **Cross-reference with current trends** (skip if already run in step 1):
+7. **Cross-reference with current trends** (skip if already run in step 1):
    ```bash
    intel trends --since 24h
    ```
 
-7. **Synthesize** using the output template in the main skill document.
+8. **Synthesize** using the output template in the main skill document.
 
 **Parallelism note**: `intel stats`, `intel trends`, and `intel forecast` are independent queries with no data dependency. Run them in parallel when possible to minimize latency (e.g., stats + trends in step 1, or trends + forecast if data freshness is already confirmed).

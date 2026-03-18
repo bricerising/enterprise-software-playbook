@@ -17,6 +17,7 @@ const WINDOWS = [
   { label: '7d', ms: 604_800_000 },
   { label: '14d', ms: 1_209_600_000 },
   { label: '30d', ms: 2_592_000_000 },
+  { label: '90d', ms: 7_776_000_000 },
 ] as const;
 
 const MAX_TITLES_PER_SCENARIO = 3;
@@ -46,11 +47,11 @@ const PHASE_EMISSIONS: Record<
   string,
   { means: Record<string, number>; stddev: number }
 > = {
-  emerging:     { means: { '1d': 1.0, '7d': 0.5, '14d': 0.2, '30d': 0.0 }, stddev: 0.5 },
-  accelerating: { means: { '1d': 0.5, '7d': 0.5, '14d': 0.3, '30d': 0.3 }, stddev: 0.4 },
-  peaking:      { means: { '1d': -0.3, '7d': 0.3, '14d': 0.2, '30d': 0.1 }, stddev: 0.4 },
-  decaying:     { means: { '1d': -0.5, '7d': -0.3, '14d': -0.2, '30d': -0.1 }, stddev: 0.4 },
-  stable:       { means: { '1d': 0.0, '7d': 0.0, '14d': 0.0, '30d': 0.0 }, stddev: 0.15 },
+  emerging:     { means: { '1d': 1.0, '7d': 0.5, '14d': 0.2, '30d': 0.0, '90d': -0.1 }, stddev: 0.5 },
+  accelerating: { means: { '1d': 0.5, '7d': 0.5, '14d': 0.3, '30d': 0.3, '90d': 0.2 }, stddev: 0.4 },
+  peaking:      { means: { '1d': -0.3, '7d': 0.3, '14d': 0.2, '30d': 0.1, '90d': 0.1 }, stddev: 0.4 },
+  decaying:     { means: { '1d': -0.5, '7d': -0.3, '14d': -0.2, '30d': -0.1, '90d': 0.0 }, stddev: 0.4 },
+  stable:       { means: { '1d': 0.0, '7d': 0.0, '14d': 0.0, '30d': 0.0, '90d': 0.0 }, stddev: 0.15 },
 };
 
 /* ── Interfaces ─────────────────────────────────────────────────────── */
@@ -171,6 +172,7 @@ export interface MultiscaleItem {
   d1_accel: number;
   d7_accel: number;
   d30_accel: number;
+  d90_accel: number;
 }
 
 export type DynamicType = 'reinforcing_loop' | 'delay' | 'accumulation' | 'dampening';
@@ -201,7 +203,7 @@ export interface ComputeForecastOpts {
   min_support?: number;
   top_scenarios?: number;
   dedup?: string;
-  /** Overall analysis window in days (default: 30). Accepted values: 7, 14, 30. */
+  /** Overall analysis window in days (default: 120). Accepted values: 7, 14, 30, 60, 90, 120. */
   window_days?: number;
   /** When true, return a compact summary (top-N per section) instead of full output. */
   compact?: boolean;
@@ -262,11 +264,20 @@ export function computeForecast(
   const summary = opts.summary ?? false;
   const compact = summary || (opts.compact ?? false);
 
-  // Overall analysis window (default 30 days)
-  const windowDays = opts.window_days ?? 30;
-  const windowMs = windowDays * 86_400_000;
+  // Overall analysis window (default 120 days), clamped to actual data coverage
+  const requestedWindowDays = opts.window_days ?? 120;
+  const warnings: string[] = [];
 
   const now = Date.now();
+  const { t: oldestEvent } = db.prepare('SELECT MIN(fetched_at) AS t FROM events').get() as { t: string | null };
+  const dataDays = oldestEvent ? Math.floor((now - new Date(oldestEvent).getTime()) / 86_400_000) : 0;
+
+  const windowDays = dataDays > 0 ? Math.min(requestedWindowDays, dataDays) : requestedWindowDays;
+  if (windowDays < requestedWindowDays) {
+    warnings.push(`Window clamped from ${requestedWindowDays}d to ${windowDays}d (only ${dataDays}d of data available)`);
+  }
+
+  const windowMs = windowDays * 86_400_000;
   const windowStart = sinceISO(windowMs);
   const end = formatISO(new Date(now));
 
@@ -409,10 +420,10 @@ export function computeForecast(
     if (filteredContext) result.context = filteredContext;
 
     if (sectionFilter) {
-      return ok(filterSections(result, sectionFilter));
+      return ok(filterSections(result, sectionFilter), { warnings });
     }
 
-    return ok(result);
+    return ok(result, { warnings });
   }
 
   const fullResult: ForecastData = {
@@ -430,10 +441,10 @@ export function computeForecast(
   };
 
   if (sectionFilter) {
-    return ok(filterSections(fullResult, sectionFilter));
+    return ok(filterSections(fullResult, sectionFilter), { warnings });
   }
 
-  return ok(fullResult);
+  return ok(fullResult, { warnings });
 }
 
 /** Re-cap dynamics per type after initial detection.
@@ -543,9 +554,10 @@ function computeLifecycles(
     const d7 = accels['7d'] ?? 0;
     const d14 = accels['14d'] ?? 0;
     const d30 = accels['30d'] ?? 0;
+    const d90 = accels['90d'] ?? 0;
     const v30 = volumes['30d'] ?? 0;
 
-    const ruleResult = classifyPhase(d1, d7, d14, d30, v30, median30d);
+    const ruleResult = classifyPhase(d1, d7, d14, d30, d90, v30, median30d);
     const hmmResult = classifyPhaseHMM(accels);
 
     // Use HMM phase when its confidence is substantially higher;
@@ -575,11 +587,12 @@ function classifyPhase(
   d7: number,
   _d14: number,
   d30: number,
+  d90: number,
   v30: number,
   median30d: number,
 ): { phase: LifecycleItem['phase']; confidence: number } {
   // Count directional agreement across windows for confidence
-  const directions = [d1, d7, d30].map((a) =>
+  const directions = [d1, d7, d30, d90].map((a) =>
     a > 0.2 ? 1 : a < -0.2 ? -1 : 0,
   );
   const agreeing = Math.max(
@@ -587,7 +600,7 @@ function classifyPhase(
     directions.filter((d) => d === -1).length,
     directions.filter((d) => d === 0).length,
   );
-  const confidence = Math.round((agreeing / 3) * 100) / 100;
+  const confidence = Math.round((agreeing / 4) * 100) / 100;
 
   // Classification rules (order matters — first match wins)
   if (d1 > 0.5 && d7 > 0 && v30 < median30d) {
@@ -840,16 +853,19 @@ function buildMultiscaleView(lifecycles: LifecycleItem[]): MultiscaleItem[] {
     const d1 = lc.accelerations['1d'] ?? 0;
     const d7 = lc.accelerations['7d'] ?? 0;
     const d30 = lc.accelerations['30d'] ?? 0;
+    const d90 = lc.accelerations['90d'] ?? 0;
 
     // Use d7 as proxy for short-term when d1 is dead
     const short = Math.abs(d1) >= 0.1 ? d1 : d7;
+    // Use d90 as long-term signal when available, fall back to d30
+    const long = Math.abs(d90) >= 0.05 ? d90 : d30;
 
     let alignment: MultiscaleItem['alignment'];
-    if (short > 0 && d7 > 0 && d30 > 0) {
+    if (short > 0 && d7 > 0 && long > 0) {
       alignment = 'aligned_up';
-    } else if (short < 0 && d7 < 0 && d30 < 0) {
+    } else if (short < 0 && d7 < 0 && long < 0) {
       alignment = 'aligned_down';
-    } else if ((short > 0 && d30 < 0) || (short < 0 && d30 > 0)) {
+    } else if ((short > 0 && long < 0) || (short < 0 && long > 0)) {
       alignment = 'diverging';
     } else if ((short > 0 && d7 < 0) || (short < 0 && d7 > 0)) {
       alignment = 'transitioning';
@@ -864,6 +880,7 @@ function buildMultiscaleView(lifecycles: LifecycleItem[]): MultiscaleItem[] {
       d1_accel: d1,
       d7_accel: d7,
       d30_accel: d30,
+      d90_accel: d90,
     };
   });
 }
@@ -1224,7 +1241,7 @@ function classifyPhaseHMM(
   for (const phase of phases) {
     const { means, stddev } = PHASE_EMISSIONS[phase];
     let logLik = 0;
-    for (const w of ['1d', '7d', '14d', '30d']) {
+    for (const w of ['1d', '7d', '14d', '30d', '90d']) {
       const observed = accels[w] ?? 0;
       logLik += gaussianLogPdf(observed, means[w], stddev);
     }

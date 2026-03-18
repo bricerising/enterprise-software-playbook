@@ -6,7 +6,7 @@ The intelligence tool collects signals and computes trends, but trends are backw
 
 ## Goal
 
-Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes ten complementary views from a single 30-day analysis window:
+Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes ten complementary views from a configurable analysis window (default: 120 days):
 
 1. **Lifecycle positioning** — rule-based + HMM probabilistic phase classification (emerging, accelerating, peaking, decaying, stable)
 2. **Chain detection** — statistically significant temporal co-movement patterns with causal directionality and exponential decay weighting
@@ -34,7 +34,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 | Chain detection with statistical rigor (lift, confidence, directionality, decay weighting) | User-defined chain rules or overrides |
 | Transitive chain inference from direct chains | Chains longer than 2 hops (A→B→C) |
 | Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Scenario evaluation or accuracy tracking |
-| Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d |
+| Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d/90d |
 | Entropy-based surprise scoring per topic | Custom entropy thresholds |
 | CUSUM change-point detection for structural breaks | Real-time streaming CUSUM |
 | Systems dynamics detection (reinforcing loops, delays, accumulations, dampening) | Full causal modeling or simulation |
@@ -87,8 +87,8 @@ All computation is read-only against the existing `events` and `event_topics` ta
 
 ### Execution Flow
 
-1. Count events in the 30-day analysis window
-2. **Lifecycles**: compute volume and acceleration at 4 windows (1d, 7d, 14d, 30d) for every topic; classify phase via rule-based + HMM hybrid; detect CUSUM change points per topic
+1. Count events in the analysis window (default: 120 days)
+2. **Lifecycles**: compute volume and acceleration at 5 windows (1d, 7d, 14d, 30d, 90d) for every topic; classify phase via rule-based + HMM hybrid; detect CUSUM change points per topic
 3. **Chains**: detect temporal co-movement patterns via SQL; compute statistical metrics; determine directionality; apply exponential decay weighting (14-day half-life)
 4. **Transitive chains**: join direct chains A→B and B→C to find 2-hop propagation paths
 5. **Scenarios**: filter active chains with lift ≥ 1.5; compute Bayesian posterior probabilities from base rates × chain lifts × decay factors × CUSUM discounts; widen timeframes by entropy factor
@@ -104,7 +104,7 @@ All computation is read-only against the existing `events` and `event_topics` ta
 ### CLI
 
 ```
-intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios, 30d window
+intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios, 120d window
 intel forecast --lag-window 14                    # 14-day lag window for chain detection
 intel forecast --min-support 2                    # lower threshold for sparse data
 intel forecast --top-scenarios 5                  # limit scenario output
@@ -132,7 +132,7 @@ intel forecast --topics ai.openai --section lifecycles,entropy --compact  # comb
       "min_support": { "type": "number", "description": "Min co-occurrences for valid chain (default: 2)" },
       "top_scenarios": { "type": "number", "description": "Max scenarios to return (default: 10)" },
       "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" },
-      "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, or 30 (default: 30)" },
+      "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, 30, 60, 90, or 120 (default: 120)" },
       "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" },
       "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" },
       "topics": { "type": "array", "items": { "type": "string" }, "description": "Filter output to specific topic IDs" },
@@ -150,7 +150,7 @@ intel forecast --topics ai.openai --section lifecycles,entropy --compact  # comb
 | `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted |
 | `top_scenarios` | number | 10 | Cap on scenario results returned |
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
-| `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
+| `window_days` | number | 120 | Overall analysis window in days (7, 14, 30, 60, 90, or 120) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
 | `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
 | `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
@@ -192,7 +192,7 @@ Classify each topic's current trajectory so agents can distinguish "newly appear
 
 ### Algorithm
 
-For each of the 4 time windows (1d, 7d, 14d, 30d):
+For each of the 5 time windows (1d, 7d, 14d, 30d, 90d):
 
 1. Compute **current volume** — event count in the window (with optional canonical_url dedup)
 2. Compute **previous volume** — event count in the preceding window of equal length
@@ -219,7 +219,7 @@ Then classify phase using a priority-ordered rule set:
 | d7 < -0.1 AND d30 > 0.2 | `peaking` |
 | d7 < -0.1 AND d30 < -0.1 | `decaying` |
 
-**Confidence** is the fraction of windows (d1, d7, d30) that agree directionally. Each window is classified as up (> 0.2), down (< -0.2), or neutral. Confidence = max(count_up, count_down, count_neutral) / 3.
+**Confidence** is the fraction of windows (d1, d7, d30, d90) that agree directionally. Each window is classified as up (> 0.2), down (< -0.2), or neutral. Confidence = max(count_up, count_down, count_neutral) / 4.
 
 ### Output
 
@@ -229,8 +229,8 @@ interface LifecycleItem {
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;          // 0.33 - 1.0
   phase_probabilities?: Record<string, number>; // HMM posterior per phase; only present when HMM was used
-  volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N }
-  accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N }
+  volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N, '90d': N }
+  accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N, '90d': N }
   change_points: number[];           // days ago when CUSUM detected structural breaks
 }
 ```
@@ -478,15 +478,16 @@ Flag topics where short-term and long-term momentum signals agree or conflict. C
 
 For each topic from lifecycles:
 
-1. Extract d1, d7, d30 acceleration values
+1. Extract d1, d7, d30, d90 acceleration values
 2. Compute `short` = d1 if |d1| >= 0.1, else d7 (sparse-day proxy)
-3. Classify alignment:
+3. Compute `long` = d90 if |d90| >= 0.05, else d30 (falls back to d30 when d90 is near-zero)
+4. Classify alignment:
 
 | Condition | Alignment |
 |-----------|-----------|
-| short > 0 AND d7 > 0 AND d30 > 0 | `aligned_up` |
-| short < 0 AND d7 < 0 AND d30 < 0 | `aligned_down` |
-| (short > 0 AND d30 < 0) OR (short < 0 AND d30 > 0) | `diverging` |
+| short > 0 AND d7 > 0 AND long > 0 | `aligned_up` |
+| short < 0 AND d7 < 0 AND long < 0 | `aligned_down` |
+| (short > 0 AND long < 0) OR (short < 0 AND long > 0) | `diverging` |
 | (short > 0 AND d7 < 0) OR (short < 0 AND d7 > 0) | `transitioning` |
 | default (all near zero) | `aligned_up` (neutral-up) |
 
@@ -499,6 +500,7 @@ interface MultiscaleItem {
   d1_accel: number;
   d7_accel: number;
   d30_accel: number;
+  d90_accel: number;
 }
 ```
 
@@ -625,7 +627,7 @@ Supplement the rule-based lifecycle classifier with a probabilistic model. The H
 
 ### Algorithm
 
-1. For each topic, collect acceleration values across the 4 time windows
+1. For each topic, collect acceleration values across the 5 time windows
 2. Compute log-likelihoods for each phase using pre-defined Gaussian emission parameters (`PHASE_EMISSIONS`)
 3. Normalize via log-sum-exp to get posterior probabilities
 4. Return the MAP phase and full posterior distribution
@@ -668,7 +670,7 @@ tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe bl
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `WINDOWS` | 1d, 7d, 14d, 30d | Analysis timescales for lifecycle computation |
+| `WINDOWS` | 1d, 7d, 14d, 30d, 90d | Analysis timescales for lifecycle computation |
 | `MAX_TITLES_PER_SCENARIO` | 3 | Evidence title cap per scenario |
 | Spike day threshold | volume >= 3 | Minimum daily events to count as a "spike day" in chain detection |
 | Tiered activation threshold | 7d acceleration > 1.0 | Sparse-day fallback for chain activation |
@@ -774,8 +776,8 @@ Two fixture sets seed synthetic data for deterministic testing:
 
 | Decision | Selected | Rationale |
 |----------|----------|-----------|
-| Configurable analysis window | 7, 14, or 30 days (default 30) | Different planning horizons need different windows; 30d covers multiple weekly cycles, 7d useful for short-term forecasting |
-| 4-window lifecycle (1d/7d/14d/30d) | 4 windows | Balances granularity with computation cost; 14d adds mid-term signal |
+| Configurable analysis window | 7, 14, 30, 60, 90, or 120 days (default 120) | Different planning horizons need different windows; 120d enables seasonal and multi-quarter trend detection, 7d useful for short-term forecasting |
+| 5-window lifecycle (1d/7d/14d/30d/90d) | 5 windows | Balances granularity with computation cost; 90d adds long-term signal for phase classification and multiscale alignment |
 | Spike day threshold = 3 events | 3 | Filters noise from single stray events; tunable via data density |
 | Lift >= 1.5 for scenarios | 1.5 | Excludes below-chance and borderline chains; conservative filter |
 | Entropy-widened timeframes | avg_lag ± halfWidth × (1 + entropy) | Bayesian + entropy approach replaces earlier stddev-based windows |
@@ -863,6 +865,18 @@ intel forecast --min-support 2 | jq '[.data.ranked_chains[].from_topic] | group_
 
 ---
 
+## Known Limitations
+
+| Limitation | Impact | Mitigation |
+|---|---|---|
+| **Classifier noise** | Topic classifier over-tags high-volume topics (e.g. `lang.typescript`, `infra.gpu`), inflating volume counts and producing misleading evidence (e.g., "Home Assistant waters my plants" tagged as TypeScript). | Evidence pre-filter drops all-low-relevance scenarios; `target_base_rate` filter catches omnipresent targets. Consumers must still cross-check evidence titles against scenario topics. |
+| **120-day retention window** | Can detect quarterly trends and seasonal cycles within a single quarter, but cannot detect year-over-year patterns or multi-year trends. Effective horizon is "what's happening now, what's about to happen, and how does the current quarter compare to the last." | 90d lifecycle window leverages the extended retention for phase classification. For longer-horizon analysis, supplement with analyst reports and historical research. |
+| **Co-movement ≠ causation** | Chains detect statistical co-occurrence patterns, not causal mechanisms. High lift means "more than random" but does not imply A causes B. | Weekday-ratio filter catches some calendar artifacts. Consumers must treat chains as correlation signals and seek explanatory mechanisms before acting. |
+| **Source bias** | 128 sources skew toward developer communities (Hacker News), vendor announcements (AWS/Azure/GCP blogs), and financial news (Seeking Alpha, Yahoo Finance). Enterprise procurement signals, analyst reports behind paywalls (Gartner, Forrester, IDC), and non-English-language markets are underweighted. | Coverage gaps are blind spots, not absence of activity. Source diversity metric partially compensates by discounting single-source chains. |
+| **Attention ≠ fundamentals** | "Accelerating" means more coverage and developer activity, not necessarily more revenue, better margins, or enterprise adoption. The `biz.earnings → hw.gpu` chain is suggestive but thin. | System is designed for technology momentum detection — where engineering investment is concentrating. Not a substitute for market research or financial analysis. |
+
+---
+
 ## Future Work
 
 ### Narrative scenario layer
@@ -876,3 +890,23 @@ A future enhancement could add a narrative clustering layer on top of the Bayesi
 3. **Evidence alignment**: Match evidence titles to narrative themes rather than individual topics, reducing false-positive noise
 
 This would bridge the gap between the statistical engine's output and the kind of forward-looking intelligence that's most actionable for decision-making. The current approach — having the LLM synthesize across sections — works but pushes narrative construction entirely to the consumer.
+
+### Additional data sources
+
+The current 128-source feed set is strong for developer community signals but has known blind spots. Recommended additions ranked by signal value:
+
+1. **Job posting data** — Which roles companies are hiring for is a strong leading indicator of technology investment decisions. A spike in "Rust infrastructure engineer" postings across multiple companies predicts Rust ecosystem growth 3-6 months ahead of developer community discussion. Sources: LinkedIn API, Indeed, Greenhouse/Lever public postings.
+
+2. **Analyst report feeds** (Gartner, Forrester, IDC) — Enterprise procurement signals that the current developer-community-skewed sources miss. A Gartner "Cool Vendor" designation or Magic Quadrant shift drives enterprise adoption patterns invisible to HN/RSS feeds.
+
+3. **Extended retention window** *(partially addressed)* — Retention extended to 120 days with a 90d lifecycle window for phase classification and multiscale alignment. Seasonal decomposition and year-over-year comparison remain future work; further extension to 180-365 days with downsampled historical data would enable annual cycle detection.
+
+4. **Financial data feed** — Correlation with actual capital flows (VC funding rounds, M&A activity, public company revenue by segment) would ground the attention-based signals in economic reality. The current `biz.earnings → hw.gpu` chain is suggestive; systematic financial data would make it rigorous. Sources: Crunchbase API, SEC EDGAR, Yahoo Finance API.
+
+### Classifier precision improvements
+
+The topic classifier's broad tagging of high-volume topics (documented in Known Limitations) could be mitigated by:
+
+1. **Confidence-weighted tagging** — Emit classifier confidence per topic assignment, allowing downstream filtering by precision rather than binary inclusion
+2. **Negative examples** — Train the classifier with explicit "not this topic" examples for commonly over-tagged categories
+3. **Title-topic coherence scoring** — Post-hoc validation that evidence titles are semantically related to the scenario's target topic, using embedding similarity
