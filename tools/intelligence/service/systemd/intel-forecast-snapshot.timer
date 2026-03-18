@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly timer for intel forecast snapshot (Sundays 03:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

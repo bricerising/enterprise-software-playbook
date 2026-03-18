@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install intel-collector as a managed service (launchd on macOS, systemd on Linux).
+# Install intel services as managed daemons (launchd on macOS, systemd on Linux).
+# Services: collector (long-running), forecast-snapshot (weekly), forecast-evaluate (daily).
 #
 # Usage:
 #   ./install.sh          # install and start
@@ -41,59 +42,77 @@ check_prereqs() {
 # --- macOS (launchd) ---
 
 install_launchd() {
-    local intel_bin current_path plist_src plist_dest
+    local intel_bin current_path
     intel_bin="$(command -v intel)"
     current_path="$PATH"
-    plist_src="$SCRIPT_DIR/launchd/com.intel.collector.plist"
-    plist_dest="$HOME/Library/LaunchAgents/com.intel.collector.plist"
 
     mkdir -p "$HOME/Library/LaunchAgents"
     mkdir -p "$HOME/Library/Logs"
 
-    # Resolve placeholders
-    sed \
-        -e "s|__INTEL_BIN__|${intel_bin}|g" \
-        -e "s|__HOME__|${HOME}|g" \
-        -e "s|__PATH__|${current_path}|g" \
-        "$plist_src" > "$plist_dest"
+    local plists=(
+        com.intel.collector
+        com.intel.forecast-snapshot
+        com.intel.forecast-evaluate
+    )
 
-    echo "Installed plist to $plist_dest"
+    for label in "${plists[@]}"; do
+        local plist_src="$SCRIPT_DIR/launchd/${label}.plist"
+        local plist_dest="$HOME/Library/LaunchAgents/${label}.plist"
 
-    # Load the service
-    launchctl bootout "gui/$(id -u)/com.intel.collector" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "$plist_dest"
+        # Resolve placeholders
+        sed \
+            -e "s|__INTEL_BIN__|${intel_bin}|g" \
+            -e "s|__HOME__|${HOME}|g" \
+            -e "s|__PATH__|${current_path}|g" \
+            "$plist_src" > "$plist_dest"
 
-    echo "Service started. Check status with:"
+        echo "Installed plist to $plist_dest"
+
+        # Load the service
+        launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+        launchctl bootstrap "gui/$(id -u)" "$plist_dest"
+    done
+
+    echo "Services started. Check status with:"
     echo "  launchctl print gui/$(id -u)/com.intel.collector"
+    echo "  launchctl print gui/$(id -u)/com.intel.forecast-snapshot"
+    echo "  launchctl print gui/$(id -u)/com.intel.forecast-evaluate"
     echo "  tail -f ~/Library/Logs/intel-collector.log"
+    echo "  tail -f ~/Library/Logs/intel-forecast.log"
 }
 
 uninstall_launchd() {
-    local plist_dest="$HOME/Library/LaunchAgents/com.intel.collector.plist"
+    local plists=(
+        com.intel.collector
+        com.intel.forecast-snapshot
+        com.intel.forecast-evaluate
+    )
 
-    launchctl bootout "gui/$(id -u)/com.intel.collector" 2>/dev/null || true
+    for label in "${plists[@]}"; do
+        launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
 
-    if [[ -f "$plist_dest" ]]; then
-        rm "$plist_dest"
-        echo "Removed $plist_dest"
-    fi
+        local plist_dest="$HOME/Library/LaunchAgents/${label}.plist"
+        if [[ -f "$plist_dest" ]]; then
+            rm "$plist_dest"
+            echo "Removed $plist_dest"
+        fi
+    done
 
-    echo "Service stopped and uninstalled."
+    echo "Services stopped and uninstalled."
 }
 
 # --- Linux (systemd) ---
 
 install_systemd() {
-    local unit_src unit_dest
-    unit_src="$SCRIPT_DIR/systemd/intel-collector.service"
-    unit_dest="$HOME/.config/systemd/user/intel-collector.service"
-
     mkdir -p "$HOME/.config/systemd/user"
 
-    # Check if intel is at the expected path; patch ExecStart if needed
     local intel_bin
     intel_bin="$(command -v intel)"
     local expected_bin="$HOME/.local/bin/intel"
+
+    # Install collector service
+    local unit_src="$SCRIPT_DIR/systemd/intel-collector.service"
+    local unit_dest="$HOME/.config/systemd/user/intel-collector.service"
 
     if [[ "$intel_bin" != "$expected_bin" ]]; then
         sed "s|%h/.local/bin/intel|${intel_bin}|g" "$unit_src" > "$unit_dest"
@@ -101,30 +120,86 @@ install_systemd() {
     else
         cp "$unit_src" "$unit_dest"
     fi
-
     echo "Installed unit to $unit_dest"
 
+    # Install forecast timer/service pairs
+    local forecast_units=(
+        intel-forecast-snapshot
+        intel-forecast-evaluate
+    )
+
+    for unit in "${forecast_units[@]}"; do
+        for ext in service timer; do
+            local src="$SCRIPT_DIR/systemd/${unit}.${ext}"
+            local dest="$HOME/.config/systemd/user/${unit}.${ext}"
+
+            if [[ "$ext" == "service" && "$intel_bin" != "$expected_bin" ]]; then
+                sed "s|%h/.local/bin/intel|${intel_bin}|g" "$src" > "$dest"
+            else
+                cp "$src" "$dest"
+            fi
+            echo "Installed unit to $dest"
+        done
+    done
+
     systemctl --user daemon-reload
+
+    # Enable and start collector
     systemctl --user enable intel-collector.service
     systemctl --user start intel-collector.service
 
-    echo "Service started. Check status with:"
+    # Enable and start forecast timers
+    for unit in "${forecast_units[@]}"; do
+        systemctl --user enable "${unit}.timer"
+        systemctl --user start "${unit}.timer"
+    done
+
+    echo "Services started. Check status with:"
     echo "  systemctl --user status intel-collector"
+    echo "  systemctl --user list-timers 'intel-forecast-*'"
     echo "  journalctl --user -u intel-collector -f"
 }
 
 uninstall_systemd() {
+    # Stop and disable collector
     systemctl --user stop intel-collector.service 2>/dev/null || true
     systemctl --user disable intel-collector.service 2>/dev/null || true
 
-    local unit_dest="$HOME/.config/systemd/user/intel-collector.service"
-    if [[ -f "$unit_dest" ]]; then
-        rm "$unit_dest"
+    # Stop and disable forecast timers
+    local forecast_units=(
+        intel-forecast-snapshot
+        intel-forecast-evaluate
+    )
+
+    for unit in "${forecast_units[@]}"; do
+        systemctl --user stop "${unit}.timer" 2>/dev/null || true
+        systemctl --user disable "${unit}.timer" 2>/dev/null || true
+    done
+
+    # Remove unit files
+    local removed=false
+    local all_units=(
+        intel-collector.service
+        intel-forecast-snapshot.service
+        intel-forecast-snapshot.timer
+        intel-forecast-evaluate.service
+        intel-forecast-evaluate.timer
+    )
+
+    for unit_file in "${all_units[@]}"; do
+        local unit_dest="$HOME/.config/systemd/user/${unit_file}"
+        if [[ -f "$unit_dest" ]]; then
+            rm "$unit_dest"
+            echo "Removed $unit_dest"
+            removed=true
+        fi
+    done
+
+    if [[ "$removed" == true ]]; then
         systemctl --user daemon-reload
-        echo "Removed $unit_dest"
     fi
 
-    echo "Service stopped and uninstalled."
+    echo "Services stopped and uninstalled."
 }
 
 # --- Main ---

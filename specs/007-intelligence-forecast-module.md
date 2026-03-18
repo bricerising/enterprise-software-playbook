@@ -39,7 +39,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 | CUSUM change-point detection for structural breaks | Real-time streaming CUSUM |
 | Systems dynamics detection (reinforcing loops, delays, accumulations, dampening) | Full causal modeling or simulation |
 | Confidence-weighted topic classification with learned weights | Negative example training or embedding-based classification |
-| Forecast snapshot → evaluate → weight update learning loop | Automated continuous evaluation (manual via `intel forecast evaluate`) |
+| Forecast snapshot → evaluate → weight update learning loop | Scheduled via launchd/systemd (weekly snapshot, daily evaluate); see spec 006 Service Management |
 
 ---
 
@@ -700,6 +700,19 @@ Where `topicCountFactor` is: 1.0 (1-2 topics), 0.7 (3-4 topics), 0.4 (5 topics).
 
 Close the feedback loop: snapshot forecasts, evaluate outcomes, and adjust per-topic weights based on historical accuracy. Topics with accurate forecasts get higher classifier confidence; topics with many false positives get discounted.
 
+### Scheduling
+
+The learning loop is automated via OS-level scheduled jobs (see spec 006 Service Management, "Forecast Scheduled Jobs"):
+
+| Job | Schedule | What it does |
+|-----|----------|-------------|
+| `intel forecast --snapshot` | Weekly (Sundays 03:00) | Captures current scenarios for later evaluation |
+| `intel forecast evaluate` | Daily (04:00) | Evaluates pending outcomes, updates topic weights |
+
+The daily evaluate cadence ensures outcomes are resolved promptly after their predicted timeframe elapses. The weekly snapshot cadence aligns with the 7-day default lag window — snapshotting more frequently would produce highly overlapping scenario sets with minimal additional signal.
+
+Both jobs are installed and managed by `service/install.sh` alongside the collector daemon. They run as one-shot processes (not daemons) and share a log file (`~/Library/Logs/intel-forecast.log` on macOS; systemd journal on Linux).
+
 ### Snapshot Mechanism
 
 `intel forecast --snapshot` saves the current forecast for later evaluation:
@@ -936,7 +949,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Normalized transitive confidence | Geometric mean of leg confidences | `normalized_confidence = sqrt(conf_AB * conf_BC)` — calibrated [0,1] metric for comparing transitive chain strength without raw combined_lift inflation. |
 | Adaptive summary mode | Auto-upgrade thin sections when scenario yield < 3 | Summary mode upgrades ranked_chains, dynamics, lifecycles to compact limits when fewer than 3 scenarios qualify. Eliminates manual --compact retry round-trip. |
 | Confidence-weighted tagging | Classifier emits confidence per tag | Replaces binary match with 4-signal confidence formula (keyword density, regex hits, context validation, priority). Stored in `event_topics.confidence`. |
-| Forecast learning loop | Snapshot → evaluate → weight update | Laplace-smoothed precision per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. `--snapshot` flag (not automatic) + 90-day retention. |
+| Forecast learning loop | Snapshot → evaluate → weight update | Laplace-smoothed precision per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. Scheduled via launchd/systemd: weekly snapshot (Sun 03:00), daily evaluate (04:00). 90-day retention. |
 | Combined evidence relevance | topicConfidence × topicCountFactor | Replaces topic-count-only heuristic with combined score that accounts for classifier confidence and tag specificity. |
 
 ---
