@@ -62,6 +62,9 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Default timeout for SEC EDGAR requests (30 seconds). */
+const EDGAR_FETCH_TIMEOUT_MS = 30_000;
+
 export class EarningsAdapter implements SourceAdapter {
   readonly source: SourceType = 'earnings';
   readonly feedName: string;
@@ -170,11 +173,13 @@ export class EarningsAdapter implements SourceAdapter {
       let data: SubmissionsResponse;
       try {
         const url = `https://data.sec.gov/submissions/CIK${cik}.json`;
+        const ac = AbortSignal.timeout(EDGAR_FETCH_TIMEOUT_MS);
         const res = await globalThis.fetch(url, {
           headers: {
             'User-Agent': this.getUserAgent(),
             Accept: 'application/json',
           },
+          signal: ac,
         });
 
         if (!res.ok) {
@@ -206,11 +211,13 @@ export class EarningsAdapter implements SourceAdapter {
 
         try {
           const archiveUrl = `https://data.sec.gov/submissions/${archive.name}`;
+          const archiveAc = AbortSignal.timeout(EDGAR_FETCH_TIMEOUT_MS);
           const archiveRes = await globalThis.fetch(archiveUrl, {
             headers: {
               'User-Agent': this.getUserAgent(),
               Accept: 'application/json',
             },
+            signal: archiveAc,
           });
 
           if (!archiveRes.ok) {

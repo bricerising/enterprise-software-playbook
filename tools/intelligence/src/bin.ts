@@ -363,25 +363,28 @@ const forecast = program
 
       if (opts.snapshot) {
         // Snapshot requires a writer connection
-        const writer = openWriter(dbPath);
-        try {
-          const result = computeForecast(writer, {
-            lag_window_days: parseInt(opts.lagWindow, 10),
-            min_support: parseInt(opts.minSupport, 10),
-            top_scenarios: parseInt(opts.topScenarios, 10),
-            dedup: opts.dedup,
-            window_days: windowDays,
-            compact: opts.compact ?? false,
-            summary: opts.summary ?? false,
-            with_context: opts.withContext ?? false,
-            topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
-            sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
-          });
-          const snap = saveSnapshot(writer, result.data.scenarios, windowDays);
-          output(ok({ forecast: result.data, snapshot: snap }), fmt);
-        } finally {
-          writer.close();
-        }
+        const result = sqliteBusyRetry(() => {
+          const writer = openWriter(dbPath);
+          try {
+            const forecast = computeForecast(writer, {
+              lag_window_days: parseInt(opts.lagWindow, 10),
+              min_support: parseInt(opts.minSupport, 10),
+              top_scenarios: parseInt(opts.topScenarios, 10),
+              dedup: opts.dedup,
+              window_days: windowDays,
+              compact: opts.compact ?? false,
+              summary: opts.summary ?? false,
+              with_context: opts.withContext ?? false,
+              topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
+              sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
+            });
+            const snap = saveSnapshot(writer, forecast.data.scenarios, windowDays);
+            return ok({ forecast: forecast.data, snapshot: snap });
+          } finally {
+            writer.close();
+          }
+        });
+        output(result, fmt);
       } else {
         const result = sqliteBusyRetry(() =>
           withReader(dbPath, (db) =>

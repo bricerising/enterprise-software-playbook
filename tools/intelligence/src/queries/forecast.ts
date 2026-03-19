@@ -266,6 +266,17 @@ export function computeForecast(
 
   // Overall analysis window (default 120 days), clamped to actual data coverage
   const requestedWindowDays = opts.window_days ?? 120;
+  if (requestedWindowDays <= 0) {
+    return ok({
+      window: { start: '', end: '', events_analyzed: 0 },
+      ranked_chains: [],
+      scenarios: [],
+      dynamics: [],
+      change_points_summary: [],
+    } as ForecastData, {
+      warnings: [`Invalid window_days: ${requestedWindowDays}. Must be > 0.`],
+    });
+  }
   const warnings: string[] = [];
 
   const now = Date.now();
@@ -397,7 +408,7 @@ export function computeForecast(
     // Auto-upgrade those sections to compact limits so the agent gets actionable
     // data without needing a manual --compact retry.
     const effectiveLimits: Record<string, number> = { ...limits };
-    if (summary && filteredScenarios.slice(0, limits.scenarios).length < 3) {
+    if (summary && filteredScenarios.length < 3) {
       effectiveLimits.ranked_chains = Math.max(limits.ranked_chains, COMPACT_LIMITS.ranked_chains);
       effectiveLimits.dynamics_per_type = Math.max(limits.dynamics_per_type, COMPACT_LIMITS.dynamics_per_type);
       effectiveLimits.lifecycles = Math.max(limits.lifecycles, COMPACT_LIMITS.lifecycles);
@@ -1718,9 +1729,10 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
     WHERE outcome_id = ?
   `);
 
-  // Check for spike days (volume >= 3) for a topic in a date range
+  // Check for spike days (volume >= 3) for a topic in a date range.
+  // Returns one row per spike-day; we only check if any rows exist.
   const spikeSql = `
-    SELECT COUNT(DISTINCT ${PUB_DAY}) AS spike_days
+    SELECT 1
     FROM event_topics et
     JOIN events e ON e.event_id = et.event_id
     WHERE et.topic = ?
@@ -1728,6 +1740,7 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
       AND ${PUB_TS} < ?
     GROUP BY ${PUB_DAY}
     HAVING COUNT(*) >= 3
+    LIMIT 1
   `;
   const spikeStmt = db.prepare(spikeSql);
 
@@ -1735,40 +1748,58 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
   let skipped = 0;
   const nowISO = formatISO(new Date(now));
 
+  // Group pending outcomes by snapshot_id so we parse each snapshot's
+  // scenarios JSON once instead of once per outcome row.
+  const bySnapshot = new Map<number, {
+    scenarios: ScenarioItem[];
+    createdAt: string;
+    outcomes: typeof pendingRows;
+  }>();
+  for (const row of pendingRows) {
+    let group = bySnapshot.get(row.snapshot_id);
+    if (!group) {
+      group = {
+        scenarios: JSON.parse(row.scenarios) as ScenarioItem[],
+        createdAt: row.created_at,
+        outcomes: [],
+      };
+      bySnapshot.set(row.snapshot_id, group);
+    }
+    group.outcomes.push(row);
+  }
+
   const results = db.transaction(() => {
-    for (const row of pendingRows) {
-      // Parse scenario to get timeframe
-      const scenarios = JSON.parse(row.scenarios) as ScenarioItem[];
-      const scenario = scenarios.find(s => s.target_topic === row.target_topic);
-      if (!scenario) {
-        // Scenario not found in snapshot — mark as not observed, brier = predicted²
-        const brier = row.predicted_probability * row.predicted_probability;
-        updateOutcome.run(0, brier, nowISO, row.outcome_id);
+    for (const [, group] of bySnapshot) {
+      for (const row of group.outcomes) {
+        const scenario = group.scenarios.find(s => s.target_topic === row.target_topic);
+        if (!scenario) {
+          // Scenario not found in snapshot — mark as not observed, brier = predicted²
+          const brier = row.predicted_probability * row.predicted_probability;
+          updateOutcome.run(0, brier, nowISO, row.outcome_id);
+          evaluated++;
+          continue;
+        }
+
+        const createdAt = new Date(group.createdAt).getTime();
+        const maxDays = scenario.timeframe_days[1];
+        const deadlineMs = createdAt + maxDays * 86_400_000;
+
+        if (now < deadlineMs) {
+          // Timeframe hasn't elapsed yet — skip
+          skipped++;
+          continue;
+        }
+
+        // Check if topic had a spike day within the predicted timeframe
+        const windowStart = formatISO(new Date(createdAt));
+        const windowEnd = formatISO(new Date(deadlineMs));
+        const spikeRows = spikeStmt.all(row.target_topic, windowStart, windowEnd);
+        const observed = spikeRows.length > 0 ? 1 : 0;
+        const brier = (row.predicted_probability - observed) ** 2;
+
+        updateOutcome.run(observed, brier, nowISO, row.outcome_id);
         evaluated++;
-        continue;
       }
-
-      const createdAt = new Date(row.created_at).getTime();
-      const maxDays = scenario.timeframe_days[1];
-      const deadlineMs = createdAt + maxDays * 86_400_000;
-
-      if (now < deadlineMs) {
-        // Timeframe hasn't elapsed yet — skip
-        skipped++;
-        continue;
-      }
-
-      // Check if topic had a spike day within the predicted timeframe
-      const windowStart = formatISO(new Date(createdAt));
-      const windowEnd = formatISO(new Date(deadlineMs));
-      const spikeRows = spikeStmt.all(row.target_topic, windowStart, windowEnd) as Array<{
-        spike_days: number;
-      }>;
-      const observed = spikeRows.length > 0 ? 1 : 0;
-      const brier = (row.predicted_probability - observed) ** 2;
-
-      updateOutcome.run(observed, brier, nowISO, row.outcome_id);
-      evaluated++;
     }
 
     // Update topic weights from evaluated outcomes using average Brier score.
