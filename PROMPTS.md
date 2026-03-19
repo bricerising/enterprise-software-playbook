@@ -319,7 +319,7 @@ Prioritize: evidence, counterpoints, explicit owner + next step.
 
 ## Mechanics (in-process building blocks)
 
-### Apply a concrete GoF pattern
+### Apply a concrete code pattern
 
 ```text
 Use patterns-<creational|structural|behavioral> (read the matching `skills/patterns-*/SKILL.md`).
