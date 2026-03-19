@@ -1,4 +1,4 @@
-# Theme coherence rubric: the-true-scotsman
+# Theme coherence rubric: enterprise-software-playbook
 
 This repository is a tongue-in-cheek set of **agent skills** meant to teach code assistants to write what humans tend to consider **clean code**: readable, maintainable, testable, and safe to change.
 
@@ -11,7 +11,7 @@ Skills should be small, self-contained playbooks (workflow + checklists + minima
 - **Keep dependencies explicit**: avoid hidden globals; inject dependencies via params/factories; centralize wiring.
 - **Make failures explicit**: treat expected failures as data; reserve exceptions/panics for unexpected/unrecoverable; catch/convert at boundaries.
 - **Make lifetimes explicit**: start/stop/dispose explicitly; don’t rely on “eventually cleaned up”.
-- **Use patterns as vocabulary**: choose the simplest GoF pattern that fits; don’t introduce patterns as decoration.
+- **Use patterns as vocabulary**: choose the simplest code pattern that fits; don't introduce patterns as decoration.
 - **Test at seams**: prefer consumer-facing tests; avoid asserting implementation details.
 
 ## Consistency across languages

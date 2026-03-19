@@ -25,5 +25,18 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/010-archobs-velocity-edges-suggestions.md`](010-archobs-velocity-edges-suggestions.md): Velocity queries, boundary edge inspection, and suggestion improvements for archobs.
 - [`specs/011-archobs-trajectory-feedback.md`](011-archobs-trajectory-feedback.md): Feedback-driven improvements — velocity compare, drift trend, monolith labels, trajectory fast path.
 - [`specs/012-skill-consolidation-and-cross-domain-integration.md`](012-skill-consolidation-and-cross-domain-integration.md): Merge trajectory→forecast and brief→intel; add cross-domain integration (archobs × forecast) to architecture, plan, design, and spec skills.
-- [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)).
+- [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)):
+  - [`001`](decisions/001-workflow-stage-taxonomy.md): Workflow-stage taxonomy
+  - [`002`](decisions/002-code-vs-system-pattern-terms.md): Code vs system pattern terms
+  - [`003`](decisions/003-repo-name-enterprise-software-playbook.md): Repo name → enterprise-software-playbook
+  - [`004`](decisions/004-triage-boundary-wrappers-decision-tree.md): Triage boundary wrappers / decision tree
+  - [`005`](decisions/005-add-security-hardening-skill.md): Add security hardening skill
+  - [`006`](decisions/006-review-protocol-for-code-reviews.md): Review protocol for code reviews
+  - [`009`](decisions/009-v2-skill-names-and-navigation.md): V2 skill names and navigation
+  - [`010`](decisions/010-move-skills-under-skills-folder.md): Move skills under skills/ folder
+  - [`011`](decisions/011-explicit-system-model-and-feedback-discipline.md): Explicit system model and feedback discipline
+  - [`012`](decisions/012-build-guardrails-for-validation-and-packaging.md): Build guardrails for validation and packaging
+  - [`013`](decisions/013-metadata-index-and-scaffolding.md): Metadata index and scaffolding
+  - [`014`](decisions/014-structured-thinking-probes-for-core-skills.md): Structured-thinking probes for core skills
+  - [`015`](decisions/015-vendor-archobs-tool.md): Vendor archobs tool
 - [`specs/templates/`](templates/README.md): Copy/paste templates for app-repo integration, CI quality gates, and service spec bundles.

@@ -237,8 +237,8 @@ def _check_manifest(repo_root: Path, skill_names: list[str], errors: list[str]) 
             )
 
 
-def _check_markdown_links(skills_root: Path, errors: list[str]) -> None:
-    """Verify that relative markdown links in skill .md files resolve to existing files."""
+def _check_markdown_links(repo_root: Path, skills_root: Path, errors: list[str]) -> None:
+    """Verify that relative markdown links in .md files resolve to existing files."""
     link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+\.md(?:#[^)]+)?)\)")
 
     def _strip_fenced_code_blocks(markdown: str) -> str:
@@ -253,7 +253,15 @@ def _check_markdown_links(skills_root: Path, errors: list[str]) -> None:
                 lines.append(line)
         return "\n".join(lines)
 
-    for md_file in sorted(skills_root.rglob("*.md")):
+    # Collect all markdown files to check: skills/, specs/, and top-level docs.
+    md_files: list[Path] = sorted(skills_root.rglob("*.md"))
+    specs_root = repo_root / "specs"
+    if specs_root.is_dir():
+        md_files.extend(sorted(specs_root.rglob("*.md")))
+    for top_level in sorted(repo_root.glob("*.md")):
+        md_files.append(top_level)
+
+    for md_file in md_files:
         content = _strip_fenced_code_blocks(md_file.read_text())
         for match in link_pattern.finditer(content):
             target = match.group(1).strip()
@@ -264,7 +272,7 @@ def _check_markdown_links(skills_root: Path, errors: list[str]) -> None:
                 continue
             resolved = (md_file.parent / target_path).resolve()
             if not resolved.exists():
-                rel_source = md_file.relative_to(skills_root.parent)
+                rel_source = md_file.relative_to(repo_root)
                 errors.append(
                     f"Broken link in {rel_source}: '{target}' does not resolve to a file"
                 )
@@ -306,7 +314,7 @@ def run_checks(repo_root: Path) -> list[str]:
     _check_prompt_skills(skill_names, prompts_text, errors)
     _check_finish_order(prompts_text, errors)
     _check_manifest(repo_root, skill_names, errors)
-    _check_markdown_links(skills_root, errors)
+    _check_markdown_links(repo_root, skills_root, errors)
     return errors
 
 
