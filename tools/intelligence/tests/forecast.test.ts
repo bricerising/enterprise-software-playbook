@@ -3,9 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openWriter } from '../src/db.js';
-import { computeForecast } from '../src/queries/forecast.js';
-import { detectDynamics } from '../src/queries/forecast.js';
-import type { ChainItem, LifecycleItem, MultiscaleItem, EntropyItem } from '../src/queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts, detectDynamics } from '../src/queries/forecast/index.js';
+import type { ChainItem, LifecycleItem, MultiscaleItem, EntropyItem } from '../src/queries/forecast/index.js';
 import type Database from 'better-sqlite3';
 
 let tmpDir: string;
@@ -121,7 +120,7 @@ describe('computeForecast', () => {
   });
 
   it('detects chains with correct support counts', () => {
-    const result = computeForecast(db, { min_support: 2 });
+    const result = computeForecast(db, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
 
@@ -152,13 +151,13 @@ describe('computeForecast', () => {
     }
   });
 
-  it('generates scenarios with probability 0-1 and valid timeframe', () => {
+  it('generates scenarios with score 0-1 and valid timeframe', () => {
     const result = computeForecast(db, { min_support: 2 });
     const scenarios = result.data.scenarios;
 
     for (const s of scenarios) {
-      expect(s.probability).toBeGreaterThanOrEqual(0);
-      expect(s.probability).toBeLessThanOrEqual(1);
+      expect(s.score).toBeGreaterThanOrEqual(0);
+      expect(s.score).toBeLessThanOrEqual(1);
       expect(s.timeframe_days).toHaveLength(2);
       expect(s.timeframe_days[0]).toBeLessThanOrEqual(s.timeframe_days[1]);
       expect(s.trigger_topics.length).toBeGreaterThan(0);
@@ -190,6 +189,7 @@ describe('computeForecast', () => {
       expect(typeof ms.d1_accel).toBe('number');
       expect(typeof ms.d7_accel).toBe('number');
       expect(typeof ms.d30_accel).toBe('number');
+      expect(typeof ms.d90_accel).toBe('number');
     }
   });
 
@@ -395,7 +395,7 @@ describe('sparse-day fallbacks', () => {
 
 describe('chain statistical fields', () => {
   it('lift and confidence are finite and in expected ranges', () => {
-    const result = computeForecast(db, { min_support: 2 });
+    const result = computeForecast(db, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
 
@@ -614,32 +614,32 @@ describe('HMM phase classifier', () => {
 /* ── Bayesian scenario projection tests ────────────────────────────── */
 
 describe('Bayesian scenario projection', () => {
-  it('scenarios still satisfy probability 0-1 invariant', () => {
+  it('scenarios still satisfy score 0-1 invariant', () => {
     const result = computeForecast(db, { min_support: 2 });
     for (const s of result.data.scenarios) {
-      expect(s.probability).toBeGreaterThanOrEqual(0);
-      expect(s.probability).toBeLessThanOrEqual(1);
+      expect(s.score).toBeGreaterThanOrEqual(0);
+      expect(s.score).toBeLessThanOrEqual(1);
     }
   });
 
   it('scenario probabilities sum to ~1.0 (softmax normalized)', () => {
     const result = computeForecast(db, { min_support: 2 });
     if (result.data.scenarios.length > 0) {
-      const sum = result.data.scenarios.reduce((acc, s) => acc + s.probability, 0);
-      // Allow rounding tolerance: each probability is rounded to 2 decimal places
+      const sum = result.data.scenarios.reduce((acc, s) => acc + s.score, 0);
+      // Allow rounding tolerance: each score is rounded to 2 decimal places
       expect(sum).toBeGreaterThan(0.9);
       expect(sum).toBeLessThanOrEqual(1.1);
-      // Highest probability is the first entry (sorted descending)
-      expect(result.data.scenarios[0].probability).toBeGreaterThan(0);
-      expect(result.data.scenarios[0].probability).toBeLessThanOrEqual(1);
+      // Highest score is the first entry (sorted descending)
+      expect(result.data.scenarios[0].score).toBeGreaterThan(0);
+      expect(result.data.scenarios[0].score).toBeLessThanOrEqual(1);
     }
   });
 
-  it('scenarios are sorted by probability descending', () => {
+  it('scenarios are sorted by score descending', () => {
     const result = computeForecast(db, { min_support: 2 });
     const scenarios = result.data.scenarios;
     for (let i = 1; i < scenarios.length; i++) {
-      expect(scenarios[i - 1].probability).toBeGreaterThanOrEqual(scenarios[i].probability);
+      expect(scenarios[i - 1].score).toBeGreaterThanOrEqual(scenarios[i].score);
     }
   });
 
@@ -675,11 +675,11 @@ describe('Bayesian scenario projection', () => {
     const result = computeForecast(db, { min_support: 2 });
     const scenarios = result.data.scenarios;
     for (const s of scenarios) {
-      expect(s.probability).toBeGreaterThanOrEqual(0);
-      expect(s.probability).toBeLessThanOrEqual(1);
+      expect(s.score).toBeGreaterThanOrEqual(0);
+      expect(s.score).toBeLessThanOrEqual(1);
     }
     if (scenarios.length > 0) {
-      const sum = scenarios.reduce((acc, s) => acc + s.probability, 0);
+      const sum = scenarios.reduce((acc, s) => acc + s.score, 0);
       expect(sum).toBeGreaterThan(0.9);
       expect(sum).toBeLessThanOrEqual(1.1);
     }
@@ -782,7 +782,7 @@ describe('published_at temporal analysis', () => {
       }
     }
 
-    const result = computeForecast(pubDb, { min_support: 2 });
+    const result = computeForecast(pubDb, { min_support: 2, window_days: 30 });
     const chains = result.data.chains;
     expect(chains.length).toBeGreaterThan(0);
   });
@@ -841,8 +841,8 @@ describe('dynamics detection (unit)', () => {
     topic: 'test.topic',
     phase: 'stable',
     phase_confidence: 0.8,
-    volumes: { '1d': 5, '7d': 20, '14d': 40, '30d': 80 },
-    accelerations: { '1d': 0, '7d': 0, '14d': 0, '30d': 0 },
+    volumes: { '1d': 5, '7d': 20, '14d': 40, '30d': 80, '90d': 200 },
+    accelerations: { '1d': 0, '7d': 0, '14d': 0, '30d': 0, '90d': 0 },
     change_points: [],
     ...overrides,
   });
@@ -853,6 +853,7 @@ describe('dynamics detection (unit)', () => {
     d1_accel: 0.5,
     d7_accel: 0.3,
     d30_accel: 0.2,
+    d90_accel: 0.1,
     ...overrides,
   });
 
@@ -935,7 +936,7 @@ describe('summary mode', () => {
   });
 
   it('omits detail sections entirely in summary mode', () => {
-    const result = computeForecast(db, { min_support: 2, summary: true });
+    const result = computeForecast(db, { min_support: 2, summary: true, window_days: 30 });
     // Zero-limited sections should be omitted from the response (not empty arrays)
     expect(result.data.lifecycles).toBeUndefined();
     expect(result.data.chains).toBeUndefined();
@@ -981,8 +982,8 @@ describe('scenario differentiation', () => {
     const scenarios = result.data.scenarios;
     if (scenarios.length < 2) return;
 
-    // At least some probability variation should exist (not all identical)
-    const probs = new Set(scenarios.map((s) => s.probability));
+    // At least some score variation should exist (not all identical)
+    const probs = new Set(scenarios.map((s) => s.score));
     expect(probs.size).toBeGreaterThan(1);
   });
 
@@ -1120,7 +1121,7 @@ describe('with_context', () => {
   });
 
   it('context works with summary mode', () => {
-    const result = computeForecast(db, { min_support: 2, summary: true, with_context: true });
+    const result = computeForecast(db, { min_support: 2, summary: true, with_context: true, window_days: 30 });
     expect(result.status).toBe('ok');
     expect(result.data.context).toBeDefined();
     // Summary sections should still be omitted
@@ -1139,5 +1140,340 @@ describe('with_context', () => {
       emptyDb.close();
       rmSync(emptyDir, { recursive: true, force: true });
     }
+  });
+});
+
+/* ── Snapshot + Brier score evaluation tests ───────────────────────── */
+
+describe('saveSnapshot', () => {
+  it('saves snapshot and returns snapshot_id', () => {
+    const forecast = computeForecast(db, { min_support: 2 });
+    const result = saveSnapshot(db, forecast.data.scenarios, 120);
+    expect(result.snapshot_id).toBeGreaterThan(0);
+    expect(result.scenarios_saved).toBe(forecast.data.scenarios.length);
+    expect(result.snapshots_pruned).toBeGreaterThanOrEqual(0);
+  });
+
+  it('creates outcome rows for each scenario', () => {
+    const forecast = computeForecast(db, { min_support: 2 });
+    const snap = saveSnapshot(db, forecast.data.scenarios, 120);
+
+    const rows = db.prepare(
+      'SELECT * FROM forecast_outcomes WHERE snapshot_id = ?',
+    ).all(snap.snapshot_id) as Array<{
+      target_topic: string;
+      predicted_probability: number;
+      outcome: number | null;
+      brier_score: number | null;
+    }>;
+
+    expect(rows.length).toBe(forecast.data.scenarios.length);
+    for (const row of rows) {
+      expect(row.outcome).toBeNull();
+      expect(row.brier_score).toBeNull();
+      expect(row.predicted_probability).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('evaluateForecasts (Brier score)', () => {
+  /**
+   * Helper: create a snapshot with a known scenario, then backdate the
+   * snapshot so its timeframe has elapsed, making it eligible for evaluation.
+   */
+  function createEvaluableSnapshot(
+    testDb: Database.Database,
+    targetTopic: string,
+    predictedProbability: number,
+    timeframeDays: [number, number],
+    daysAgo: number,
+  ): number {
+    const scenarios = [{
+      target_topic: targetTopic,
+      score: predictedProbability,
+      timeframe_days: timeframeDays,
+      trigger_topics: ['test.trigger'],
+      supporting_chains: 1,
+      evidence_titles: ['Test evidence'],
+      evidence_relevance: ['high' as const],
+      target_entropy: 0.5,
+      target_base_rate: 0.3,
+    }];
+
+    const snap = saveSnapshot(testDb, scenarios, 120);
+
+    // Backdate the snapshot so the timeframe has elapsed
+    const backdated = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+    testDb.prepare(
+      'UPDATE forecast_snapshots SET created_at = ? WHERE snapshot_id = ?',
+    ).run(backdated, snap.snapshot_id);
+
+    return snap.snapshot_id;
+  }
+
+  let evalDir: string;
+  let evalDb: Database.Database;
+
+  beforeEach(() => {
+    evalDir = mkdtempSync(join(tmpdir(), 'intel-eval-test-'));
+    const evalPath = join(evalDir, 'eval.db');
+    evalDb = openWriter(evalPath);
+  });
+
+  afterEach(() => {
+    evalDb.close();
+    rmSync(evalDir, { recursive: true, force: true });
+  });
+
+  it('skips outcomes whose timeframe has not elapsed', () => {
+    // Scenario with timeframe [1, 30] days, snapshot just created (0 days ago)
+    const scenarios = [{
+      target_topic: 'test.topic',
+      score: 0.8,
+      timeframe_days: [1, 30] as [number, number],
+      trigger_topics: ['test.trigger'],
+      supporting_chains: 1,
+      evidence_titles: ['Test'],
+      evidence_relevance: ['high' as const],
+      target_entropy: 0.5,
+      target_base_rate: 0.3,
+    }];
+    saveSnapshot(evalDb, scenarios, 120);
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('computes correct Brier score for high-confidence correct prediction', () => {
+    // Predict topic.observed with P=0.9, then create spikes so outcome=1
+    // Expected brier = (0.9 - 1)^2 = 0.01
+    createEvaluableSnapshot(evalDb, 'topic.observed', 0.9, [1, 5], 10);
+
+    // Insert spike events for the topic within the timeframe
+    const spikeDay = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    for (let j = 0; j < 4; j++) {
+      evalDb.prepare(`
+        INSERT INTO events (event_id, source, feed, url, canonical_url, title, content,
+          published_at, fetched_at, topics, tags, score, comments)
+        VALUES (?, 'rss', 'test', ?, ?, ?, '', ?, ?, '[]', '[]', 0, 0)
+      `).run(`spike-${j}`, `https://ex.com/s-${j}`, `https://ex.com/s-${j}`,
+        `Spike ${j}`, spikeDay, spikeDay);
+      evalDb.prepare(
+        'INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?)',
+      ).run(`spike-${j}`, 'topic.observed');
+    }
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(1);
+
+    const outcome = evalDb.prepare(
+      'SELECT outcome, brier_score FROM forecast_outcomes WHERE target_topic = ?',
+    ).get('topic.observed') as { outcome: number; brier_score: number };
+    expect(outcome.outcome).toBe(1);
+    expect(outcome.brier_score).toBeCloseTo(0.01, 2);
+  });
+
+  it('computes correct Brier score for high-confidence wrong prediction', () => {
+    // Predict topic.absent with P=0.9, no spikes occur → outcome=0
+    // Expected brier = (0.9 - 0)^2 = 0.81
+    createEvaluableSnapshot(evalDb, 'topic.absent', 0.9, [1, 5], 10);
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(1);
+
+    const outcome = evalDb.prepare(
+      'SELECT outcome, brier_score FROM forecast_outcomes WHERE target_topic = ?',
+    ).get('topic.absent') as { outcome: number; brier_score: number };
+    expect(outcome.outcome).toBe(0);
+    expect(outcome.brier_score).toBeCloseTo(0.81, 2);
+  });
+
+  it('high-base-rate topic with moderate score gets moderate Brier score', () => {
+    // Predict topic.frequent with P=0.5, spike occurs → outcome=1
+    // Expected brier = (0.5 - 1)^2 = 0.25 — not rewarded as strongly as P=0.9 correct
+    createEvaluableSnapshot(evalDb, 'topic.frequent', 0.5, [1, 5], 10);
+
+    const spikeDay = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    for (let j = 0; j < 4; j++) {
+      evalDb.prepare(`
+        INSERT INTO events (event_id, source, feed, url, canonical_url, title, content,
+          published_at, fetched_at, topics, tags, score, comments)
+        VALUES (?, 'rss', 'test', ?, ?, ?, '', ?, ?, '[]', '[]', 0, 0)
+      `).run(`freq-${j}`, `https://ex.com/f-${j}`, `https://ex.com/f-${j}`,
+        `Frequent ${j}`, spikeDay, spikeDay);
+      evalDb.prepare(
+        'INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?)',
+      ).run(`freq-${j}`, 'topic.frequent');
+    }
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(1);
+
+    const outcome = evalDb.prepare(
+      'SELECT outcome, brier_score FROM forecast_outcomes WHERE target_topic = ?',
+    ).get('topic.frequent') as { outcome: number; brier_score: number };
+    expect(outcome.outcome).toBe(1);
+    expect(outcome.brier_score).toBeCloseTo(0.25, 2);
+  });
+
+  it('does not update weights until MIN_OUTCOMES_FOR_WEIGHT threshold', () => {
+    // Create fewer than 5 evaluable snapshots
+    for (let i = 0; i < 3; i++) {
+      createEvaluableSnapshot(evalDb, 'topic.few', 0.7, [1, 3], 10 + i);
+    }
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(3);
+    expect(result.weights_updated).toBe(0);
+
+    const weight = evalDb.prepare(
+      'SELECT weight FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.few');
+    expect(weight).toBeUndefined();
+  });
+
+  it('updates weights correctly after enough outcomes', () => {
+    // Create 6 evaluable snapshots with P=0.8, all with outcome=0 (no spikes)
+    // brier = (0.8 - 0)^2 = 0.64 each → avg_brier = 0.64
+    // base_rate = 0.3 → brier_ref = 0.3*(0.7)^2 + 0.7*(0.3)^2 = 0.21
+    // skill = 1 - 0.64/0.21 = -2.048 → clamped to 0
+    // weight = WEIGHT_FLOOR + 0 = 0.5
+    for (let i = 0; i < 6; i++) {
+      createEvaluableSnapshot(evalDb, 'topic.wrong', 0.8, [1, 3], 10 + i);
+    }
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(6);
+    expect(result.weights_updated).toBe(1);
+
+    const weight = evalDb.prepare(
+      'SELECT weight, avg_brier_score FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.wrong') as { weight: number; avg_brier_score: number };
+    expect(weight.avg_brier_score).toBeCloseTo(0.64, 2);
+    expect(weight.weight).toBeCloseTo(0.5, 2);
+  });
+
+  it('handles malformed scenario JSON gracefully', () => {
+    createEvaluableSnapshot(evalDb, 'topic.malformed', 0.7, [1, 3], 10);
+    evalDb.prepare(
+      "UPDATE forecast_snapshots SET scenarios = 'null' WHERE snapshot_id = (SELECT MAX(snapshot_id) FROM forecast_snapshots)"
+    ).run();
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(1); // treated as missing scenario, not thrown
+  });
+
+  it('well-calibrated predictions produce higher weights than poorly calibrated', () => {
+    // Topic A: P=0.9 predictions, all correct (brier = 0.01)
+    // Topic B: P=0.9 predictions, all wrong (brier = 0.81)
+    for (let i = 0; i < 6; i++) {
+      createEvaluableSnapshot(evalDb, 'topic.good', 0.9, [1, 3], 10 + i);
+      createEvaluableSnapshot(evalDb, 'topic.bad', 0.9, [1, 3], 10 + i);
+    }
+
+    // Add spikes for topic.good only
+    for (let i = 0; i < 6; i++) {
+      const spikeDay = new Date(Date.now() - (8 + i) * 86_400_000).toISOString();
+      for (let j = 0; j < 4; j++) {
+        evalDb.prepare(`
+          INSERT INTO events (event_id, source, feed, url, canonical_url, title, content,
+            published_at, fetched_at, topics, tags, score, comments)
+          VALUES (?, 'rss', 'test', ?, ?, ?, '', ?, ?, '[]', '[]', 0, 0)
+        `).run(`good-${i}-${j}`, `https://ex.com/g-${i}-${j}`, `https://ex.com/g-${i}-${j}`,
+          `Good ${i}-${j}`, spikeDay, spikeDay);
+        evalDb.prepare(
+          'INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?)',
+        ).run(`good-${i}-${j}`, 'topic.good');
+      }
+    }
+
+    evaluateForecasts(evalDb);
+
+    const goodWeight = evalDb.prepare(
+      'SELECT weight FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.good') as { weight: number };
+    const badWeight = evalDb.prepare(
+      'SELECT weight FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.bad') as { weight: number };
+
+    expect(goodWeight.weight).toBeGreaterThan(badWeight.weight);
+    // Good: brier ≈ 0.01, skill ≈ 0.952 → weight ≈ 0.976
+    expect(goodWeight.weight).toBeGreaterThan(0.9);
+    // Bad: brier ≈ 0.81, skill < 0 → clamped → weight = 0.5
+    expect(badWeight.weight).toBeLessThan(0.7);
+  });
+
+  it('base-rate-adjusted skill: rare-event topics are not penalized vs high-base-rate', () => {
+    // High-base-rate topic: base_rate=0.8, predicts 0.8, always observes spike
+    // brier = (0.8-1)^2 = 0.04, brier_ref = 0.8*0.04 + 0.2*0.64 = 0.032+0.128 = 0.16
+    // skill = 1 - 0.04/0.16 = 0.75 → weight = 0.5 + 0.5*0.75 = 0.875
+    const highBaseScenarios = [{
+      target_topic: 'topic.highbase',
+      score: 0.8,
+      timeframe_days: [1, 3] as [number, number],
+      trigger_topics: ['test.trigger'],
+      supporting_chains: 1,
+      evidence_titles: ['Test evidence'],
+      evidence_relevance: ['high' as const],
+      target_entropy: 0.5,
+      target_base_rate: 0.8,
+    }];
+
+    // Rare-event topic: base_rate=0.15, predicts 0.15, never observes spike
+    // brier = (0.15-0)^2 = 0.0225, brier_ref = 0.15*0.7225 + 0.85*0.0225 = 0.108375+0.019125 = 0.1275
+    // skill = 1 - 0.0225/0.1275 = 0.824 → weight = 0.5 + 0.5*0.824 = 0.912
+    const rareScenarios = [{
+      target_topic: 'topic.rare',
+      score: 0.15,
+      timeframe_days: [1, 3] as [number, number],
+      trigger_topics: ['test.trigger'],
+      supporting_chains: 1,
+      evidence_titles: ['Test evidence'],
+      evidence_relevance: ['high' as const],
+      target_entropy: 0.5,
+      target_base_rate: 0.15,
+    }];
+
+    // Create 6 snapshots for each, backdated so they're evaluable
+    for (let i = 0; i < 6; i++) {
+      const snap1 = saveSnapshot(evalDb, highBaseScenarios, 120);
+      const snap2 = saveSnapshot(evalDb, rareScenarios, 120);
+
+      const backdated = new Date(Date.now() - (10 + i) * 86_400_000).toISOString();
+      evalDb.prepare('UPDATE forecast_snapshots SET created_at = ? WHERE snapshot_id = ?').run(backdated, snap1.snapshot_id);
+      evalDb.prepare('UPDATE forecast_snapshots SET created_at = ? WHERE snapshot_id = ?').run(backdated, snap2.snapshot_id);
+
+      // Add spike events for high-base topic within timeframe
+      const spikeDay = new Date(Date.now() - (8 + i) * 86_400_000).toISOString();
+      for (let j = 0; j < 4; j++) {
+        evalDb.prepare(`
+          INSERT INTO events (event_id, source, feed, url, canonical_url, title, content,
+            published_at, fetched_at, topics, tags, score, comments)
+          VALUES (?, 'rss', 'test', ?, ?, ?, '', ?, ?, '[]', '[]', 0, 0)
+        `).run(`hb-${i}-${j}`, `https://ex.com/hb-${i}-${j}`, `https://ex.com/hb-${i}-${j}`,
+          `HighBase ${i}-${j}`, spikeDay, spikeDay);
+        evalDb.prepare(
+          'INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?)',
+        ).run(`hb-${i}-${j}`, 'topic.highbase');
+      }
+      // No spikes for rare topic (well-calibrated: predicts low, observes low)
+    }
+
+    const result = evaluateForecasts(evalDb);
+    expect(result.evaluated).toBe(12);
+    expect(result.weights_updated).toBe(2);
+
+    const highWeight = evalDb.prepare(
+      'SELECT weight FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.highbase') as { weight: number };
+    const rareWeight = evalDb.prepare(
+      'SELECT weight FROM topic_weights WHERE topic_id = ?',
+    ).get('topic.rare') as { weight: number };
+
+    // Both topics are well-calibrated — weights should be similar (within 0.15)
+    expect(Math.abs(highWeight.weight - rareWeight.weight)).toBeLessThan(0.15);
+    // Both should have weight > WEIGHT_FLOOR (0.5) since they have positive skill
+    expect(highWeight.weight).toBeGreaterThan(0.5);
+    expect(rareWeight.weight).toBeGreaterThan(0.5);
   });
 });

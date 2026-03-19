@@ -27,20 +27,7 @@ Use code patterns for in-process structure; use system patterns when the problem
    intel forecast    # external engine — lifecycle phases and chains
    ```
 
-   **Decision mapping** (lifecycle phase → boundary design):
-   | Lifecycle phase | Boundary recommendation |
-   |---|---|
-   | emerging | Keep boundaries loose — expect interface churn, use Adapter |
-   | accelerating | Good adoption window — design against current APIs |
-   | peaking / stable | Design for longevity — pin versions confidently |
-   | decaying | Wall off behind Facade — minimize coupling surface |
-
-   **Dynamic signals**:
-   | Dynamics signal | Architecture implication |
-   |---|---|
-   | reinforcing loop detected | Area is compounding — delaying adoption widens the gap |
-   | dampening detected | Growth arrested — don't over-invest in integration depth |
-   | accumulation detected | Pressure building — define boundary before forced migration |
+   **Decision mapping**: See [Lifecycle Decision Mapping — Architecture: Boundary Design](../references/lifecycle-decision-mapping.md#architecture-boundary-design) for lifecycle phase → boundary design tables and dynamic signal implications.
 
 1. Externalize the system model:
    - objective function (goal, constraints, anti-goals)

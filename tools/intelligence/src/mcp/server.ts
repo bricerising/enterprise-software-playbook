@@ -6,7 +6,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type Database from 'better-sqlite3';
 import type { SourceType } from '../types.js';
-import { openReader } from '../db.js';
+import { openReader, openWriter } from '../db.js';
 import { searchEvents } from '../queries/search.js';
 import { computeTrends } from '../queries/trends.js';
 import { listEvents, getEvent } from '../queries/events.js';
@@ -14,7 +14,7 @@ import { querySources } from '../queries/sources.js';
 import { queryTopics } from '../queries/topics.js';
 import { queryStats } from '../queries/stats.js';
 import { buildPack } from '../queries/pack.js';
-import { computeForecast } from '../queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts } from '../queries/forecast/index.js';
 
 
 const TOOL_DEFINITIONS = [
@@ -113,13 +113,31 @@ const TOOL_DEFINITIONS = [
         min_support: { type: 'number', description: 'Min co-occurrences for valid chain (default: 2)' },
         top_scenarios: { type: 'number', description: 'Max scenarios to return (default: 10)' },
         dedup: { type: 'string', enum: ['canonical', 'none'], default: 'canonical' },
-        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, or 30 (default: 30)' },
+        window_days: { type: 'number', description: 'Analysis window in days: 7, 14, 30, 60, 90, or 120 (default: 120)' },
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
         summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
         with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },
         topics: { type: 'array', items: { type: 'string' }, description: 'Filter output to specific topic IDs (e.g., ["ai.openai", "hw.gpu"])' },
         sections: { type: 'array', items: { type: 'string' }, description: 'Include only these sections (e.g., ["lifecycles", "entropy"])' },
       },
+    },
+  },
+  {
+    name: 'intel_forecast_snapshot',
+    description: 'Save a forecast snapshot for later evaluation. Computes a forecast and persists top scenarios + outcomes for Brier score tracking.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        window_days: { type: 'number', description: 'Analysis window in days (default: 120)' },
+      },
+    },
+  },
+  {
+    name: 'intel_forecast_evaluate',
+    description: 'Evaluate pending forecast outcomes and update topic weights using Brier Skill Score.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
     },
   },
 ];
@@ -217,6 +235,29 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             sections: params.sections as string[] | undefined,
           });
           break;
+
+        case 'intel_forecast_snapshot': {
+          const windowDays = (params.window_days as number | undefined) ?? 120;
+          const writer = openWriter(dbPath);
+          try {
+            const fc = computeForecast(writer, { window_days: windowDays });
+            const snap = saveSnapshot(writer, fc.data.scenarios, windowDays);
+            result = { snapshot: snap };
+          } finally {
+            writer.close();
+          }
+          break;
+        }
+
+        case 'intel_forecast_evaluate': {
+          const writer = openWriter(dbPath);
+          try {
+            result = evaluateForecasts(writer);
+          } finally {
+            writer.close();
+          }
+          break;
+        }
 
         default:
           return {

@@ -103,7 +103,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 
 | Rule | When it matters | What to do |
 |---|---|---|
-| **Probabilities ≠ certainties** | Always | Present forecasts as probabilistic scenarios, not predictions of fact |
+| **Scores ≠ probabilities** | Always | Scenario scores are relative rankings (temperature-sharpened softmax), not calibrated probabilities. Present as "high/medium/low confidence" not as percentage likelihoods |
 | **Trajectory = evidence** | Internal engine | Use "evidence suggests" / "development patterns indicate" framing |
 | **Adjacency is heuristic** | Internal engine | The adjacency table reflects common patterns, not rules. Domain context overrides |
 | **Freshness check** | Before synthesis | Stale data → stale forecasts. Verify recency via `intel stats` |
@@ -116,13 +116,16 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 | **Base rate noise** | `trigger_base_rate` > 0.5 | Topic spikes most days — chains from it are less informative |
 | **Target base rate noise** | `target_base_rate` > 0.8 | Target topic is omnipresent — predicting it will spike is trivially true. Pre-filtered when evidence is weak (no 'high' relevance) |
 | **Evidence relevance** | `evidence_relevance` = `low` | Likely a classifier false positive (event tagged with 5+ topics). Weight scenario lower. Scenarios where ALL evidence is 'low' are pre-filtered out |
-| **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing. Scenarios with high `target_base_rate` (> 0.8) and no 'high'-relevance evidence are now pre-filtered |
+| **Classifier over-tagging** | High-volume topics (e.g. `lang.typescript`) | Topic classifier assigns these broadly — evidence titles may not be topically relevant even when marked `high`. Cross-check titles before citing. Scenarios with high `target_base_rate` (> 0.8) and no 'high'-relevance evidence are now pre-filtered. **Volume inflation**: over-tagged topics have inflated volume counts and chain support — discount both when evidence titles look off-topic |
+| **Co-movement ≠ causation** | All chains and scenarios | Chains detect statistical co-occurrence (A spikes, then B spikes), not causal mechanisms. High lift means "more than random" but does not mean A causes B. Always frame as "associated with" or "tends to follow," never "causes" or "leads to." The weekday-ratio filter catches some calendar artifacts, but spurious correlation is an inherent limitation |
+| **Source bias** | All forecasts | 128 sources skew toward developer communities (HN), vendor blogs (AWS/Azure/GCP), and financial news (Seeking Alpha, Yahoo Finance). Enterprise procurement signals, analyst reports behind paywalls (Gartner, Forrester, IDC), and non-English-language markets are underweighted. Treat coverage gaps as blind spots, not absence of activity |
+| **Attention ≠ fundamentals** | Lifecycle phases, scenarios | "Accelerating" means more coverage and developer activity, not necessarily more revenue, better margins, or enterprise adoption. The system tracks technology momentum (where engineering attention is concentrating), not market fundamentals. Do not use lifecycle phases as investment or procurement signals without supplementary research |
 | **Accumulation freshness** | Accumulation dynamics | Requires `published_at` in window. Backfill-only topics are excluded |
 | **HMM vs rule-based** | Phase classification | HMM overrides rule-based when confidence is +0.15 higher. `phase_probabilities` only present when HMM was used |
 | **Transitive diversity** | A→B→C chains | Per-prefix cap of 3 ensures diverse paths. If all top results share the same A→B prefix, lower-ranked cross-domain paths are more interesting |
 | **Transitive uncertainty** | A→B→C chains | `combined_lift` is a product, `min_support` is the weakest link — uncertainty compounds. Use `normalized_confidence` (geometric mean of leg confidences, 0-1) for calibrated comparison |
 | **Cluster staleness** | Internal engine | Low `drift.ari_prev` means cluster boundaries are shifting. Path-based analysis still valid |
-| **30-day retention** | All forecasts | System only sees patterns within retention window |
+| **120-day retention** | All forecasts | System sees patterns within 120-day retention window with a 90d lifecycle timescale. Can detect quarterly trends and seasonal cycles within a single quarter, but cannot detect year-over-year patterns. Good at "what's happening now, what's about to happen, and how does the current quarter compare to the last." For longer-horizon questions, supplement with analyst reports and historical research |
 | **No fabrication** | Always | Only use data returned by tools. Never invent scenarios or probabilities |
 | **No raw JSON** | Output | Always synthesize through the output template |
 
@@ -152,7 +155,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - **Active triggers**: topics currently spiking that have historical chain patterns
 - **Top scenarios** (3-5):
   - **Topic**: the predicted target topic
-  - **Probability**: Bayesian posterior (0-1), explain as high/medium/low
+  - **Score**: relative scenario score (0-1), explain as high/medium/low. Not a calibrated probability — use for ranking, not for estimating real-world likelihood
   - **Timeframe**: expected window in days (entropy-widened)
   - **Triggers**: which active topics are driving this prediction (sorted by contribution strength — first trigger matters most for this specific target)
   - **Evidence**: top supporting article titles (up to 3). Check `evidence_relevance` — flag any 'low' relevance titles as potential classifier false positives.

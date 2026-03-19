@@ -28,20 +28,7 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    intel forecast    # lifecycle phase for the wrapped dependency
    ```
 
-   **Decision mapping** (lifecycle phase → pattern adjustment):
-   | Lifecycle phase | Pattern guidance |
-   |---|---|
-   | decaying | Adapter/Facade is urgent — isolate the dying dependency, prepare swap interface |
-   | accelerating | Lighter wrapping — the API is still finding its shape; heavy abstraction fights upstream changes |
-   | stable | Any pattern works — optimize for internal coupling concerns from archobs |
-   | emerging | Adapter with narrow surface — expect rapid breaking changes |
-
-   **Compound signal** (archobs × forecast):
-   | Archobs signal | Forecast signal | Implication |
-   |---|---|---|
-   | High xnbr + external dependency | decaying | Urgent extraction candidate — the bridge is to a sinking island |
-   | High hubness + external dependency | accelerating | Monitor — high fan-in to a moving target risks cascading breakage |
-   | High leakage between clusters | diverging lifecycles | Split is natural — the ecosystems are pulling apart |
+   **Decision mapping**: See [Lifecycle Decision Mapping — Design: Pattern Longevity](../references/lifecycle-decision-mapping.md#design-pattern-longevity) for lifecycle phase → pattern adjustment tables and compound signal (archobs x forecast) implications.
 
 3. Identify the main pressure:
    - **Creation** pressure: hard-to-test construction, many variants, environment-specific families.

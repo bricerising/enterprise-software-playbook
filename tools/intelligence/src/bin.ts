@@ -13,7 +13,7 @@ import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
-import { computeForecast } from './queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
 import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
@@ -340,44 +340,93 @@ program
   });
 
 // --- forecast ---
-program
+const forecast = program
   .command('forecast')
   .description('Predict likely next developments from event chain patterns')
   .option('--lag-window <days>', 'Max days between chain links', '7')
   .option('--min-support <n>', 'Min co-occurrences for valid chain', '2')
   .option('--top-scenarios <n>', 'Max scenarios to return', '10')
   .option('--dedup <mode>', 'Dedup mode: canonical | none', 'canonical')
-  .option('--window <days>', 'Analysis window in days (7, 14, or 30)', '30')
+  .option('--window <days>', 'Analysis window in days (7, 14, 30, 60, 90, or 120)', '120')
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .option('--with-context', 'Inline top event titles per change point and top chain topic')
   .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.openai,hw.gpu)')
   .option('--section <sections>', 'Comma-separated sections to include (e.g., lifecycles,entropy)')
+  .option('--snapshot', 'Save forecast snapshot for later evaluation')
   .action((opts) => {
     try {
       const config = getConfig(program.opts());
       const dbPath = getDbPath(config, program.opts().db);
       const fmt = program.opts().format ?? 'json';
+      const windowDays = parseInt(opts.window, 10);
 
-      const result = sqliteBusyRetry(() =>
-        withReader(dbPath, (db) =>
-          computeForecast(db, {
-            lag_window_days: parseInt(opts.lagWindow, 10),
-            min_support: parseInt(opts.minSupport, 10),
-            top_scenarios: parseInt(opts.topScenarios, 10),
-            dedup: opts.dedup,
-            window_days: parseInt(opts.window, 10),
-            compact: opts.compact ?? false,
-            summary: opts.summary ?? false,
-            with_context: opts.withContext ?? false,
-            topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
-            sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
-          }),
-        ),
-      );
-      output(result, fmt);
+      if (opts.snapshot) {
+        // Snapshot requires a writer connection
+        const result = sqliteBusyRetry(() => {
+          const writer = openWriter(dbPath);
+          try {
+            const forecast = computeForecast(writer, {
+              lag_window_days: parseInt(opts.lagWindow, 10),
+              min_support: parseInt(opts.minSupport, 10),
+              top_scenarios: parseInt(opts.topScenarios, 10),
+              dedup: opts.dedup,
+              window_days: windowDays,
+              compact: opts.compact ?? false,
+              summary: opts.summary ?? false,
+              with_context: opts.withContext ?? false,
+              topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
+              sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
+            });
+            const snap = saveSnapshot(writer, forecast.data.scenarios, windowDays);
+            return ok({ forecast: forecast.data, snapshot: snap });
+          } finally {
+            writer.close();
+          }
+        });
+        output(result, fmt);
+      } else {
+        const result = sqliteBusyRetry(() =>
+          withReader(dbPath, (db) =>
+            computeForecast(db, {
+              lag_window_days: parseInt(opts.lagWindow, 10),
+              min_support: parseInt(opts.minSupport, 10),
+              top_scenarios: parseInt(opts.topScenarios, 10),
+              dedup: opts.dedup,
+              window_days: windowDays,
+              compact: opts.compact ?? false,
+              summary: opts.summary ?? false,
+              with_context: opts.withContext ?? false,
+              topics: opts.topics ? opts.topics.split(',').map((t: string) => t.trim()) : undefined,
+              sections: opts.section ? opts.section.split(',').map((s: string) => s.trim()) : undefined,
+            }),
+          ),
+        );
+        output(result, fmt);
+      }
     } catch (err) {
       handleError(err, 'read');
+    }
+  });
+
+forecast
+  .command('evaluate')
+  .description('Evaluate pending forecast outcomes and update topic weights')
+  .action(() => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const writer = openWriter(dbPath);
+      try {
+        const result = evaluateForecasts(writer);
+        output(ok(result), fmt);
+      } finally {
+        writer.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
     }
   });
 

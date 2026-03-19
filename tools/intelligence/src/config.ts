@@ -50,7 +50,7 @@ const CollectorSchema = z.object({
   fetch_content: z.boolean().default(true),
   content_timeout_ms: z.number().positive().default(10000),
   max_content_length: z.number().positive().default(50000),
-  retention_days: z.number().positive().default(30),
+  retention_days: z.number().positive().default(120),
   edgar_contact: z.string().email().optional(),
   edgar_max_rps: z.number().positive().max(10).default(2),
   synchronous: z.enum(['normal', 'full']).default('normal'),

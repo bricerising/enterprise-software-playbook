@@ -70,13 +70,7 @@ Use one (or both) of these:
    intel forecast    # lifecycle phase for the dependency
    ```
 
-   **Decision mapping**:
-   | Lifecycle phase | Versioning strategy |
-   |---|---|
-   | accelerating | Design for version negotiation — expect API churn, use flexible contracts |
-   | stable | Pin versions confidently — stable API surface |
-   | decaying | Include migration timeline in spec — plan for replacement |
-   | emerging | Use narrow contract surface — only pin what you use today |
+   **Decision mapping**: See [Lifecycle Decision Mapping — Spec: Versioning Strategy](../references/lifecycle-decision-mapping.md#spec-versioning-strategy) for lifecycle phase → versioning strategy table.
 
 1. Decide the scope:
    - One service? write/update the service spec bundle.

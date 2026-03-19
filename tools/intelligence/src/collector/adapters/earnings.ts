@@ -35,6 +35,9 @@ interface EarningsAdapterOptions {
   edgar_contact: string;
   /** Max requests per second (default 2, max 10) */
   edgar_max_rps?: number;
+  /** Max days of historical filings to fetch (default: 730).
+   *  Prevents unbounded first-run ingestion of all SEC archives. */
+  max_history_days?: number;
 }
 
 /** Parallel-array shape used by both recent filings and archive files */
@@ -62,6 +65,9 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Default timeout for SEC EDGAR requests (30 seconds). */
+const EDGAR_FETCH_TIMEOUT_MS = 30_000;
+
 export class EarningsAdapter implements SourceAdapter {
   readonly source: SourceType = 'earnings';
   readonly feedName: string;
@@ -70,6 +76,7 @@ export class EarningsAdapter implements SourceAdapter {
   private readonly formTypes: Set<string>;
   private readonly requestDelayMs: number;
   private readonly activeRoster: Map<string, string>;
+  private readonly historyCutoffDate: string;
 
   constructor(opts: EarningsAdapterOptions) {
     this.feedName = opts.name;
@@ -79,6 +86,11 @@ export class EarningsAdapter implements SourceAdapter {
     const maxRps = Math.min(opts.edgar_max_rps ?? 2, 10);
     this.requestDelayMs = Math.ceil(1000 / maxRps);
 
+    // History cutoff: skip filings older than this date even on first run
+    const maxHistoryDays = opts.max_history_days ?? 730;
+    const cutoff = new Date(Date.now() - maxHistoryDays * 86_400_000);
+    this.historyCutoffDate = cutoff.toISOString().slice(0, 10);
+
     // Filter roster to requested tickers, or use full roster
     if (opts.tickers && opts.tickers.length > 0) {
       this.activeRoster = new Map<string, string>();
@@ -87,6 +99,10 @@ export class EarningsAdapter implements SourceAdapter {
         const cik = TECH_ROSTER.get(upper);
         if (cik) {
           this.activeRoster.set(upper, cik);
+        } else {
+          console.error(
+            `[intel] earnings: ticker ${upper} not in built-in roster, skipping — add CIK mapping or remove from config`,
+          );
         }
       }
     } else {
@@ -132,6 +148,9 @@ export class EarningsAdapter implements SourceAdapter {
       // Skip filings at or before checkpoint
       if (cursorDate && filingDate <= cursorDate) continue;
 
+      // Skip filings older than history cutoff (prevents unbounded first-run)
+      if (filingDate < this.historyCutoffDate) continue;
+
       yield {
         event_id: `earnings:${ticker}:${accessionNumber}`,
         source: 'earnings',
@@ -170,11 +189,13 @@ export class EarningsAdapter implements SourceAdapter {
       let data: SubmissionsResponse;
       try {
         const url = `https://data.sec.gov/submissions/CIK${cik}.json`;
+        const ac = AbortSignal.timeout(EDGAR_FETCH_TIMEOUT_MS);
         const res = await globalThis.fetch(url, {
           headers: {
             'User-Agent': this.getUserAgent(),
             Accept: 'application/json',
           },
+          signal: ac,
         });
 
         if (!res.ok) {
@@ -199,18 +220,21 @@ export class EarningsAdapter implements SourceAdapter {
       // Fetch and yield from historical archive files
       const archiveFiles = data.filings.files ?? [];
       for (const archive of archiveFiles) {
-        // Skip archives entirely if all filings are before the checkpoint
+        // Skip archives entirely if all filings are before the checkpoint or history cutoff
         if (cursorDate && archive.filingTo <= cursorDate) continue;
+        if (archive.filingTo < this.historyCutoffDate) continue;
 
         await delay(this.requestDelayMs);
 
         try {
           const archiveUrl = `https://data.sec.gov/submissions/${archive.name}`;
+          const archiveAc = AbortSignal.timeout(EDGAR_FETCH_TIMEOUT_MS);
           const archiveRes = await globalThis.fetch(archiveUrl, {
             headers: {
               'User-Agent': this.getUserAgent(),
               Accept: 'application/json',
             },
+            signal: archiveAc,
           });
 
           if (!archiveRes.ok) {

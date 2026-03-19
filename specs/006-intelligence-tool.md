@@ -802,6 +802,54 @@ journalctl --user -u intel-collector -f
 loginctl enable-linger $USER
 ```
 
+### Forecast Scheduled Jobs
+
+The forecast learning loop (spec 007, section J2) requires periodic `intel forecast --snapshot` and `intel forecast evaluate` invocations. Without scheduling, topic weights remain at the default 1.0 and the confidence learning loop never runs.
+
+Two additional launchd plists and four systemd units handle this:
+
+| Job | Schedule | launchd plist | systemd timer + service |
+|-----|----------|---------------|------------------------|
+| **Snapshot** | Weekly (Sundays 03:00) | `com.intel.forecast-snapshot.plist` | `intel-forecast-snapshot.timer` + `.service` |
+| **Evaluate** | Daily (04:00) | `com.intel.forecast-evaluate.plist` | `intel-forecast-evaluate.timer` + `.service` |
+
+Key differences from the collector service:
+
+- **One-shot, not daemon**: No `KeepAlive` (launchd) / `Type=oneshot` (systemd). The process runs, completes, and exits.
+- **Calendar-triggered**: `StartCalendarInterval` (launchd) / `OnCalendar` (systemd) replaces `RunAtLoad`/`KeepAlive`.
+- **Shared log file**: Both jobs log to `~/Library/Logs/intel-forecast.log` (macOS). On Linux, output routes to the systemd journal under separate unit names.
+- **Persistent timers** (systemd): `Persistent=true` ensures missed runs (e.g., machine was off) execute on next boot.
+
+The same `install.sh` script handles all three services — collector, forecast-snapshot, and forecast-evaluate — in a single `install`/`uninstall` invocation.
+
+**Commands (macOS):**
+```bash
+# Status
+launchctl print gui/$(id -u)/com.intel.forecast-snapshot
+launchctl print gui/$(id -u)/com.intel.forecast-evaluate
+
+# Manual trigger
+launchctl kickstart gui/$(id -u)/com.intel.forecast-snapshot
+launchctl kickstart gui/$(id -u)/com.intel.forecast-evaluate
+
+# Logs
+tail -f ~/Library/Logs/intel-forecast.log
+```
+
+**Commands (Linux):**
+```bash
+# Status
+systemctl --user list-timers 'intel-forecast-*'
+
+# Manual trigger
+systemctl --user start intel-forecast-snapshot.service
+systemctl --user start intel-forecast-evaluate.service
+
+# Logs
+journalctl --user -u intel-forecast-snapshot
+journalctl --user -u intel-forecast-evaluate
+```
+
 ### Why Not `--daemon`
 
 The `--daemon` flag and PID file management exist for manual operation without a service manager. Under launchd/systemd supervision, the collector runs in foreground mode:
@@ -977,9 +1025,15 @@ tools/intelligence/
 ├── service/
 │   ├── install.sh                       # cross-platform service installer
 │   ├── launchd/
-│   │   └── com.intel.collector.plist    # macOS launchd agent (template)
+│   │   ├── com.intel.collector.plist            # macOS launchd agent — collector daemon
+│   │   ├── com.intel.forecast-snapshot.plist    # macOS launchd agent — weekly forecast snapshot
+│   │   └── com.intel.forecast-evaluate.plist    # macOS launchd agent — daily forecast evaluate
 │   └── systemd/
-│       └── intel-collector.service      # Linux systemd user unit
+│       ├── intel-collector.service              # Linux systemd user unit — collector daemon
+│       ├── intel-forecast-snapshot.service       # Linux systemd unit — forecast snapshot (oneshot)
+│       ├── intel-forecast-snapshot.timer         # Linux systemd timer — weekly (Sun 03:00)
+│       ├── intel-forecast-evaluate.service       # Linux systemd unit — forecast evaluate (oneshot)
+│       └── intel-forecast-evaluate.timer         # Linux systemd timer — daily (04:00)
 ├── tests/
 │   ├── topics.test.ts                   # topic classification precision
 │   ├── trends.test.ts                   # trend computation

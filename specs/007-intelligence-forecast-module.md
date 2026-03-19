@@ -6,7 +6,7 @@ The intelligence tool collects signals and computes trends, but trends are backw
 
 ## Goal
 
-Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes ten complementary views from a single 30-day analysis window:
+Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.ts`) that synthesizes forward-looking intelligence from the existing event database. The module computes ten complementary views from a configurable analysis window (default: 120 days):
 
 1. **Lifecycle positioning** — rule-based + HMM probabilistic phase classification (emerging, accelerating, peaking, decaying, stable)
 2. **Chain detection** — statistically significant temporal co-movement patterns with causal directionality and exponential decay weighting
@@ -24,7 +24,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 - Quantitative price/volume forecasting (this is topic-level signal analysis, not financial modeling)
 - Machine learning or LLM-based prediction (HMM classification is the only probabilistic model; everything else is statistical/algorithmic)
 - Real-time streaming computation (runs on-demand against the SQLite database)
-- Backtesting framework (forecasts are forward-looking snapshots, not evaluated against outcomes)
+- Full backtesting framework (the snapshot evaluation mechanism enables forward-looking outcome tracking but does not support retroactive backtesting against historical data)
 
 ## Scope
 
@@ -33,11 +33,13 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 | Lifecycle classification from multi-window acceleration (rule-based + HMM hybrid) | Custom lifecycle phase definitions |
 | Chain detection with statistical rigor (lift, confidence, directionality, decay weighting) | User-defined chain rules or overrides |
 | Transitive chain inference from direct chains | Chains longer than 2 hops (A→B→C) |
-| Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Scenario evaluation or accuracy tracking |
-| Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d |
+| Bayesian scenario projection with entropy-widened timeframes and CUSUM discounts | Full retroactive backtesting against historical data |
+| Multiscale convergence from acceleration vectors | Custom window definitions beyond 1d/7d/14d/30d/90d |
 | Entropy-based surprise scoring per topic | Custom entropy thresholds |
 | CUSUM change-point detection for structural breaks | Real-time streaming CUSUM |
 | Systems dynamics detection (reinforcing loops, delays, accumulations, dampening) | Full causal modeling or simulation |
+| Confidence-weighted topic classification with learned weights | Negative example training or embedding-based classification |
+| Forecast snapshot → evaluate → weight update learning loop | Scheduled via launchd/systemd (weekly snapshot, daily evaluate); see spec 006 Service Management |
 
 ---
 
@@ -83,12 +85,12 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-All computation is read-only against the existing `events` and `event_topics` tables. No new tables or schema changes. The module is a single function (`computeForecast`) that returns the standard `IntelResponse<ForecastData>` envelope. Temporal queries use `COALESCE(published_at, fetched_at)` so bulk ingests don't compress real-world timelines.
+Core forecast computation is read-only against the `events` and `event_topics` tables. The learning loop adds three new tables (`forecast_snapshots`, `forecast_outcomes`, `topic_weights`) and a `confidence` column on `event_topics` (migration 004). The main entry point is `computeForecast()` which returns the standard `IntelResponse<ForecastData>` envelope. `saveSnapshot()` and `evaluateForecasts()` handle the write-path learning loop. Temporal queries use `COALESCE(published_at, fetched_at)` so bulk ingests don't compress real-world timelines.
 
 ### Execution Flow
 
-1. Count events in the 30-day analysis window
-2. **Lifecycles**: compute volume and acceleration at 4 windows (1d, 7d, 14d, 30d) for every topic; classify phase via rule-based + HMM hybrid; detect CUSUM change points per topic
+1. Count events in the analysis window (default: 120 days)
+2. **Lifecycles**: compute volume and acceleration at 5 windows (1d, 7d, 14d, 30d, 90d) for every topic; classify phase via rule-based + HMM hybrid; detect CUSUM change points per topic
 3. **Chains**: detect temporal co-movement patterns via SQL; compute statistical metrics; determine directionality; apply exponential decay weighting (14-day half-life)
 4. **Transitive chains**: join direct chains A→B and B→C to find 2-hop propagation paths
 5. **Scenarios**: filter active chains with lift ≥ 1.5; compute Bayesian posterior probabilities from base rates × chain lifts × decay factors × CUSUM discounts; widen timeframes by entropy factor
@@ -104,7 +106,7 @@ All computation is read-only against the existing `events` and `event_topics` ta
 ### CLI
 
 ```
-intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios, 30d window
+intel forecast                                    # defaults: 7d lag, min_support=2, top 10 scenarios, 120d window
 intel forecast --lag-window 14                    # 14-day lag window for chain detection
 intel forecast --min-support 2                    # lower threshold for sparse data
 intel forecast --top-scenarios 5                  # limit scenario output
@@ -117,6 +119,8 @@ intel forecast --summary --window 7               # short-term summary forecast
 intel forecast --topics ai.openai,hw.gpu          # filter output to specific topics
 intel forecast --section lifecycles,entropy        # include only specific sections
 intel forecast --topics ai.openai --section lifecycles,entropy --compact  # combined filtering
+intel forecast --snapshot                    # save snapshot for later evaluation
+intel forecast evaluate                      # evaluate pending outcomes and update topic weights
 ```
 
 ### MCP Tool
@@ -132,7 +136,7 @@ intel forecast --topics ai.openai --section lifecycles,entropy --compact  # comb
       "min_support": { "type": "number", "description": "Min co-occurrences for valid chain (default: 2)" },
       "top_scenarios": { "type": "number", "description": "Max scenarios to return (default: 10)" },
       "dedup": { "type": "string", "enum": ["canonical", "none"], "default": "canonical" },
-      "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, or 30 (default: 30)" },
+      "window_days": { "type": "number", "description": "Analysis window in days: 7, 14, 30, 60, 90, or 120 (default: 120)" },
       "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" },
       "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" },
       "topics": { "type": "array", "items": { "type": "string" }, "description": "Filter output to specific topic IDs" },
@@ -150,7 +154,7 @@ intel forecast --topics ai.openai --section lifecycles,entropy --compact  # comb
 | `min_support` | number | 2 | Minimum co-occurrence count for a chain to be emitted |
 | `top_scenarios` | number | 10 | Cap on scenario results returned |
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
-| `window_days` | number | 30 | Overall analysis window in days (7, 14, or 30) |
+| `window_days` | number | 120 | Overall analysis window in days (7, 14, 30, 60, 90, or 120) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
 | `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
 | `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
@@ -192,7 +196,7 @@ Classify each topic's current trajectory so agents can distinguish "newly appear
 
 ### Algorithm
 
-For each of the 4 time windows (1d, 7d, 14d, 30d):
+For each of the 5 time windows (1d, 7d, 14d, 30d, 90d):
 
 1. Compute **current volume** — event count in the window (with optional canonical_url dedup)
 2. Compute **previous volume** — event count in the preceding window of equal length
@@ -219,7 +223,7 @@ Then classify phase using a priority-ordered rule set:
 | d7 < -0.1 AND d30 > 0.2 | `peaking` |
 | d7 < -0.1 AND d30 < -0.1 | `decaying` |
 
-**Confidence** is the fraction of windows (d1, d7, d30) that agree directionally. Each window is classified as up (> 0.2), down (< -0.2), or neutral. Confidence = max(count_up, count_down, count_neutral) / 3.
+**Confidence** is the fraction of windows (d1, d7, d30, d90) that agree directionally. Each window is classified as up (> 0.2), down (< -0.2), or neutral. Confidence = max(count_up, count_down, count_neutral) / 4.
 
 ### Output
 
@@ -229,8 +233,8 @@ interface LifecycleItem {
   phase: 'emerging' | 'accelerating' | 'peaking' | 'decaying' | 'stable';
   phase_confidence: number;          // 0.33 - 1.0
   phase_probabilities?: Record<string, number>; // HMM posterior per phase; only present when HMM was used
-  volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N }
-  accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N }
+  volumes: Record<string, number>;   // { '1d': N, '7d': N, '14d': N, '30d': N, '90d': N }
+  accelerations: Record<string, number>; // { '1d': N, '7d': N, '14d': N, '30d': N, '90d': N }
   change_points: number[];           // days ago when CUSUM detected structural breaks
 }
 ```
@@ -478,15 +482,16 @@ Flag topics where short-term and long-term momentum signals agree or conflict. C
 
 For each topic from lifecycles:
 
-1. Extract d1, d7, d30 acceleration values
+1. Extract d1, d7, d30, d90 acceleration values
 2. Compute `short` = d1 if |d1| >= 0.1, else d7 (sparse-day proxy)
-3. Classify alignment:
+3. Compute `long` = d90 if |d90| >= 0.05, else d30 (falls back to d30 when d90 is near-zero)
+4. Classify alignment:
 
 | Condition | Alignment |
 |-----------|-----------|
-| short > 0 AND d7 > 0 AND d30 > 0 | `aligned_up` |
-| short < 0 AND d7 < 0 AND d30 < 0 | `aligned_down` |
-| (short > 0 AND d30 < 0) OR (short < 0 AND d30 > 0) | `diverging` |
+| short > 0 AND d7 > 0 AND long > 0 | `aligned_up` |
+| short < 0 AND d7 < 0 AND long < 0 | `aligned_down` |
+| (short > 0 AND long < 0) OR (short < 0 AND long > 0) | `diverging` |
 | (short > 0 AND d7 < 0) OR (short < 0 AND d7 > 0) | `transitioning` |
 | default (all near zero) | `aligned_up` (neutral-up) |
 
@@ -499,6 +504,7 @@ interface MultiscaleItem {
   d1_accel: number;
   d7_accel: number;
   d30_accel: number;
+  d90_accel: number;
 }
 ```
 
@@ -625,7 +631,7 @@ Supplement the rule-based lifecycle classifier with a probabilistic model. The H
 
 ### Algorithm
 
-1. For each topic, collect acceleration values across the 4 time windows
+1. For each topic, collect acceleration values across the 5 time windows
 2. Compute log-likelihoods for each phase using pre-defined Gaussian emission parameters (`PHASE_EMISSIONS`)
 3. Normalize via log-sum-exp to get posterior probabilities
 4. Return the MAP phase and full posterior distribution
@@ -638,13 +644,145 @@ The HMM overrides the rule-based classification when its confidence is substanti
 
 ---
 
+## I. Confidence-Weighted Classification
+
+### Purpose
+
+The topic classifier performs binary keyword/regex matching — a topic either matches or it doesn't. A tangential mention of "bedrock" scores identically to a deep-dive article about Amazon Bedrock. Confidence-weighted classification adds a per-tag confidence score in [0, 1] so downstream consumers (evidence relevance, chain detection) can distinguish strong matches from weak ones.
+
+### Algorithm
+
+The confidence formula combines four signals already present in the match path:
+
+```
+base = 0.5 + min(keywordHits - 1, 3) × 0.1 + regexHits × 0.05    (capped at 0.8)
+contextBoost = context_required && passed ? 1.25 : 1.0
+priorityFactor = 0.6 + 0.4 × (priority / 100)
+raw_confidence = min(1.0, base × contextBoost × priorityFactor)
+final_confidence = min(1.0, raw_confidence × topic_weight)
+```
+
+- **base**: starts at 0.5 for a single keyword hit; each additional keyword hit adds 0.1 (up to +0.3); each regex hit adds 0.05. Capped at 0.8 to leave room for context and priority boosts.
+- **contextBoost**: topics with `context_required: true` that pass context validation get a 25% boost (reward for passing the disambiguation gate).
+- **priorityFactor**: maps topic priority (0-100) into a [0.6, 1.0] multiplier. High-priority topics get a confidence boost.
+- **topic_weight**: learned weight from the feedback loop (default 1.0). Topics with poor forecast accuracy trend toward 0.5.
+
+### Schema
+
+```sql
+ALTER TABLE event_topics ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0;
+```
+
+Backward-compatible: existing rows default to 1.0. New events receive computed confidence values.
+
+### Interface Changes
+
+- `classify()` returns `ClassifiedTopic[]` (array of `{ id: string; confidence: number }`) instead of `string[]`
+- `classifyIds()` provides backward-compatible `string[]` return type
+- `loadTopics()` accepts optional DB handle to load `topic_weights` into an in-memory Map
+
+### Evidence Relevance Upgrade
+
+Evidence relevance in scenario projection now uses a combined score:
+
+```
+combinedScore = topicConfidence × topicCountFactor
+relevance = combinedScore >= 0.7 ? 'high' : combinedScore >= 0.4 ? 'medium' : 'low'
+```
+
+Where `topicCountFactor` is: 1.0 (1-2 topics), 0.7 (3-4 topics), 0.4 (5 topics). This replaces the previous topic-count-only heuristic with a score that accounts for both classifier confidence and tag specificity.
+
+---
+
+## J2. Forecast Learning Loop
+
+### Purpose
+
+Close the feedback loop: snapshot forecasts, evaluate outcomes, and adjust per-topic weights based on historical accuracy. Topics with accurate forecasts get higher classifier confidence; topics with many false positives get discounted.
+
+### Scheduling
+
+The learning loop is automated via OS-level scheduled jobs (see spec 006 Service Management, "Forecast Scheduled Jobs"):
+
+| Job | Schedule | What it does |
+|-----|----------|-------------|
+| `intel forecast --snapshot` | Weekly (Sundays 03:00) | Captures current scenarios for later evaluation |
+| `intel forecast evaluate` | Daily (04:00) | Evaluates pending outcomes, updates topic weights |
+
+The daily evaluate cadence ensures outcomes are resolved promptly after their predicted timeframe elapses. The weekly snapshot cadence aligns with the 7-day default lag window — snapshotting more frequently would produce highly overlapping scenario sets with minimal additional signal.
+
+Both jobs are installed and managed by `service/install.sh` alongside the collector daemon. They run as one-shot processes (not daemons) and share a log file (`~/Library/Logs/intel-forecast.log` on macOS; systemd journal on Linux).
+
+### Snapshot Mechanism
+
+`intel forecast --snapshot` saves the current forecast for later evaluation:
+
+1. Insert all scenarios into `forecast_snapshots` (JSON blob) + one `forecast_outcomes` row per scenario (outcome = NULL = pending)
+2. Auto-delete snapshots older than 90 days (retention cleanup)
+
+### Evaluation
+
+`intel forecast evaluate` evaluates pending outcomes:
+
+1. For each pending outcome (outcome IS NULL):
+   - Check if `target_topic` had a spike day (volume >= 3) within the predicted timeframe since snapshot creation
+   - Set `outcome = 1` (observed) or `outcome = 0` (not observed, timeframe elapsed)
+   - Skip if timeframe hasn't elapsed yet
+
+### Weight Update
+
+After evaluation, topic weights are updated using Laplace-smoothed precision:
+
+```
+precision = (TP + 1) / (TP + FP + 2)     // Laplace smoothing, default = 0.5
+weight = 0.5 + 0.5 × precision            // Maps [0,1] → [0.5, 1.0]
+```
+
+- Topics with many accurate forecasts → weight trends toward 1.0
+- Topics with many false positives → weight trends toward 0.5 (50% discount, never fully silenced)
+- Topics with no data → default ~0.75 (neutral)
+- Minimum 5 evaluated outcomes before updating weight (avoids swinging on sparse data)
+
+### Schema
+
+```sql
+CREATE TABLE forecast_snapshots (
+    snapshot_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    window_days   INTEGER NOT NULL,
+    scenarios     TEXT NOT NULL CHECK (json_valid(scenarios))
+);
+
+CREATE TABLE forecast_outcomes (
+    outcome_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id   INTEGER NOT NULL REFERENCES forecast_snapshots(snapshot_id),
+    target_topic  TEXT NOT NULL,
+    predicted_probability REAL NOT NULL,
+    outcome       INTEGER,  -- NULL=pending, 1=observed, 0=not observed
+    evaluated_at  TEXT,
+    UNIQUE(snapshot_id, target_topic)
+);
+
+CREATE TABLE topic_weights (
+    topic_id        TEXT PRIMARY KEY,
+    weight          REAL NOT NULL DEFAULT 1.0,
+    true_positives  INTEGER NOT NULL DEFAULT 0,
+    false_positives INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+```
+
+---
+
 ## Implementation
 
 ### File Structure
 
 ```
-tools/intelligence/src/queries/forecast.ts    — all algorithm code (~1300 lines)
-tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe blocks
+tools/intelligence/src/queries/forecast.ts    — forecast computation + snapshot + evaluation
+tools/intelligence/src/collector/topic-classifier.ts — confidence-weighted classification
+tools/intelligence/migrations/004-confidence-learning.sql — schema migration
+tools/intelligence/tests/forecast.test.ts     — tests
 ```
 
 ### Internal Functions
@@ -663,12 +801,14 @@ tools/intelligence/tests/forecast.test.ts     — 61 tests across 14 describe bl
 | `computeEntropy` | F | Shannon entropy per topic |
 | `detectDynamics` | F2 | Systems thinking pattern detection |
 | `detectChangePoints` | G | CUSUM change-point detection per topic |
+| `saveSnapshot` | J2 | Persist forecast scenarios for later evaluation |
+| `evaluateForecasts` | J2 | Evaluate pending outcomes and update topic weights |
 
 ### Constants
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `WINDOWS` | 1d, 7d, 14d, 30d | Analysis timescales for lifecycle computation |
+| `WINDOWS` | 1d, 7d, 14d, 30d, 90d | Analysis timescales for lifecycle computation |
 | `MAX_TITLES_PER_SCENARIO` | 3 | Evidence title cap per scenario |
 | Spike day threshold | volume >= 3 | Minimum daily events to count as a "spike day" in chain detection |
 | Tiered activation threshold | 7d acceleration > 1.0 | Sparse-day fallback for chain activation |
@@ -774,8 +914,8 @@ Two fixture sets seed synthetic data for deterministic testing:
 
 | Decision | Selected | Rationale |
 |----------|----------|-----------|
-| Configurable analysis window | 7, 14, or 30 days (default 30) | Different planning horizons need different windows; 30d covers multiple weekly cycles, 7d useful for short-term forecasting |
-| 4-window lifecycle (1d/7d/14d/30d) | 4 windows | Balances granularity with computation cost; 14d adds mid-term signal |
+| Configurable analysis window | 7, 14, 30, 60, 90, or 120 days (default 120) | Different planning horizons need different windows; 120d enables seasonal and multi-quarter trend detection, 7d useful for short-term forecasting |
+| 5-window lifecycle (1d/7d/14d/30d/90d) | 5 windows | Balances granularity with computation cost; 90d adds long-term signal for phase classification and multiscale alignment |
 | Spike day threshold = 3 events | 3 | Filters noise from single stray events; tunable via data density |
 | Lift >= 1.5 for scenarios | 1.5 | Excludes below-chance and borderline chains; conservative filter |
 | Entropy-widened timeframes | avg_lag ± halfWidth × (1 + entropy) | Bayesian + entropy approach replaces earlier stddev-based windows |
@@ -808,6 +948,9 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Weekday ratio field | Avg weekday fraction always present on chains | `weekday_ratio` (0-1) enables programmatic calendar artifact assessment. Binary `temporal_pattern` flag threshold lowered from 0.85 to 0.75. |
 | Normalized transitive confidence | Geometric mean of leg confidences | `normalized_confidence = sqrt(conf_AB * conf_BC)` — calibrated [0,1] metric for comparing transitive chain strength without raw combined_lift inflation. |
 | Adaptive summary mode | Auto-upgrade thin sections when scenario yield < 3 | Summary mode upgrades ranked_chains, dynamics, lifecycles to compact limits when fewer than 3 scenarios qualify. Eliminates manual --compact retry round-trip. |
+| Confidence-weighted tagging | Classifier emits confidence per tag | Replaces binary match with 4-signal confidence formula (keyword density, regex hits, context validation, priority). Stored in `event_topics.confidence`. |
+| Forecast learning loop | Snapshot → evaluate → weight update | Laplace-smoothed precision per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. Scheduled via launchd/systemd: weekly snapshot (Sun 03:00), daily evaluate (04:00). 90-day retention. |
+| Combined evidence relevance | topicConfidence × topicCountFactor | Replaces topic-count-only heuristic with combined score that accounts for classifier confidence and tag specificity. |
 
 ---
 
@@ -863,6 +1006,18 @@ intel forecast --min-support 2 | jq '[.data.ranked_chains[].from_topic] | group_
 
 ---
 
+## Known Limitations
+
+| Limitation | Impact | Mitigation |
+|---|---|---|
+| **Classifier noise** | Topic classifier over-tags high-volume topics (e.g. `lang.typescript`, `infra.gpu`), inflating volume counts and producing misleading evidence (e.g., "Home Assistant waters my plants" tagged as TypeScript). | Confidence-weighted classification now scores each tag assignment 0-1 based on keyword density, regex hits, context validation, and priority. Evidence relevance uses the combined confidence × topic-count score. The forecast learning loop further adjusts weights based on historical accuracy. Evidence pre-filter drops all-low-relevance scenarios; `target_base_rate` filter catches omnipresent targets. |
+| **120-day retention window** | Can detect quarterly trends and seasonal cycles within a single quarter, but cannot detect year-over-year patterns or multi-year trends. Effective horizon is "what's happening now, what's about to happen, and how does the current quarter compare to the last." | 90d lifecycle window leverages the extended retention for phase classification. For longer-horizon analysis, supplement with analyst reports and historical research. |
+| **Co-movement ≠ causation** | Chains detect statistical co-occurrence patterns, not causal mechanisms. High lift means "more than random" but does not imply A causes B. | Weekday-ratio filter catches some calendar artifacts. Consumers must treat chains as correlation signals and seek explanatory mechanisms before acting. |
+| **Source bias** | 128 sources skew toward developer communities (Hacker News), vendor announcements (AWS/Azure/GCP blogs), and financial news (Seeking Alpha, Yahoo Finance). Enterprise procurement signals, analyst reports behind paywalls (Gartner, Forrester, IDC), and non-English-language markets are underweighted. | Coverage gaps are blind spots, not absence of activity. Source diversity metric partially compensates by discounting single-source chains. |
+| **Attention ≠ fundamentals** | "Accelerating" means more coverage and developer activity, not necessarily more revenue, better margins, or enterprise adoption. The `biz.earnings → hw.gpu` chain is suggestive but thin. | System is designed for technology momentum detection — where engineering investment is concentrating. Not a substitute for market research or financial analysis. |
+
+---
+
 ## Future Work
 
 ### Narrative scenario layer
@@ -876,3 +1031,23 @@ A future enhancement could add a narrative clustering layer on top of the Bayesi
 3. **Evidence alignment**: Match evidence titles to narrative themes rather than individual topics, reducing false-positive noise
 
 This would bridge the gap between the statistical engine's output and the kind of forward-looking intelligence that's most actionable for decision-making. The current approach — having the LLM synthesize across sections — works but pushes narrative construction entirely to the consumer.
+
+### Additional data sources
+
+The current 128-source feed set is strong for developer community signals but has known blind spots. Recommended additions ranked by signal value:
+
+1. **Job posting data** — Which roles companies are hiring for is a strong leading indicator of technology investment decisions. A spike in "Rust infrastructure engineer" postings across multiple companies predicts Rust ecosystem growth 3-6 months ahead of developer community discussion. Sources: LinkedIn API, Indeed, Greenhouse/Lever public postings.
+
+2. **Analyst report feeds** (Gartner, Forrester, IDC) — Enterprise procurement signals that the current developer-community-skewed sources miss. A Gartner "Cool Vendor" designation or Magic Quadrant shift drives enterprise adoption patterns invisible to HN/RSS feeds.
+
+3. **Extended retention window** *(partially addressed)* — Retention extended to 120 days with a 90d lifecycle window for phase classification and multiscale alignment. Seasonal decomposition and year-over-year comparison remain future work; further extension to 180-365 days with downsampled historical data would enable annual cycle detection.
+
+4. **Financial data feed** — Correlation with actual capital flows (VC funding rounds, M&A activity, public company revenue by segment) would ground the attention-based signals in economic reality. The current `biz.earnings → hw.gpu` chain is suggestive; systematic financial data would make it rigorous. Sources: Crunchbase API, SEC EDGAR, Yahoo Finance API.
+
+### Classifier precision improvements
+
+Confidence-weighted tagging is now implemented (see section I). Remaining improvements:
+
+1. **Negative examples** — Train the classifier with explicit "not this topic" examples for commonly over-tagged categories
+2. **Title-topic coherence scoring** — Post-hoc validation that evidence titles are semantically related to the scenario's target topic, using embedding similarity
+3. **Confidence-weighted chain volumes** — Use confidence scores in chain detection volume computation (opt-in; currently only affects evidence relevance)
