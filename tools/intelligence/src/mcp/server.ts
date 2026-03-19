@@ -6,7 +6,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type Database from 'better-sqlite3';
 import type { SourceType } from '../types.js';
-import { openReader } from '../db.js';
+import { openReader, openWriter } from '../db.js';
 import { searchEvents } from '../queries/search.js';
 import { computeTrends } from '../queries/trends.js';
 import { listEvents, getEvent } from '../queries/events.js';
@@ -14,7 +14,7 @@ import { querySources } from '../queries/sources.js';
 import { queryTopics } from '../queries/topics.js';
 import { queryStats } from '../queries/stats.js';
 import { buildPack } from '../queries/pack.js';
-import { computeForecast } from '../queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts } from '../queries/forecast/index.js';
 
 
 const TOOL_DEFINITIONS = [
@@ -122,6 +122,24 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    name: 'intel_forecast_snapshot',
+    description: 'Save a forecast snapshot for later evaluation. Computes a forecast and persists top scenarios + outcomes for Brier score tracking.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        window_days: { type: 'number', description: 'Analysis window in days (default: 120)' },
+      },
+    },
+  },
+  {
+    name: 'intel_forecast_evaluate',
+    description: 'Evaluate pending forecast outcomes and update topic weights using Brier Skill Score.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+  },
 ];
 
 export async function startMcpServer(dbPath: string): Promise<void> {
@@ -217,6 +235,29 @@ export async function startMcpServer(dbPath: string): Promise<void> {
             sections: params.sections as string[] | undefined,
           });
           break;
+
+        case 'intel_forecast_snapshot': {
+          const windowDays = (params.window_days as number | undefined) ?? 120;
+          const writer = openWriter(dbPath);
+          try {
+            const fc = computeForecast(writer, { window_days: windowDays });
+            const snap = saveSnapshot(writer, fc.data.scenarios, windowDays);
+            result = { snapshot: snap };
+          } finally {
+            writer.close();
+          }
+          break;
+        }
+
+        case 'intel_forecast_evaluate': {
+          const writer = openWriter(dbPath);
+          try {
+            result = evaluateForecasts(writer);
+          } finally {
+            writer.close();
+          }
+          break;
+        }
 
         default:
           return {

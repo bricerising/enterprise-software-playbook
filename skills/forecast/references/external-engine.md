@@ -78,7 +78,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | `chains` | Direct A->B co-movement patterns with lift, confidence, directionality, decay-weighted support |
    | `ranked_chains` | Active chains scored and sorted (cross-domain first, then composite score with base-rate discount), capped at 50. Per-trigger cap of 3 ensures diverse trigger representation. |
    | `transitive_chains` | A->B->C paths with combined lift and weakest-link support |
-   | `scenarios` | Bayesian posterior probabilities, entropy-widened timeframes, trigger chains, evidence with relevance hints |
+   | `scenarios` | Ranked scenario scores (relative, not calibrated probabilities), entropy-widened timeframes, trigger chains, evidence with relevance hints |
    | `multiscale` | Per-topic alignment across 1d/7d/30d/90d (aligned_up, aligned_down, diverging, transitioning) |
    | `entropy` | Shannon entropy per topic — low (< 0.3) = predictable; high (> 0.8) = bursty |
    | `dynamics` | Systems dynamics: reinforcing loops, delays, accumulations (with freshness gate), dampening signals |
@@ -123,9 +123,9 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    | Developer community attention (HN, RSS, blogs) | Enterprise procurement decisions |
    | English-language technology discourse | Non-English markets and communities |
 
-   **Compensating for blind spots**: When the forecast surfaces a high-probability scenario or structural break, ask "what signals would I need from outside this system to validate this?" For enterprise-relevant decisions, supplement with analyst reports, job posting trends, and financial data. The system's 120-day retention window with 90d lifecycle timescale enables quarterly trend detection, but cannot detect year-over-year patterns or multi-year trends.
+   **Compensating for blind spots**: When the forecast surfaces a high-scoring scenario or structural break, ask "what signals would I need from outside this system to validate this?" For enterprise-relevant decisions, supplement with analyst reports, job posting trends, and financial data. The system's 120-day retention window with 90d lifecycle timescale enables quarterly trend detection, but cannot detect year-over-year patterns or multi-year trends.
 
-5. **Deepen on high-probability scenarios** (skip if `--with-context` was used — context is already inlined):
+5. **Deepen on high-scoring scenarios** (skip if `--with-context` was used — context is already inlined):
    ```bash
    # Free-text search (FTS5 syntax) — use natural language, not topic IDs
    intel search "AI agents" --since 7d --limit 10

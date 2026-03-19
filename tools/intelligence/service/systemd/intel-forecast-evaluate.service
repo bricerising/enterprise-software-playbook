@@ -6,6 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sh -c '"%h/.local/bin/intel" stats 2>/dev/null | grep -q "events:" && test "$(%h/.local/bin/intel stats 2>/dev/null | grep -oP "events:\\s*\\K\\d+")" -gt 0 || { echo "No events in database, skipping forecast evaluate"; exit 1; }'
 ExecStart=%h/.local/bin/intel forecast evaluate --config %h/.config/intel/config.yaml
 
 Environment=NODE_ENV=production

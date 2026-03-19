@@ -32,14 +32,7 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    intel forecast    # lifecycle phases for relevant dependencies
    ```
 
-   **Cross-reference matrix**:
-   | Archobs signal | Forecast signal | Interpretation | Priority adjustment |
-   |---|---|---|---|
-   | High risk (>0.5) | reinforcing loop | Compound risk — structural debt accelerating | Prioritize first |
-   | High risk (>0.5) | stable / decaying | Structural debt, stable ecosystem | Schedule normally |
-   | High leakage (>0.20) | diverging lifecycles | Boundary spans ecosystems moving in different directions | Prioritize boundary extraction |
-   | Low risk | emerging / accelerating | Emerging opportunity | Plan adoption path before coupling grows organically |
-   | High coupling to dependency | decaying phase | Dependency is dying — extraction is urgent | Elevate to P0 |
+   **Cross-reference matrix**: See [Lifecycle Decision Mapping — Plan: Risk Amplification](../references/lifecycle-decision-mapping.md#plan-risk-amplification) for archobs signal x forecast signal → priority adjustment table.
 
 5. Identify the primary risk(s) (pick 1–3): correctness, migration, partial failure, security/privacy, performance, operability.
 5. Add a compact decision table (2–3 options including a no-change baseline):

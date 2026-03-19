@@ -103,7 +103,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 
 | Rule | When it matters | What to do |
 |---|---|---|
-| **Probabilities ≠ certainties** | Always | Present forecasts as probabilistic scenarios, not predictions of fact |
+| **Scores ≠ probabilities** | Always | Scenario scores are relative rankings (temperature-sharpened softmax), not calibrated probabilities. Present as "high/medium/low confidence" not as percentage likelihoods |
 | **Trajectory = evidence** | Internal engine | Use "evidence suggests" / "development patterns indicate" framing |
 | **Adjacency is heuristic** | Internal engine | The adjacency table reflects common patterns, not rules. Domain context overrides |
 | **Freshness check** | Before synthesis | Stale data → stale forecasts. Verify recency via `intel stats` |
@@ -155,7 +155,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - **Active triggers**: topics currently spiking that have historical chain patterns
 - **Top scenarios** (3-5):
   - **Topic**: the predicted target topic
-  - **Probability**: Bayesian posterior (0-1), explain as high/medium/low
+  - **Score**: relative scenario score (0-1), explain as high/medium/low. Not a calibrated probability — use for ranking, not for estimating real-world likelihood
   - **Timeframe**: expected window in days (entropy-widened)
   - **Triggers**: which active topics are driving this prediction (sorted by contribution strength — first trigger matters most for this specific target)
   - **Evidence**: top supporting article titles (up to 3). Check `evidence_relevance` — flag any 'low' relevance titles as potential classifier false positives.

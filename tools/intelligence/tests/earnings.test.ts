@@ -259,6 +259,13 @@ describe('EarningsAdapter', () => {
     consoleSpy.mockRestore();
   });
 
+  it('logs warning for tickers not in TECH_ROSTER', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    new EarningsAdapter({ name: 'test', tickers: ['NVDA', 'FAKECORP'], edgar_contact: 'test@example.com' });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('FAKECORP not in built-in roster'));
+    spy.mockRestore();
+  });
+
   it('uses case-insensitive ticker matching', async () => {
     const fixture = makeSubmissionsFixture();
     fetchSpy.mockImplementation(() => mockFetchResponse(fixture));

@@ -37,6 +37,20 @@ check_prereqs() {
     # Ensure data and runtime directories exist
     mkdir -p "$HOME/.local/share/intel"
     mkdir -p "$HOME/.local/run/intel"
+
+    # Warn if database is empty or missing — forecast services will no-op
+    local db_path="$HOME/.local/share/intel/intel.db"
+    if [[ ! -f "$db_path" ]]; then
+        echo "Warning: Database not found at $db_path."
+        echo "Forecast services will skip until the collector has run at least once."
+    elif command -v "$intel_bin" &>/dev/null; then
+        local event_count
+        event_count=$("$intel_bin" stats 2>/dev/null | grep -oP 'events:\s*\K\d+' || echo "0")
+        if [[ "$event_count" -eq 0 ]]; then
+            echo "Warning: Database exists but contains 0 events."
+            echo "Forecast services will skip until the collector has ingested data."
+        fi
+    fi
 }
 
 # --- macOS (launchd) ---

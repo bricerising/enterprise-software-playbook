@@ -13,7 +13,7 @@ import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
-import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast.js';
+import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
 import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
