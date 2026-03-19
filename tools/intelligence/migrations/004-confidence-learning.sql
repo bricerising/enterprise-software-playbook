@@ -38,3 +38,7 @@ CREATE TABLE topic_weights (
     false_positives INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- Indexes for forecast evaluation queries
+CREATE INDEX idx_forecast_outcomes_pending ON forecast_outcomes(outcome) WHERE outcome IS NULL;
+CREATE INDEX idx_event_topics_confidence ON event_topics(topic, confidence);

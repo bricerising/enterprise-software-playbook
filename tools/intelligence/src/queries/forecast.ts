@@ -694,6 +694,7 @@ function detectChains(
     GROUP BY a.topic, b.topic
     HAVING support >= ?
     ORDER BY lift DESC, support DESC
+    LIMIT 500
   `;
 
   const chainRows = db.prepare(chainSql).all(
@@ -870,8 +871,9 @@ function buildMultiscaleView(lifecycles: LifecycleItem[]): MultiscaleItem[] {
     } else if ((short > 0 && d7 < 0) || (short < 0 && d7 > 0)) {
       alignment = 'transitioning';
     } else {
-      // All near zero or mixed without clear divergence
-      alignment = 'aligned_up'; // treat zero/zero as neutral-up
+      // All near zero or mixed without clear divergence — treat as stable/down
+      // to avoid false accumulation signals from inactive topics
+      alignment = 'aligned_down';
     }
 
     return {
@@ -1679,11 +1681,16 @@ export interface EvaluateResult {
  * - Check if target_topic had a spike day (volume >= 3) within the predicted
  *   timeframe since snapshot creation
  * - Set outcome = 1 (observed) or 0 (not observed, timeframe elapsed)
+ * - Compute Brier score: (predicted_probability - outcome)²
  * - Skip if timeframe hasn't elapsed yet
  *
- * Then update topic_weights using Laplace-smoothed precision:
- *   precision = (TP + 1) / (TP + FP + 2)
- *   weight = 0.5 + 0.5 × precision
+ * Then update topic_weights using average Brier score:
+ *   weight = 0.5 + 0.5 × (1 - avg_brier_score)
+ *
+ * Brier score is a proper scoring rule that rewards calibrated predictions:
+ * - Perfect prediction (P=0.9, outcome=1): brier = 0.01 → high weight
+ * - Bad prediction (P=0.9, outcome=0): brier = 0.81 → low weight
+ * - Trivial prediction (P=0.5, always spikes): brier = 0.25 → moderate weight
  */
 export function evaluateForecasts(db: Database.Database): EvaluateResult {
   const now = Date.now();
@@ -1707,7 +1714,7 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
 
   const updateOutcome = db.prepare(`
     UPDATE forecast_outcomes
-    SET outcome = ?, evaluated_at = ?
+    SET outcome = ?, brier_score = ?, evaluated_at = ?
     WHERE outcome_id = ?
   `);
 
@@ -1734,8 +1741,9 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
       const scenarios = JSON.parse(row.scenarios) as ScenarioItem[];
       const scenario = scenarios.find(s => s.target_topic === row.target_topic);
       if (!scenario) {
-        // Scenario not found in snapshot — mark as not observed
-        updateOutcome.run(0, nowISO, row.outcome_id);
+        // Scenario not found in snapshot — mark as not observed, brier = predicted²
+        const brier = row.predicted_probability * row.predicted_probability;
+        updateOutcome.run(0, brier, nowISO, row.outcome_id);
         evaluated++;
         continue;
       }
@@ -1757,35 +1765,41 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
         spike_days: number;
       }>;
       const observed = spikeRows.length > 0 ? 1 : 0;
+      const brier = (row.predicted_probability - observed) ** 2;
 
-      updateOutcome.run(observed, nowISO, row.outcome_id);
+      updateOutcome.run(observed, brier, nowISO, row.outcome_id);
       evaluated++;
     }
 
-    // Update topic weights from all evaluated outcomes
+    // Update topic weights from evaluated outcomes using average Brier score.
+    // Brier score is a proper scoring rule: rewards calibrated predictions,
+    // penalizes both overconfident wrong predictions and underconfident correct ones.
     const weightSql = `
       SELECT target_topic,
              SUM(CASE WHEN outcome = 1 THEN 1 ELSE 0 END) AS tp,
              SUM(CASE WHEN outcome = 0 THEN 1 ELSE 0 END) AS fp,
+             AVG(brier_score) AS avg_brier,
              COUNT(*) AS total
       FROM forecast_outcomes
-      WHERE outcome IS NOT NULL
+      WHERE outcome IS NOT NULL AND brier_score IS NOT NULL
       GROUP BY target_topic
     `;
     const weightRows = db.prepare(weightSql).all() as Array<{
       target_topic: string;
       tp: number;
       fp: number;
+      avg_brier: number;
       total: number;
     }>;
 
     const upsertWeight = db.prepare(`
-      INSERT INTO topic_weights (topic_id, weight, true_positives, false_positives, updated_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO topic_weights (topic_id, weight, true_positives, false_positives, avg_brier_score, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_id) DO UPDATE SET
         weight = excluded.weight,
         true_positives = excluded.true_positives,
         false_positives = excluded.false_positives,
+        avg_brier_score = excluded.avg_brier_score,
         updated_at = excluded.updated_at
     `);
 
@@ -1793,12 +1807,11 @@ export function evaluateForecasts(db: Database.Database): EvaluateResult {
     for (const row of weightRows) {
       if (row.total < MIN_OUTCOMES_FOR_WEIGHT) continue;
 
-      // Laplace-smoothed precision: (TP + 1) / (TP + FP + 2)
-      const precision = (row.tp + 1) / (row.tp + row.fp + 2);
-      // Weight maps [0,1] → [0.5, 1.0]
-      const weight = Math.round((0.5 + 0.5 * precision) * 1000) / 1000;
+      // Weight from Brier score: perfect (0) → 1.0, random (0.25) → 0.625, worst (1.0) → 0.5
+      const avgBrier = row.avg_brier ?? 0.25;
+      const weight = Math.round((0.5 + 0.5 * (1 - avgBrier)) * 1000) / 1000;
 
-      upsertWeight.run(row.target_topic, weight, row.tp, row.fp, nowISO);
+      upsertWeight.run(row.target_topic, weight, row.tp, row.fp, avgBrier, nowISO);
       weightsUpdated++;
     }
 
