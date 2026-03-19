@@ -48,3 +48,10 @@ jobs:
           done
           package_count="$(find /tmp/skill-dist -maxdepth 1 -type f -name '*.skill' | wc -l | tr -d ' ')"
           test "$package_count" -eq "$skill_count"
+
+      - name: Documentation build check
+        run: |
+          set -euo pipefail
+          pip install mkdocs-material
+          python3 .system/docs/generate_mkdocs_nav.py > mkdocs.yml
+          mkdocs build --strict

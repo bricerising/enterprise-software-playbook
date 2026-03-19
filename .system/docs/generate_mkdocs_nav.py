@@ -37,17 +37,36 @@ def setup_docs_dir() -> None:
         shutil.rmtree(BUILD_DOCS_DIR)
     BUILD_DOCS_DIR.mkdir(parents=True)
 
-    # Symlink top-level markdown files
+    # Symlink top-level markdown and other doc-linked files
     for md in sorted(REPO_ROOT.glob("*.md")):
         target = os.path.relpath(md, BUILD_DOCS_DIR)
         (BUILD_DOCS_DIR / md.name).symlink_to(target)
+    for extra in ("LICENSE.txt",):
+        src = REPO_ROOT / extra
+        if src.exists():
+            target = os.path.relpath(src, BUILD_DOCS_DIR)
+            (BUILD_DOCS_DIR / extra).symlink_to(target)
 
-    # Symlink content directories
-    for dirname in ("skills", "specs", "tools"):
+    # Symlink content directories (only those referenced by the nav)
+    for dirname in ("skills", "specs"):
         src = REPO_ROOT / dirname
         if src.is_dir():
             target = os.path.relpath(src, BUILD_DOCS_DIR)
             (BUILD_DOCS_DIR / dirname).symlink_to(target)
+
+    # Symlink top-level files from each tool dir (avoids node_modules/lib)
+    tools_src = REPO_ROOT / "tools"
+    if tools_src.is_dir():
+        for tool_dir in sorted(tools_src.iterdir()):
+            if not tool_dir.is_dir() or tool_dir.name.startswith("."):
+                continue
+            doc_files = list(tool_dir.glob("*.md")) + list(tool_dir.glob("*.txt"))
+            if doc_files:
+                dest = BUILD_DOCS_DIR / "tools" / tool_dir.name
+                dest.mkdir(parents=True, exist_ok=True)
+                for f in doc_files:
+                    target = os.path.relpath(f, dest)
+                    (dest / f.name).symlink_to(target)
 
 
 # ---------------------------------------------------------------------------
@@ -184,15 +203,14 @@ def build_nav(manifest: dict) -> list:
     nav.append({"Home": "README.md"})
 
     # ---- Getting Started ----
-    nav.append(
-        {
-            "Getting Started": [
-                {"Prompt Recipes": "PROMPTS.md"},
-                {"Tutorial": "TUTORIAL.md"},
-                {"Glossary": "GLOSSARY.md"},
-            ]
-        }
-    )
+    getting_started = [
+        {"Prompt Recipes": "PROMPTS.md"},
+        {"Tutorial": "TUTORIAL.md"},
+        {"Glossary": "GLOSSARY.md"},
+    ]
+    if (REPO_ROOT / "INSTALL.md").exists():
+        getting_started.insert(0, {"Installation": "INSTALL.md"})
+    nav.append({"Getting Started": getting_started})
 
     # ---- Skills (grouped by stage) ----
     skills_section: list[dict] = []
@@ -344,6 +362,7 @@ plugins:
   - search
 
 exclude_docs: |
+  node_modules/
   *.json
   *.yml
   *.yaml
