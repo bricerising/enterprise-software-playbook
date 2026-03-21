@@ -117,7 +117,7 @@ const TOOL_DEFINITIONS = [
         compact: { type: 'boolean', description: 'Return compact summary with top-N per section (default: false)' },
         summary: { type: 'boolean', description: 'Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)' },
         with_context: { type: 'boolean', description: 'Inline top event titles per change point and top chain topic (default: false)' },
-        topics: { type: 'array', items: { type: 'string' }, description: 'Filter output to specific topic IDs (e.g., ["ai.openai", "hw.gpu"])' },
+        topics: { type: 'array', items: { type: 'string' }, description: 'Filter output to specific topic IDs (e.g., ["ai.foundation-models", "compute.gpu"])' },
         sections: { type: 'array', items: { type: 'string' }, description: 'Include only these sections (e.g., ["lifecycles", "entropy"])' },
       },
     },

@@ -33,8 +33,8 @@ beforeEach(() => {
     const eventId = `rss:test:recent-${i}`;
     const fetchedAt = new Date(now.getTime() - i * 60000).toISOString();
     const url = `https://example.com/article-${i}`;
-    insert.run(eventId, url, url, `AWS Bedrock Article ${i}`, fetchedAt, '["aws.bedrock"]', i);
-    insertTopic.run(eventId, 'aws.bedrock');
+    insert.run(eventId, url, url, `AWS Bedrock Article ${i}`, fetchedAt, '["ai.foundation-models"]', i);
+    insertTopic.run(eventId, 'ai.foundation-models');
   }
 
   // Older events (in previous window for acceleration calc)
@@ -42,17 +42,17 @@ beforeEach(() => {
     const eventId = `rss:test:old-${i}`;
     const fetchedAt = new Date(now.getTime() - 90 * 60000 - i * 60000).toISOString();
     const url = `https://example.com/old-${i}`;
-    insert.run(eventId, url, url, `Old Bedrock Article ${i}`, fetchedAt, '["aws.bedrock"]', 0);
-    insertTopic.run(eventId, 'aws.bedrock');
+    insert.run(eventId, url, url, `Old Bedrock Article ${i}`, fetchedAt, '["ai.foundation-models"]', 0);
+    insertTopic.run(eventId, 'ai.foundation-models');
   }
 
   // Cross-source dedup test: same canonical_url, different source
   const sharedUrl = 'https://example.com/shared-article';
   const recentTime = new Date(now.getTime() - 5 * 60000).toISOString();
-  insert.run('hn:123', sharedUrl, sharedUrl, 'Shared Article HN', recentTime, '["ai.llm"]', 50);
-  insertTopic.run('hn:123', 'ai.llm');
-  insert.run('rss:test:shared', sharedUrl, sharedUrl, 'Shared Article RSS', recentTime, '["ai.llm"]', 0);
-  insertTopic.run('rss:test:shared', 'ai.llm');
+  insert.run('hn:123', sharedUrl, sharedUrl, 'Shared Article HN', recentTime, '["ai.agents"]', 50);
+  insertTopic.run('hn:123', 'ai.agents');
+  insert.run('rss:test:shared', sharedUrl, sharedUrl, 'Shared Article RSS', recentTime, '["ai.agents"]', 0);
+  insertTopic.run('rss:test:shared', 'ai.agents');
 });
 
 afterEach(() => {
@@ -66,7 +66,7 @@ describe('computeTrends', () => {
     expect(result.status).toBe('ok');
     expect(result.data.length).toBeGreaterThan(0);
 
-    const bedrock = result.data.find((t: any) => t.topic === 'aws.bedrock');
+    const bedrock = result.data.find((t: any) => t.topic === 'ai.foundation-models');
     expect(bedrock).toBeDefined();
     expect(bedrock.volume).toBeGreaterThan(0);
     expect(bedrock.score).toBeGreaterThanOrEqual(0);
@@ -75,7 +75,7 @@ describe('computeTrends', () => {
 
   it('performs cross-source dedup on canonical_url', () => {
     const result = computeTrends(db, { window: '60m', top: 10 });
-    const llm = result.data.find((t: any) => t.topic === 'ai.llm');
+    const llm = result.data.find((t: any) => t.topic === 'ai.agents');
     // Both events share canonical_url, so volume should be 1 (not 2)
     expect(llm).toBeDefined();
     expect(llm.volume).toBe(1);
@@ -83,7 +83,7 @@ describe('computeTrends', () => {
 
   it('computes acceleration from prev_volume', () => {
     const result = computeTrends(db, { window: '60m', top: 10 });
-    const bedrock = result.data.find((t: any) => t.topic === 'aws.bedrock');
+    const bedrock = result.data.find((t: any) => t.topic === 'ai.foundation-models');
     expect(bedrock).toBeDefined();
     expect(bedrock.prev_volume).toBeDefined();
     expect(bedrock.acceleration).toBeDefined();
@@ -99,7 +99,7 @@ describe('computeTrends', () => {
 
   it('includes top_titles', () => {
     const result = computeTrends(db, { window: '60m', top: 10 });
-    const bedrock = result.data.find((t: any) => t.topic === 'aws.bedrock');
+    const bedrock = result.data.find((t: any) => t.topic === 'ai.foundation-models');
     expect(bedrock.top_titles).toBeDefined();
     expect(bedrock.top_titles.length).toBeGreaterThan(0);
     expect(bedrock.top_titles.length).toBeLessThanOrEqual(3);

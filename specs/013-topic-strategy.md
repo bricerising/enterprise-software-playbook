@@ -47,6 +47,7 @@ Topics exist to detect trends that change engineering decisions. Each topic must
 | **AI integration** | When to integrate AI coding assistants into our SDLC? | `ai.coding-assistants` peaking phase, `market.talent` hiring shift signals | Tool maturity plateauing (adoption peak); evaluate and standardize now, not later |
 | **Compliance & regulation** | Will AI regulation affect our product? | `regulation.ai` accelerating + `ai.safety` chain, cross-domain convergence | Regulatory pressure building; start compliance roadmap before mandates arrive |
 | **Market position** | Where is cloud investment heading? | `market.investment` + `compute.gpu` co-movement, `market.earnings` confirmation | CapEx shifting to AI infrastructure; adjust capacity planning and vendor negotiations |
+| **Macro environment** | How do geopolitical or energy shifts affect our technology supply chain? | `macro.energy` CUSUM change point + `compute.semiconductor` chain, `macro.geopolitics` co-movement | External shock disrupting supply chain; reassess vendor dependencies, capacity planning, and cost assumptions |
 
 ---
 
@@ -109,22 +110,23 @@ No single domain should consume >30% of total topics. Disproportionate density i
 
 ### Domain Structure
 
-Nine domains organized by the SDLC decisions they primarily inform:
+Ten domains organized by the SDLC decisions they primarily inform:
 
 | Domain | Primary decisions informed | Topic count | % of total |
 |---|---|---|---|
-| `ai` | AI integration, stack selection, build vs buy | 9 | 15.5% |
-| `compute` | Stack selection, architecture evolution, operational model | 8 | 13.8% |
-| `security` | Security posture, dependency governance | 6 | 10.3% |
-| `data` | Stack selection, architecture evolution | 7 | 12.1% |
-| `devex` | Build vs buy, operational model | 6 | 10.3% |
-| `lang` | Stack selection, dependency governance | 6 | 10.3% |
-| `arch` | Architecture evolution | 5 | 8.6% |
-| `regulation` | Compliance & regulation | 4 | 6.9% |
-| `market` | Market position, build vs buy | 7 | 12.1% |
-| **Total** | | **58** | |
+| `ai` | AI integration, stack selection, build vs buy | 9 | 14.8% |
+| `compute` | Stack selection, architecture evolution, operational model | 8 | 13.1% |
+| `security` | Security posture, dependency governance | 6 | 9.8% |
+| `data` | Stack selection, architecture evolution | 7 | 11.5% |
+| `devex` | Build vs buy, operational model | 6 | 9.8% |
+| `lang` | Stack selection, dependency governance | 6 | 9.8% |
+| `arch` | Architecture evolution | 5 | 8.2% |
+| `regulation` | Compliance & regulation | 4 | 6.6% |
+| `market` | Market position, build vs buy | 7 | 11.5% |
+| `macro` | Macro environment, supply chain risk, cost planning | 3 | 4.9% |
+| **Total** | | **61** | |
 
-Maximum domain density: 15.5% (ai). All domains under 30%.
+Maximum domain density: 14.8% (ai). All domains under 30%.
 
 ### Topic ID Convention
 
@@ -235,6 +237,14 @@ Format: `domain.name` where `name` uses hyphens for multi-word identifiers. Exam
 | `market.investment` | Technology Investment | Market position | AI infrastructure CapEx surging; confirms long-term platform viability |
 | `market.ipo` | IPOs & Public Markets | Market position | Developer tooling IPO wave; signals maturity and consolidation in segment |
 
+#### macro — Macroeconomic & Geopolitical Environment
+
+| ID | Label | Decision | Example trend signal |
+|---|---|---|---|
+| `macro.energy` | Energy & Oil Markets | Cost planning, supply chain risk | Oil prices spiking due to conflict; reassess cloud/data center cost projections and energy-dependent vendor risks |
+| `macro.geopolitics` | Geopolitical Conflicts & Trade | Supply chain risk, dependency governance | War or sanctions disrupting semiconductor supply; evaluate vendor geographic concentration and alternative sourcing |
+| `macro.commodities` | Commodities & Raw Materials | Supply chain risk, cost planning | Helium or rare earth shortage affecting chip production; reassess hardware procurement timeline and capacity planning |
+
 ---
 
 ## Migration from Current Topics
@@ -334,6 +344,9 @@ The 71 current topics map to the 58 new topics. Vendor-specific topics are absor
 | `arch.frontend` | Frontend architecture decisions (SSR, RSC, web platform) were implicit in `framework.react` |
 | `arch.migration` | Migration and modernization patterns inform architecture evolution decisions |
 | `regulation.standards` | Industry compliance standards (SOC2, ISO) inform operational and compliance decisions |
+| `macro.energy` | Energy/oil market disruptions directly affect cloud infrastructure costs and data center economics; no prior coverage |
+| `macro.geopolitics` | Geopolitical conflicts and trade policy (wars, sanctions, tariffs) disrupt semiconductor supply chains and vendor availability; no prior coverage |
+| `macro.commodities` | Commodity shortages (helium, rare earths, neon) constrain chip fabrication and hardware procurement; no prior coverage |
 
 ---
 
@@ -641,7 +654,7 @@ The review is not marked complete automatically when `intel topics audit` runs b
 | Decision | Selected | Rationale |
 |---|---|---|
 | Organize by decision-relevance | 9 domains mapped to SDLC decisions | Vendor-organized topics fragment decision-relevant signals and create granularity mismatches |
-| 58 topics (down from 71) | Reduction via vendor merging, expansion via decision gaps | Every topic passes decision-relevance test; removed topics were redundant vendor splits |
+| 61 topics (down from 71) | Reduction via vendor merging, expansion via decision gaps | Every topic passes decision-relevance test; removed topics were redundant vendor splits |
 | Absorb individual AI vendor topics | Single `ai.foundation-models` | OpenAI/Anthropic/Google/Meta all inform the same "which model?" decision |
 | Absorb AWS service topics into domain topics | 16 AWS topics → distributed across 7 domain topics | AWS Lambda informs serverless decisions, not "AWS" decisions; DynamoDB informs document DB decisions |
 | Hyphenated topic IDs | `domain.hyphenated-name` | More readable and URL-friendly than underscores; establishes forward convention |
@@ -650,5 +663,6 @@ The review is not marked complete automatically when `intel topics audit` runs b
 | Minimum 5 events/month threshold | 3-month sustained minimum for topic viability | Below this, lifecycle classification and chain detection have insufficient statistical support |
 | Domain balance cap at 30% | Hard constraint on taxonomy design | Prevents single-vendor or single-area bias from distorting coverage |
 | Strategy spec, not implementation spec | Topic IDs and labels only; keywords stay in topics.yaml | Separates "what to classify" (this spec) from "how to classify" (topics.yaml + classifier code) |
+| Add `macro` domain for external environment signals | 3 topics: energy, geopolitics, commodities | Geopolitical events (wars, sanctions) and energy price shocks have direct downstream effects on semiconductor supply, cloud costs, and vendor availability. Without macro topics, these signals scatter across unrelated topics or are dropped entirely by the classifier. |
 | `intel topics audit` command | Pre-computed flags over per-topic metrics | Quarterly review requires correlating 5 data sources; a dedicated command makes the review actionable instead of manual |
 | Review tracking via `tool_metadata` | `--mark-reviewed` writes timestamp; query commands warn when overdue | Review cadence is only useful if the tool enforces it; manual mark avoids false "reviewed" state from running audit without acting |

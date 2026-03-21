@@ -25,6 +25,7 @@ import {
   vacuumInto,
   rebuildFts,
   rebuildTopicIndex,
+  reclassifyTopics,
   optimizeFts,
   quickCheck,
 } from './db-maintenance.js';
@@ -351,7 +352,7 @@ const forecast = program
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .option('--with-context', 'Inline top event titles per change point and top chain topic')
-  .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.openai,hw.gpu)')
+  .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.foundation-models,compute.gpu)')
   .option('--section <sections>', 'Comma-separated sections to include (e.g., lifecycles,entropy)')
   .option('--snapshot', 'Save forecast snapshot for later evaluation')
   .action((opts) => {
@@ -662,6 +663,24 @@ db.command('rebuild-topic-index')
       try {
         const count = rebuildTopicIndex(writer);
         output(ok({ status: 'completed', topic_rows: count }), program.opts().format ?? 'json');
+      } finally {
+        writer.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+db.command('reclassify')
+  .description('Re-run topic classifier on all events using current topics.yaml')
+  .action(async () => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const writer = openWriter(dbPath);
+      try {
+        const result = reclassifyTopics(writer);
+        output(ok({ status: 'completed', ...result }), program.opts().format ?? 'json');
       } finally {
         writer.close();
       }

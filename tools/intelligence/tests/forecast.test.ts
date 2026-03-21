@@ -38,21 +38,21 @@ const insertEvent = (
 
 /**
  * Build synthetic chain patterns:
- *   Pattern A: ai.llm → ai.agents (3 occurrences, ~2-day lag, single source)
- *   Pattern B: aws.bedrock → aws.lambda (4 occurrences, ~1-day lag, cross-source)
- *   Current spike: ai.llm active now (triggers scenario prediction for ai.agents)
+ *   Pattern A: ai.foundation-models → ai.agents (3 occurrences, ~2-day lag, single source)
+ *   Pattern B: compute.serverless → compute.containers (4 occurrences, ~1-day lag, cross-source)
+ *   Current spike: ai.foundation-models active now (triggers scenario prediction for ai.agents)
  */
 function seedChainFixtures(db: Database.Database): void {
   const now = Date.now();
 
-  // Pattern A: ai.llm spike on day D, ai.agents spike on day D+2 (3 times)
+  // Pattern A: ai.foundation-models spike on day D, ai.agents spike on day D+2 (3 times)
   for (let i = 0; i < 3; i++) {
     const baseDay = now - (20 - i * 5) * 86_400_000; // days 20, 15, 10 ago
-    // ai.llm spike (3+ events on baseDay)
+    // ai.foundation-models spike (3+ events on baseDay)
     for (let j = 0; j < 4; j++) {
       const ts = new Date(baseDay + j * 3600_000).toISOString();
       insertEvent(db, `llm-spike-${i}-${j}`, 'rss', `https://ex.com/llm-${i}-${j}`,
-        `LLM Article ${i}-${j}`, ts, ['ai.llm'], j);
+        `Foundation Model Article ${i}-${j}`, ts, ['ai.foundation-models'], j);
     }
     // ai.agents spike 2 days later (3+ events)
     const lagDay = baseDay + 2 * 86_400_000;
@@ -63,31 +63,31 @@ function seedChainFixtures(db: Database.Database): void {
     }
   }
 
-  // Pattern B: aws.bedrock → aws.lambda (4 occurrences, ~1-day lag, cross-source)
+  // Pattern B: compute.serverless → compute.containers (4 occurrences, ~1-day lag, cross-source)
   for (let i = 0; i < 4; i++) {
     const baseDay = now - (25 - i * 5) * 86_400_000; // days 25, 20, 15, 10 ago
-    // aws.bedrock spike (cross-source: rss + hackernews)
+    // compute.serverless spike (cross-source: rss + hackernews)
     for (let j = 0; j < 3; j++) {
       const ts = new Date(baseDay + j * 3600_000).toISOString();
       const src = j % 2 === 0 ? 'rss' : 'hackernews';
-      insertEvent(db, `bedrock-spike-${i}-${j}`, src, `https://ex.com/bedrock-${i}-${j}`,
-        `Bedrock Update ${i}-${j}`, ts, ['aws.bedrock'], j);
+      insertEvent(db, `serverless-spike-${i}-${j}`, src, `https://ex.com/serverless-${i}-${j}`,
+        `Serverless Update ${i}-${j}`, ts, ['compute.serverless'], j);
     }
-    // aws.lambda spike 1 day later
+    // compute.containers spike 1 day later
     const lagDay = baseDay + 1 * 86_400_000;
     for (let j = 0; j < 3; j++) {
       const ts = new Date(lagDay + j * 3600_000).toISOString();
       const src = j % 2 === 0 ? 'hackernews' : 'rss';
-      insertEvent(db, `lambda-spike-${i}-${j}`, src, `https://ex.com/lambda-${i}-${j}`,
-        `Lambda Integration ${i}-${j}`, ts, ['aws.lambda'], j);
+      insertEvent(db, `containers-spike-${i}-${j}`, src, `https://ex.com/containers-${i}-${j}`,
+        `Container Integration ${i}-${j}`, ts, ['compute.containers'], j);
     }
   }
 
-  // Current spike: ai.llm active right now (triggers scenarios)
+  // Current spike: ai.foundation-models active right now (triggers scenarios)
   for (let j = 0; j < 5; j++) {
     const ts = new Date(now - j * 3600_000).toISOString();
     insertEvent(db, `llm-now-${j}`, 'rss', `https://ex.com/llm-now-${j}`,
-      `Breaking LLM News ${j}`, ts, ['ai.llm'], 10 + j);
+      `Breaking Foundation Model News ${j}`, ts, ['ai.foundation-models'], 10 + j);
   }
 }
 
@@ -144,8 +144,8 @@ describe('computeForecast', () => {
     const result = computeForecast(db, { min_support: 2 });
     const chains = result.data.chains;
 
-    // ai.llm has a current spike, so chains from ai.llm should be active
-    const llmChains = chains.filter((c) => c.from_topic === 'ai.llm');
+    // ai.foundation-models has a current spike, so chains from it should be active
+    const llmChains = chains.filter((c) => c.from_topic === 'ai.foundation-models');
     if (llmChains.length > 0) {
       expect(llmChains.some((c) => c.active)).toBe(true);
     }
@@ -563,7 +563,7 @@ describe('CUSUM change-point detection', () => {
   });
 
   it('detects change points in data with volume spikes', () => {
-    // The test fixtures have distinct spike patterns — ai.llm has recent burst
+    // The test fixtures have distinct spike patterns — ai.foundation-models has recent burst
     const result = computeForecast(db, { min_support: 2 });
     // At least one topic should have change points given the spike patterns
     const allChangePoints = result.data.lifecycles.flatMap((lc) => lc.change_points);

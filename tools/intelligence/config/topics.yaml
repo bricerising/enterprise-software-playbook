@@ -1,270 +1,584 @@
-# Curated topic definitions for intelligence classification
+# Decision-relevant topic definitions for intelligence classification
+# Taxonomy: Spec 013 — organized by SDLC decisions, not vendors
+#
 # Each topic has:
 #   keywords: terms that trigger classification (case-insensitive)
 #   regex: optional regex patterns for more precise matching
 #   priority: higher values win when multiple topics match (1-100)
 #   context_required: if true, short acronyms require surrounding context terms
+#
+# Priority bands (spec 013):
+#   70-80: Security events (immediate attention)
+#   55-65: AI developments (fast-moving)
+#   40-55: Architecture, data, market, regulation (moderate pace)
+#   35-45: Languages, compute (slower-moving)
+#   30-40: DevEx and operations
 
 topics:
-  # --- AWS Services ---
-  - id: aws.bedrock
-    label: Amazon Bedrock
-    keywords: [bedrock, amazon bedrock]
-    regex: ['(?i)\bbedrock\b']
-    priority: 50
-    context_required: false
+  # =========================================================================
+  # ai — AI & Machine Learning
+  # Decisions: AI integration, stack selection, build vs buy
+  # =========================================================================
 
-  - id: aws.lambda
-    label: AWS Lambda
-    keywords: [aws lambda, lambda function, serverless]
-    regex: ['(?i)\blambda\b']
-    priority: 40
-    context_required: true
-    context_terms: [aws, amazon, serverless, function, invoke, cold start]
+  - id: ai.foundation-models
+    label: Foundation Models
+    keywords:
+      - large language model
+      - llm
+      - foundation model
+      - openai
+      - chatgpt
+      - gpt-4
+      - gpt-5
+      - dall-e
+      - whisper
+      - anthropic
+      - claude
+      - sonnet
+      - opus
+      - haiku
+      - gemini
+      - google ai
+      - bard
+      - palm
+      - llama
+      - meta ai
+      - llama 3
+      - llama 4
+      - bedrock
+      - amazon bedrock
+    regex: ['(?i)\bbedrock\b', '(?i)\bLLM\b']
+    priority: 60
 
-  - id: aws.sagemaker
-    label: Amazon SageMaker
-    keywords: [sagemaker, sage maker]
-    priority: 50
+  - id: ai.coding-assistants
+    label: AI Coding Assistants
+    keywords:
+      - copilot
+      - cursor
+      - code generation
+      - ai coding
+      - code assistant
+      - windsurf
+      - cline
+      - aider
+    priority: 55
 
-  - id: aws.ecs
-    label: Amazon ECS
-    keywords: [amazon ecs, elastic container service]
-    regex: ['(?i)\bECS\b']
-    priority: 40
-    context_required: true
-    context_terms: [aws, amazon, container, fargate, task]
-
-  - id: aws.eks
-    label: Amazon EKS
-    keywords: [amazon eks, elastic kubernetes]
-    regex: ['(?i)\bEKS\b']
-    priority: 40
-    context_required: true
-    context_terms: [aws, amazon, kubernetes, k8s, cluster, pod]
-
-  - id: aws.s3
-    label: Amazon S3
-    keywords: [amazon s3, s3 bucket]
-    regex: ['(?i)\bS3\b']
-    priority: 30
-    context_required: true
-    context_terms: [aws, amazon, bucket, storage, object]
-
-  - id: aws.dynamodb
-    label: Amazon DynamoDB
-    keywords: [dynamodb, dynamo db]
-    priority: 50
-
-  - id: aws.cloudformation
-    label: AWS CloudFormation
-    keywords: [cloudformation, cloud formation, cfn]
-    priority: 40
-
-  - id: aws.cdk
-    label: AWS CDK
-    keywords: [aws cdk, cloud development kit]
-    regex: ['(?i)\bCDK\b']
-    priority: 40
-    context_required: true
-    context_terms: [aws, amazon, construct, stack, infrastructure]
-
-  - id: aws.stepfunctions
-    label: AWS Step Functions
-    keywords: [step functions, stepfunctions, state machine]
-    priority: 40
-    context_required: true
-    context_terms: [aws, amazon, workflow]
-
-  - id: aws.eventbridge
-    label: Amazon EventBridge
-    keywords: [eventbridge, event bridge]
-    priority: 50
-
-  - id: aws.rds
-    label: Amazon RDS
-    keywords: [amazon rds, relational database service]
-    regex: ['(?i)\bRDS\b']
-    priority: 30
-    context_required: true
-    context_terms: [aws, amazon, database, postgres, mysql, aurora]
-
-  - id: aws.aurora
-    label: Amazon Aurora
-    keywords: [amazon aurora, aurora serverless, aurora dsql]
-    priority: 50
-
-  - id: aws.ec2
-    label: Amazon EC2
-    keywords: [amazon ec2, elastic compute]
-    regex: ['(?i)\bEC2\b']
-    priority: 30
-    context_required: true
-    context_terms: [aws, amazon, instance, compute]
-
-  - id: aws.iam
-    label: AWS IAM
-    keywords: [aws iam, identity and access]
-    regex: ['(?i)\bIAM\b']
-    priority: 30
-    context_required: true
-    context_terms: [aws, amazon, role, policy, permission]
-
-  - id: aws.general
-    label: AWS General
-    keywords: [amazon web services]
-    regex: ['(?i)\bAWS\b']
-    priority: 10
-
-  # --- AI/ML ---
-  - id: ai.llm
-    label: Large Language Models
-    keywords: [large language model, llm, foundation model]
+  - id: ai.agents
+    label: AI Agents
+    keywords:
+      - ai agent
+      - autonomous agent
+      - agentic
+      - tool use
+      - function calling
+      - agent framework
     priority: 60
 
   - id: ai.rag
     label: Retrieval Augmented Generation
-    keywords: [retrieval augmented generation, rag pipeline, rag application]
+    keywords:
+      - retrieval augmented generation
+      - rag pipeline
+      - rag application
     regex: ['(?i)\bRAG\b']
-    priority: 50
+    priority: 55
     context_required: true
     context_terms: [retrieval, generation, embedding, vector, context, augment]
 
-  - id: ai.agents
-    label: AI Agents
-    keywords: [ai agent, autonomous agent, agentic, tool use, function calling]
-    priority: 60
-
-  - id: ai.openai
-    label: OpenAI
-    keywords: [openai, chatgpt, gpt-4, gpt-5, dall-e, whisper]
-    priority: 50
-
-  - id: ai.anthropic
-    label: Anthropic
-    keywords: [anthropic, claude, sonnet, opus, haiku]
-    priority: 50
-
-  - id: ai.google
-    label: Google AI
-    keywords: [gemini, google ai, bard, palm]
-    priority: 45
-
-  - id: ai.meta
-    label: Meta AI
-    keywords: [llama, meta ai, llama 3, llama 4]
-    priority: 45
-
-  - id: ai.diffusion
-    label: Image Generation
-    keywords: [stable diffusion, midjourney, dall-e, image generation, text to image]
-    priority: 40
-
-  - id: ai.training
-    label: ML Training
-    keywords: [fine-tuning, fine tuning, rlhf, dpo, training run, pretraining]
-    priority: 40
-
   - id: ai.inference
     label: ML Inference
-    keywords: [inference, model serving, quantization, gguf, vllm, tgi, ollama]
-    priority: 40
-
-  - id: ai.embeddings
-    label: Embeddings & Vectors
-    keywords: [embedding, vector database, vector store, pinecone, weaviate, chromadb, pgvector]
-    priority: 40
-
-  - id: ai.safety
-    label: AI Safety
-    keywords: [ai safety, alignment, red teaming, jailbreak, guardrails, responsible ai]
+    keywords:
+      - inference
+      - model serving
+      - quantization
+      - gguf
+      - vllm
+      - tgi
+      - ollama
+      - local inference
+      - edge inference
     priority: 55
 
-  - id: ai.coding
-    label: AI Coding
-    keywords: [copilot, cursor, code generation, ai coding, code assistant]
-    priority: 50
+  - id: ai.training
+    label: ML Training & Fine-Tuning
+    keywords:
+      - fine-tuning
+      - fine tuning
+      - rlhf
+      - dpo
+      - training run
+      - pretraining
+      - sagemaker
+      - sage maker
+    priority: 55
 
-  - id: ai.mcp
-    label: Model Context Protocol
-    keywords: [model context protocol, mcp server, mcp tool]
+  - id: ai.safety
+    label: AI Safety & Alignment
+    keywords:
+      - ai safety
+      - alignment
+      - red teaming
+      - jailbreak
+      - guardrails
+      - responsible ai
+    priority: 60
+
+  - id: ai.multimodal
+    label: Multimodal AI
+    keywords:
+      - multimodal
+      - stable diffusion
+      - midjourney
+      - image generation
+      - text to image
+      - text to video
+      - text to speech
+      - vision model
+    priority: 55
+
+  - id: ai.protocols
+    label: AI Protocols & Interop
+    keywords:
+      - model context protocol
+      - mcp server
+      - mcp tool
+      - a2a protocol
+      - agent protocol
     regex: ['(?i)\bMCP\b']
-    priority: 50
+    priority: 55
     context_required: true
-    context_terms: [model, context, protocol, tool, server, anthropic]
+    context_terms: [model, context, protocol, tool, server, anthropic, agent]
 
-  # --- Cloud & Infrastructure ---
-  - id: cloud.kubernetes
-    label: Kubernetes
-    keywords: [kubernetes, k8s, kubectl, helm, kustomize]
-    priority: 50
+  # =========================================================================
+  # compute — Compute & Deployment
+  # Decisions: Stack selection, architecture evolution, operational model
+  # =========================================================================
 
-  - id: cloud.docker
-    label: Docker & Containers
-    keywords: [docker, container, dockerfile, docker compose, podman]
+  - id: compute.serverless
+    label: Serverless & FaaS
+    keywords:
+      - serverless
+      - faas
+      - function as a service
+      - cloudflare workers
+      - vercel edge
+      - aws lambda
+      - lambda function
+    regex: ['(?i)\blambda\b']
     priority: 40
+    context_required: true
+    context_terms: [aws, amazon, serverless, function, invoke, cold start, faas, edge]
 
-  - id: cloud.terraform
-    label: Terraform
-    keywords: [terraform, hashicorp, opentofu, hcl]
+  - id: compute.containers
+    label: Containers & Orchestration
+    keywords:
+      - kubernetes
+      - k8s
+      - kubectl
+      - helm
+      - kustomize
+      - docker
+      - container
+      - dockerfile
+      - docker compose
+      - podman
+      - amazon ecs
+      - elastic container service
+      - amazon eks
+      - elastic kubernetes
+      - fargate
+    regex: ['(?i)\bECS\b', '(?i)\bEKS\b']
+    priority: 45
+    context_required: true
+    context_terms: [aws, amazon, container, fargate, task, kubernetes, k8s, cluster, pod, docker, orchestrat]
+
+  - id: compute.iac
+    label: Infrastructure as Code
+    keywords:
+      - terraform
+      - hashicorp
+      - opentofu
+      - hcl
+      - pulumi
+      - cloudformation
+      - cloud formation
+      - cfn
+      - aws cdk
+      - cloud development kit
+      - infrastructure as code
+    regex: ['(?i)\bCDK\b']
+    priority: 40
+    context_required: true
+    context_terms: [aws, amazon, construct, stack, infrastructure, terraform, iac, provision]
+
+  - id: compute.edge
+    label: Edge Computing
+    keywords:
+      - edge computing
+      - edge function
+      - edge runtime
+      - edge network
+      - edge deployment
+      - edge node
+      - edge location
+      - edge worker
+      - durable objects
+      - iot gateway
+      - fog computing
+    priority: 35
+
+  - id: compute.gpu
+    label: GPU & Accelerators
+    keywords:
+      - gpu
+      - nvidia
+      - cuda
+      - h100
+      - a100
+      - b200
+      - tpu
+      - trainium
+      - inferentia
     priority: 45
 
-  - id: cloud.serverless
-    label: Serverless
-    keywords: [serverless, faas, function as a service, cloudflare workers, vercel edge]
-    priority: 35
-
-  - id: cloud.observability
-    label: Observability
-    keywords: [observability, opentelemetry, otel, datadog, grafana, prometheus]
+  - id: compute.semiconductor
+    label: Semiconductors & Chips
+    keywords:
+      - semiconductor
+      - chip
+      - fab
+      - tsmc
+      - asml
+      - arm
+      - risc-v
     priority: 40
 
-  - id: cloud.cicd
-    label: CI/CD
-    keywords: [ci/cd, cicd, github actions, gitlab ci, jenkins, argo cd, flux]
+  - id: compute.cloud-platforms
+    label: Cloud Platforms
+    keywords:
+      - amazon web services
+      - amazon s3
+      - s3 bucket
+      - amazon ec2
+      - elastic compute
+      - cloud platform
+      - multi-cloud
+      - cloud migration
+      - azure
+      - gcp
+      - google cloud
+    regex: ['(?i)\bAWS\b', '(?i)\bS3\b', '(?i)\bEC2\b']
+    priority: 35
+    context_required: true
+    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp]
+
+  - id: compute.networking
+    label: Cloud Networking
+    keywords:
+      - service mesh
+      - istio
+      - envoy
+      - api gateway
+      - load balancer
+      - cdn
     priority: 35
 
-  - id: cloud.networking
-    label: Cloud Networking
-    keywords: [service mesh, istio, envoy, api gateway, load balancer, cdn]
-    priority: 30
+  # =========================================================================
+  # security — Security
+  # Decisions: Security posture, dependency governance
+  # =========================================================================
 
-  # --- Security ---
-  - id: security.vulnerability
-    label: Vulnerabilities
-    keywords: [vulnerability, cve, exploit, zero-day, 0day, security advisory]
+  - id: security.vulnerabilities
+    label: Vulnerabilities & CVEs
+    keywords:
+      - vulnerability
+      - cve
+      - exploit
+      - zero-day
+      - 0day
+      - security advisory
     regex: ['CVE-\\d{4}-\\d+']
+    priority: 75
+
+  - id: security.supply-chain
+    label: Supply Chain Security
+    keywords:
+      - supply chain
+      - sbom
+      - dependency confusion
+      - typosquat
+      - malicious package
     priority: 70
 
-  - id: security.supply_chain
-    label: Supply Chain Security
-    keywords: [supply chain, sbom, dependency confusion, typosquat, malicious package]
+  - id: security.appsec
+    label: Application Security
+    keywords:
+      - appsec
+      - owasp
+      - xss
+      - sql injection
+      - ssrf
+      - csrf
+      - authentication bypass
     priority: 65
 
   - id: security.cloud
     label: Cloud Security
-    keywords: [cloud security, misconfiguration, data breach, iam vulnerability, privilege escalation]
+    keywords:
+      - cloud security
+      - misconfiguration
+      - data breach
+      - iam vulnerability
+      - privilege escalation
+    priority: 60
+
+  - id: security.cryptography
+    label: Cryptography
+    keywords:
+      - encryption
+      - tls
+      - certificate
+      - post-quantum
+      - pqc
+      - cryptography
     priority: 55
 
-  - id: security.appsec
-    label: Application Security
-    keywords: [appsec, owasp, xss, sql injection, ssrf, csrf, authentication bypass]
-    priority: 50
+  - id: security.identity
+    label: Identity & Access
+    keywords:
+      - passkey
+      - fido
+      - oidc
+      - oauth
+      - sso
+      - single sign-on
+      - identity provider
+      - aws iam
+      - identity and access
+    regex: ['(?i)\bIAM\b']
+    priority: 55
+    context_required: true
+    context_terms: [aws, amazon, role, policy, permission, identity, auth, access, login]
 
-  - id: security.crypto
-    label: Cryptography
-    keywords: [encryption, tls, certificate, post-quantum, pqc]
+  # =========================================================================
+  # data — Data & Storage
+  # Decisions: Stack selection, architecture evolution
+  # =========================================================================
+
+  - id: data.relational
+    label: Relational Databases
+    keywords:
+      - postgresql
+      - postgres
+      - citus
+      - mysql
+      - amazon rds
+      - relational database service
+      - amazon aurora
+      - aurora serverless
+      - aurora dsql
+      - sqlite
+      - libsql
+      - turso
+      - litestream
+      - relational database
+    regex: ['(?i)\bRDS\b']
+    priority: 45
+    context_required: true
+    context_terms: [aws, amazon, database, postgres, mysql, aurora, sql, relational]
+
+  - id: data.document
+    label: Document & KV Stores
+    keywords:
+      - dynamodb
+      - dynamo db
+      - mongodb
+      - couchdb
+      - document database
+      - key-value store
+      - nosql
+    priority: 45
+
+  - id: data.streaming
+    label: Event Streaming
+    keywords:
+      - kafka
+      - pulsar
+      - eventbridge
+      - event bridge
+      - event streaming
+      - message queue
+      - rabbitmq
+      - nats
+      - kinesis
+    priority: 45
+
+  - id: data.analytics
+    label: Data Analytics & Warehousing
+    keywords:
+      - data pipeline
+      - etl
+      - elt
+      - data lake
+      - data warehouse
+      - dbt
+      - snowflake
+      - databricks
+      - lakehouse
+      - data engineering
     priority: 40
 
-  # --- Programming Languages & Frameworks ---
-  - id: lang.typescript
-    label: TypeScript
-    keywords: [typescript, ts, tsc, type system]
+  - id: data.vector
+    label: Vector & Embedding Stores
+    keywords:
+      - embedding
+      - vector database
+      - vector store
+      - pinecone
+      - weaviate
+      - chromadb
+      - pgvector
+      - qdrant
+      - milvus
+    priority: 50
+
+  - id: data.caching
+    label: Caching & In-Memory
+    keywords:
+      - redis
+      - valkey
+      - dragonfly
+      - keydb
+      - memcached
+      - in-memory cache
+    priority: 40
+
+  - id: data.governance
+    label: Data Governance
+    keywords:
+      - data governance
+      - data quality
+      - data lineage
+      - data catalog
+      - data mesh
+      - data contract
+    priority: 40
+
+  # =========================================================================
+  # devex — Developer Experience & Operations
+  # Decisions: Build vs buy, operational model
+  # =========================================================================
+
+  - id: devex.cicd
+    label: CI/CD & Deployment
+    keywords:
+      - ci/cd
+      - cicd
+      - github actions
+      - gitlab ci
+      - jenkins
+      - argo cd
+      - flux
+      - deployment pipeline
     priority: 35
+
+  - id: devex.observability
+    label: Observability
+    keywords:
+      - observability
+      - opentelemetry
+      - otel
+      - datadog
+      - grafana
+      - prometheus
+      - tracing
+      - metrics
+    priority: 40
+
+  - id: devex.platform
+    label: Platform Engineering
+    keywords:
+      - platform engineering
+      - internal developer platform
+      - idp
+      - developer experience
+      - backstage
+      - developer portal
+    priority: 40
+
+  - id: devex.testing
+    label: Testing & Quality
+    keywords:
+      - test framework
+      - mutation testing
+      - test generation
+      - test coverage
+      - property-based testing
+      - fuzzing
+      - unit test
+      - integration test
+      - test automation
+      - test strategy
+      - test-driven
+      - tdd
+      - code coverage
+      - regression test
+      - end-to-end test
+      - e2e test
+      - test pyramid
+    priority: 35
+
+  - id: devex.api
+    label: API Design & Protocols
+    keywords:
+      - graphql
+      - grpc
+      - openapi
+      - rest api
+      - api design
+      - api gateway
+      - api versioning
+      - protobuf
+    priority: 40
+
+  - id: devex.cost
+    label: Cloud Cost & FinOps
+    keywords:
+      - finops
+      - cloud cost
+      - cost optimization
+      - cloud spending
+      - reserved instances
+      - spot instances
+    priority: 35
+
+  # =========================================================================
+  # lang — Languages & Runtimes
+  # Decisions: Stack selection, dependency governance
+  # =========================================================================
+
+  - id: lang.typescript
+    label: TypeScript & JS Runtimes
+    keywords:
+      - typescript
+      - tsc
+      - type system
+      - node.js
+      - nodejs
+      - npm
+      - deno
+    regex: ['(?i)\bbun\b']
+    priority: 35
+    context_required: true
+    context_terms: [typescript, javascript, node, runtime, compiler, frontend, web, react, package, npm, js, ecmascript]
 
   - id: lang.rust
     label: Rust
-    keywords: [rust, cargo, rustc, borrow checker]
+    keywords:
+      - rust
+      - cargo
+      - rustc
+      - borrow checker
     regex: ['(?i)\brust\b']
     priority: 35
     context_required: true
@@ -272,143 +586,386 @@ topics:
 
   - id: lang.python
     label: Python
-    keywords: [python, pip, pypi, cpython, pep]
+    keywords:
+      - python
+      - pip
+      - pypi
+      - cpython
+      - pep
+      - uv
     priority: 35
 
   - id: lang.go
     label: Go
-    keywords: [golang, go module, go 1.]
+    keywords:
+      - golang
+      - go module
+      - go 1.
+      - go generics
+      - goroutine
+      - go compiler
+      - go runtime
+      - go release
+      - go package
+      - go concurrency
+      - gopher
     priority: 35
 
-  - id: framework.react
-    label: React
-    keywords: [react, reactjs, next.js, nextjs, jsx, tsx]
+  - id: lang.java
+    label: Java & JVM
+    keywords:
+      - java
+      - jvm
+      - kotlin
+      - graalvm
+      - spring boot
+      - quarkus
+      - gradle
+      - maven
     priority: 35
+    context_required: true
+    context_terms: [programming, language, jvm, spring, enterprise, backend, runtime, compile]
 
-  - id: framework.node
-    label: Node.js
-    keywords: [node.js, nodejs, npm, deno, bun]
+  - id: lang.wasm
+    label: WebAssembly
+    keywords:
+      - webassembly
+      - wasm
+      - wasi
+      - component model
+    regex: ['(?i)\bWASM\b']
     priority: 35
+    context_required: true
+    context_terms: [web, assembly, runtime, browser, component, module, portable]
 
-  # --- Databases ---
-  - id: db.postgres
-    label: PostgreSQL
-    keywords: [postgresql, postgres, pgvector, citus]
-    priority: 40
+  # =========================================================================
+  # arch — Architecture Patterns
+  # Decisions: Architecture evolution
+  # =========================================================================
 
-  - id: db.sqlite
-    label: SQLite
-    keywords: [sqlite, libsql, turso, litestream]
-    priority: 40
+  - id: arch.microservices
+    label: Microservices & Boundaries
+    keywords:
+      - microservices
+      - monolith
+      - modular monolith
+      - domain-driven
+      - bounded context
+      - service boundary
+    priority: 45
 
-  - id: db.redis
-    label: Redis
-    keywords: [redis, valkey, dragonfly, keydb]
-    priority: 35
-
-  # --- Business & Finance ---
-  - id: biz.cloud_revenue
-    label: Cloud Revenue
-    keywords: [cloud revenue, aws revenue, azure revenue, gcp revenue, cloud growth, cloud segment]
-    priority: 50
-
-  - id: biz.ai_spend
-    label: AI Investment
-    keywords: [ai spending, ai investment, ai capex, data center spending, data center capex, ai revenue]
-    priority: 50
-
-  - id: biz.guidance
-    label: Earnings Guidance
-    keywords: [guidance, outlook, raised guidance, lowered guidance, forward guidance, full-year outlook]
+  - id: arch.event-driven
+    label: Event-Driven Architecture
+    keywords:
+      - event-driven
+      - event sourcing
+      - cqrs
+      - saga
+      - choreography
+      - orchestration
+      - step functions
+      - stepfunctions
+      - state machine
+      - workflow engine
     priority: 45
     context_required: true
-    context_terms: [earnings, revenue, quarter, fiscal, expects, forecast]
+    context_terms: [architecture, pattern, event, message, workflow, aws, amazon, orchestrat]
 
-  - id: biz.sec_filing
-    label: SEC Filings
-    keywords: [sec filing, 10-k, 10-q, 8-k, annual report, quarterly report]
-    priority: 45
-
-  - id: biz.earnings
-    label: Earnings
-    keywords: [earnings, revenue, quarterly results, financial results, guidance]
+  - id: arch.reliability
+    label: Reliability & SRE
+    keywords:
+      - sre
+      - site reliability
+      - incident
+      - postmortem
+      - slo
+      - sli
+      - error budget
+      - chaos engineering
     priority: 40
 
-  - id: biz.acquisition
-    label: M&A
-    keywords: [acquisition, merger, acqui-hire, acquired by, buys]
-    priority: 55
-
-  - id: biz.funding
-    label: Funding
-    keywords: [series a, series b, series c, seed round, funding round, raised, valuation]
-    priority: 45
-
-  - id: biz.ipo
-    label: IPO
-    keywords: [ipo, initial public offering, s-1, direct listing, spac]
-    priority: 55
-
-  - id: biz.layoff
-    label: Layoffs
-    keywords: [layoff, laid off, workforce reduction, rif, restructuring]
-    priority: 60
-
-  # --- Open Source ---
-  - id: oss.release
-    label: Software Releases
-    keywords: [release, version, changelog, breaking change, migration guide]
-    priority: 25
-
-  - id: oss.license
-    label: Open Source Licensing
-    keywords: [open source license, bsl, sspl, relicense, source-available, copyleft]
-    priority: 50
-
-  # --- Architecture & Engineering Practices ---
-  - id: eng.architecture
-    label: Software Architecture
-    keywords: [microservices, monolith, event-driven, cqrs, saga, domain-driven]
-    priority: 30
-
-  - id: eng.platform
-    label: Platform Engineering
-    keywords: [platform engineering, internal developer platform, idp, developer experience, backstage]
+  - id: arch.frontend
+    label: Frontend Architecture
+    keywords:
+      - react
+      - reactjs
+      - next.js
+      - nextjs
+      - jsx
+      - tsx
+      - server components
+      - ssr
+      - static site
+      - svelte
+      - vue
+      - frontend architecture
     priority: 40
 
-  - id: eng.sre
-    label: SRE & Reliability
-    keywords: [sre, site reliability, incident, postmortem, slo, sli, error budget]
+  - id: arch.migration
+    label: Migration & Modernization
+    keywords:
+      - modernization
+      - replatforming
+      - monolith-to-microservices
+      - legacy migration
+      - cloud migration
+      - strangler fig
+      - evolutionary architecture
+      - technical debt
+      - legacy system
+      - system migration
+      - migration strategy
+      - migration pattern
+      - platform migration
+      - database migration
+      - application modernization
     priority: 40
 
-  - id: eng.data
-    label: Data Engineering
-    keywords: [data pipeline, etl, elt, data lake, data warehouse, dbt, snowflake, databricks]
-    priority: 35
+  # =========================================================================
+  # regulation — Compliance & Regulation
+  # Decisions: Compliance & regulation
+  # =========================================================================
 
-  # --- Hardware & Compute ---
-  - id: hw.gpu
-    label: GPU & Accelerators
-    keywords: [gpu, nvidia, cuda, h100, a100, tpu, trainium, inferentia]
-    priority: 45
-
-  - id: hw.chip
-    label: Semiconductors
-    keywords: [semiconductor, chip, fab, tsmc, asml, arm, risc-v]
-    priority: 40
-
-  # --- Regulation & Policy ---
-  - id: policy.ai_regulation
+  - id: regulation.ai
     label: AI Regulation
-    keywords: [ai regulation, ai act, executive order, ai governance, eu ai act]
+    keywords:
+      - ai regulation
+      - ai act
+      - executive order
+      - ai governance
+      - eu ai act
     priority: 55
 
-  - id: policy.privacy
-    label: Privacy & Data
-    keywords: [gdpr, ccpa, data protection, privacy, consent, right to be forgotten]
-    priority: 40
+  - id: regulation.privacy
+    label: Privacy & Data Protection
+    keywords:
+      - gdpr
+      - ccpa
+      - data protection
+      - privacy
+      - consent
+      - right to be forgotten
+    priority: 45
 
-  - id: policy.antitrust
-    label: Antitrust
-    keywords: [antitrust, monopoly, doj, ftc, competition, market dominance]
+  - id: regulation.antitrust
+    label: Antitrust & Competition
+    keywords:
+      - antitrust
+      - monopoly
+      - doj
+      - ftc
+      - competition
+      - market dominance
     priority: 50
+
+  - id: regulation.standards
+    label: Industry Standards
+    keywords:
+      - soc2
+      - soc 2
+      - iso 27001
+      - compliance automation
+      - fedramp
+      - hipaa
+      - pci dss
+      - nist 800
+      - fisma
+      - cmmc
+      - stateramp
+      - authority to operate
+      - compliance framework
+    priority: 45
+
+  # =========================================================================
+  # market — Market & Business Intelligence
+  # Decisions: Market position, build vs buy
+  # =========================================================================
+
+  - id: market.funding
+    label: Startup Funding
+    keywords:
+      - series a
+      - series b
+      - series c
+      - seed round
+      - funding round
+      - raised
+      - valuation
+    priority: 45
+
+  - id: market.acquisition
+    label: M&A Activity
+    keywords:
+      - acquisition
+      - merger
+      - acqui-hire
+      - acquired by
+      - buys
+    priority: 55
+
+  - id: market.earnings
+    label: Earnings & Revenue
+    keywords:
+      - earnings
+      - revenue
+      - quarterly results
+      - financial results
+      - guidance
+      - cloud revenue
+      - aws revenue
+      - azure revenue
+      - gcp revenue
+      - cloud growth
+      - cloud segment
+      - sec filing
+      - 10-k
+      - 10-q
+      - 8-k
+      - annual report
+      - quarterly report
+      - outlook
+      - raised guidance
+      - lowered guidance
+      - forward guidance
+      - full-year outlook
+    priority: 45
+    context_required: true
+    context_terms: [earnings, revenue, quarter, fiscal, expects, forecast, financial, profit]
+
+  - id: market.talent
+    label: Talent & Workforce
+    keywords:
+      - hiring
+      - talent
+      - workforce
+      - layoff
+      - laid off
+      - workforce reduction
+      - rif
+      - restructuring
+      - developer survey
+    priority: 50
+
+  - id: market.licensing
+    label: Open Source Licensing
+    keywords:
+      - open source license
+      - bsl
+      - sspl
+      - relicense
+      - source-available
+      - copyleft
+      - open source initiative
+      - open source definition
+      - software license
+      - license compliance
+      - open source governance
+      - gpl
+      - apache license
+      - mit license
+      - license change
+      - licensing model
+    priority: 50
+
+  - id: market.investment
+    label: Technology Investment
+    keywords:
+      - ai spending
+      - ai investment
+      - ai capex
+      - data center spending
+      - data center capex
+      - ai revenue
+      - technology investment
+      - capex
+    priority: 50
+
+  - id: market.ipo
+    label: IPOs & Public Markets
+    keywords:
+      - ipo
+      - initial public offering
+      - s-1
+      - direct listing
+      - spac
+    priority: 50
+
+  # =========================================================================
+  # macro — Macroeconomic & Geopolitical Environment
+  # Decisions: Supply chain risk, cost planning, dependency governance
+  # =========================================================================
+
+  - id: macro.energy
+    label: Energy & Oil Markets
+    keywords:
+      - oil price
+      - oil prices
+      - crude oil
+      - brent crude
+      - energy price
+      - energy prices
+      - energy cost
+      - energy costs
+      - natural gas price
+      - gasfield
+      - petroleum
+      - opec
+      - energy crisis
+      - energy market
+      - oil market
+      - fuel price
+      - electricity price
+      - energy transition
+      - refinery
+      - strait of hormuz
+      - oil exports
+      - oil drilling
+      - oil futures
+      - oil production
+      - barrel
+      - petrodollar
+    priority: 50
+
+  - id: macro.geopolitics
+    label: Geopolitical Conflicts & Trade
+    keywords:
+      - sanctions
+      - tariff
+      - tariffs
+      - trade war
+      - embargo
+      - geopolitical
+      - military conflict
+      - missile
+      - invasion
+      - ceasefire
+      - peace deal
+      - export controls
+      - export ban
+      - trade restriction
+    regex: ['(?i)\bwar\b']
+    priority: 50
+    context_required: true
+    context_terms: [iran, china, russia, ukraine, israel, taiwan, trade, military, conflict, sanctions, tariff, geopolit, attack, strikes, troops, nato, army, navy]
+
+  - id: macro.commodities
+    label: Commodities & Raw Materials
+    keywords:
+      - commodity prices
+      - rare earth
+      - rare earths
+      - helium supply
+      - helium shortage
+      - neon gas
+      - neon supply
+      - lithium supply
+      - cobalt supply
+      - supply shortage
+      - supply disruption
+      - chip shortage
+      - semiconductor shortage
+      - mineral supply
+      - critical minerals
+      - commodity market
+      - raw materials shortage
+    priority: 45

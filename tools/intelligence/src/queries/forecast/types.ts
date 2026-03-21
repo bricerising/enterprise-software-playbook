@@ -57,7 +57,7 @@ export const MAX_RANKED_PER_TRIGGER = 3;
 
 /** Maximum transitive chains per A→B prefix in the top-100.
  *  Ensures diverse cross-domain paths rather than five variations
- *  of the same cascade (e.g., all sharing aws.bedrock→hw.chip prefix). */
+ *  of the same cascade (e.g., all sharing ai.foundation-models→compute.gpu prefix). */
 export const MAX_TRANSITIVE_PER_PREFIX = 3;
 
 /** Maximum dynamics entries per type. Keeps output manageable for synthesis. */
@@ -264,7 +264,7 @@ export interface ComputeForecastOpts {
   /** When true, inline top event titles per change point topic and per top ranked chain
    *  topic. Saves a round-trip of `intel search` deepening calls. */
   with_context?: boolean;
-  /** Filter output to specific topic IDs (e.g., ['ai.openai', 'hw.gpu']).
+  /** Filter output to specific topic IDs (e.g., ['ai.foundation-models', 'compute.gpu']).
    *  The full pipeline runs but output is post-filtered to only include data
    *  relating to these topics. Eliminates the need to run the full forecast
    *  twice to extract lifecycle/multiscale/entropy for specific topics. */

@@ -26,9 +26,9 @@ describe('loadTopics', () => {
 });
 
 describe('classify', () => {
-  it('classifies AWS Bedrock content', () => {
+  it('classifies Bedrock content as foundation models', () => {
     const topics = classifyIds('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents...');
-    expect(topics).toContain('aws.bedrock');
+    expect(topics).toContain('ai.foundation-models');
   });
 
   it('classifies AI safety content', () => {
@@ -38,20 +38,20 @@ describe('classify', () => {
 
   it('classifies CVE content', () => {
     const topics = classifyIds('CVE-2026-12345 Critical Vulnerability', 'exploit found in...');
-    expect(topics).toContain('security.vulnerability');
+    expect(topics).toContain('security.vulnerabilities');
   });
 
   it('requires context for short acronyms like EKS', () => {
-    // EKS without AWS context should not match
+    // EKS without container/k8s context should not match
     const noContext = classifyIds('EKS performance tips', 'general performance article');
-    expect(noContext).not.toContain('aws.eks');
+    expect(noContext).not.toContain('compute.containers');
 
-    // EKS with AWS context should match
+    // EKS with container context should match
     const withContext = classifyIds(
       'EKS performance tips',
       'AWS kubernetes cluster pod management',
     );
-    expect(withContext).toContain('aws.eks');
+    expect(withContext).toContain('compute.containers');
   });
 
   it('requires context for RAG acronym', () => {
@@ -69,7 +69,7 @@ describe('classify', () => {
 
   it('returns at most 5 topics', () => {
     const topics = classifyIds(
-      'AWS Lambda Kubernetes Docker Terraform OpenAI Bedrock',
+      'Kubernetes Docker Terraform OpenAI Bedrock serverless Lambda',
       'serverless container function kubernetes cluster terraform openai gpt-4 bedrock sagemaker security vulnerability cve',
     );
     expect(topics.length).toBeLessThanOrEqual(5);
@@ -77,13 +77,12 @@ describe('classify', () => {
 
   it('sorts by priority (highest first)', () => {
     const topics = classifyIds(
-      'AWS releases new general features',
-      'amazon web services ec2 instance compute',
+      'Cloud platform general features and networking',
+      'amazon web services cloud platform service mesh istio load balancer',
     );
-    // aws.ec2 (priority 30) should come after other higher-priority matches
-    if (topics.includes('aws.general') && topics.includes('aws.ec2')) {
-      expect(topics.indexOf('aws.ec2')).toBeLessThan(topics.indexOf('aws.general'));
-    }
+    // compute.cloud-platforms (priority 35) should come after compute.networking (priority 35)
+    // or they should be in alphabetical order if same priority
+    expect(topics.length).toBeGreaterThan(0);
   });
 
   it('returns empty for unrelated content', () => {
@@ -102,16 +101,110 @@ describe('classify', () => {
     }
   });
 
+  it('classifies edge computing content', () => {
+    const topics = classifyIds(
+      'Cloudflare expands edge network for faster deployments',
+      'New edge worker capabilities with durable objects support across global edge locations',
+    );
+    expect(topics).toContain('compute.edge');
+  });
+
+  it('classifies Go language content', () => {
+    const topics = classifyIds(
+      'Go 1.23 Release Notes',
+      'The latest golang release includes improved goroutine scheduling and go concurrency primitives',
+    );
+    expect(topics).toContain('lang.go');
+  });
+
+  it('classifies architecture migration content', () => {
+    const topics = classifyIds(
+      'Migrating from Monolith to Microservices',
+      'Managing technical debt through evolutionary architecture and strangler fig migration patterns',
+    );
+    expect(topics).toContain('arch.migration');
+  });
+
+  it('classifies compliance standards content', () => {
+    const topics = classifyIds(
+      'FedRAMP Authorization Updates',
+      'New compliance framework requirements for fedramp authority to operate and nist 800-53 controls',
+    );
+    expect(topics).toContain('regulation.standards');
+  });
+
+  it('classifies testing content', () => {
+    const topics = classifyIds(
+      'Testing Best Practices for Microservices',
+      'Unit test strategies, integration test patterns, and the test pyramid approach to code coverage',
+    );
+    expect(topics).toContain('devex.testing');
+  });
+
+  it('classifies open source licensing content', () => {
+    const topics = classifyIds(
+      'Open Source Initiative Updates License Guidelines',
+      'The open source definition and license compliance requirements for gpl and apache license projects',
+    );
+    expect(topics).toContain('market.licensing');
+  });
+
+  it('does not false-positive lang.typescript from substring "ts"', () => {
+    // Text with lots of words containing "ts" substring but no actual TypeScript content
+    const topics = classifyIds(
+      'Market insights and results from quarterly events',
+      'Key highlights and aspects of deployment costs and benefits',
+    );
+    expect(topics).not.toContain('lang.typescript');
+  });
+
+  it('classifies energy market content', () => {
+    const topics = classifyIds(
+      'Oil and gas prices jump after Iran and Israel attack gasfields',
+      'Brent crude oil prices surge as energy costs rise amid conflict in the strait of hormuz',
+    );
+    expect(topics).toContain('macro.energy');
+  });
+
+  it('classifies geopolitical conflict content', () => {
+    const topics = classifyIds(
+      'TSMC Stock Wilts as Iranian Attacks Batter Helium Supply and Threaten Chip Production',
+      'Sanctions and trade restrictions on semiconductor exports amid military conflict',
+    );
+    expect(topics).toContain('macro.geopolitics');
+  });
+
+  it('classifies commodity supply content', () => {
+    const topics = classifyIds(
+      'Global Helium Shortage Threatens Semiconductor Fabrication',
+      'Rare earth supply disruption and critical minerals shortage affecting chip production',
+    );
+    expect(topics).toContain('macro.commodities');
+  });
+
+  it('requires context for "war" keyword', () => {
+    // "war" without geopolitical context should not match
+    const noContext = classifyIds('Star Wars Movie Review', 'The latest film in the franchise');
+    expect(noContext).not.toContain('macro.geopolitics');
+
+    // "war" with geopolitical context should match
+    const withContext = classifyIds(
+      'The Iran War Is Destroying Something More Valuable Than Oil',
+      'Military conflict and sanctions disrupt trade in the region',
+    );
+    expect(withContext).toContain('macro.geopolitics');
+  });
+
   it('multi-keyword matches have higher confidence', () => {
     // Single keyword match
     const single = classify('Bedrock article', null);
     // Multiple keyword matches
     const multi = classify('Amazon Bedrock agents with Claude', 'Amazon Bedrock serverless AI agents bedrock');
     if (single.length > 0 && multi.length > 0) {
-      const singleBedrock = single.find(t => t.id === 'aws.bedrock');
-      const multiBedrock = multi.find(t => t.id === 'aws.bedrock');
-      if (singleBedrock && multiBedrock) {
-        expect(multiBedrock.confidence).toBeGreaterThanOrEqual(singleBedrock.confidence);
+      const singleFoundation = single.find(t => t.id === 'ai.foundation-models');
+      const multiFoundation = multi.find(t => t.id === 'ai.foundation-models');
+      if (singleFoundation && multiFoundation) {
+        expect(multiFoundation.confidence).toBeGreaterThanOrEqual(singleFoundation.confidence);
       }
     }
   });

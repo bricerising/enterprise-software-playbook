@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { formatISO } from './util/time.js';
+import { classify, loadTopics } from './collector/topic-classifier.js';
 
 export interface CheckpointResult {
   busy: boolean;
@@ -148,6 +149,59 @@ export function rebuildTopicIndex(db: Database.Database, batchSize = 1000): numb
   }
 
   return total;
+}
+
+/**
+ * Reclassify all events through the current topic classifier.
+ * Updates both events.topics JSON and event_topics table.
+ */
+export function reclassifyTopics(db: Database.Database, batchSize = 500): { events_processed: number; topic_rows: number } {
+  loadTopics(undefined, db);
+
+  db.exec('DELETE FROM event_topics');
+
+  let eventsProcessed = 0;
+  let topicRows = 0;
+  let offset = 0;
+
+  const selectStmt = db.prepare(`
+    SELECT event_id, title, content FROM events
+    LIMIT ? OFFSET ?
+  `);
+  const updateStmt = db.prepare(
+    'UPDATE events SET topics = ? WHERE event_id = ?',
+  );
+  const insertStmt = db.prepare(
+    'INSERT OR IGNORE INTO event_topics (event_id, topic, confidence) VALUES (?, ?, ?)',
+  );
+
+  while (true) {
+    const rows = selectStmt.all(batchSize, offset) as Array<{
+      event_id: string;
+      title: string;
+      content: string | null;
+    }>;
+    if (rows.length === 0) break;
+
+    const batch = db.transaction(() => {
+      for (const row of rows) {
+        const classified = classify(row.title, row.content);
+        const topicIds = classified.map((t) => t.id);
+        updateStmt.run(JSON.stringify(topicIds), row.event_id);
+        for (const t of classified) {
+          insertStmt.run(row.event_id, t.id, t.confidence);
+          topicRows++;
+        }
+        eventsProcessed++;
+      }
+    });
+    batch();
+
+    offset += batchSize;
+    if (rows.length < batchSize) break;
+  }
+
+  return { events_processed: eventsProcessed, topic_rows: topicRows };
 }
 
 /**

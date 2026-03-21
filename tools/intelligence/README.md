@@ -101,7 +101,7 @@ intel search "CVE-2026" --since 7d
 intel search "kubernetes" --source rss
 
 # Events — browse by topic, source, or time
-intel events --topic aws.bedrock --since 7d
+intel events --topic ai.foundation-models --since 7d
 intel events --source hackernews
 intel events --id rss:aws-blog:abc123    # full content for one event
 
