@@ -25,11 +25,6 @@ const FeedSchema = z.discriminatedUnion('source', [
     max_items: z.number().positive().optional().default(100),
   }),
   z.object({
-    source: z.literal('lobsters'),
-    name: z.string(),
-    poll_interval: z.number().positive().optional(),
-  }),
-  z.object({
     source: z.literal('edgar'),
     name: z.string(),
     form_types: z.array(z.string()).optional().default(['8-K', '10-K', '10-Q']),

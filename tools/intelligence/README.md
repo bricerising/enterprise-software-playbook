@@ -1,6 +1,6 @@
 # intel
 
-`intel` is a lightweight intelligence collector and query tool backed by SQLite. It continuously polls curated sources (RSS, Hacker News, Lobsters, SEC EDGAR), classifies events into ~100 topics, and exposes the data via CLI commands and MCP tools for agent integration.
+`intel` is a lightweight intelligence collector and query tool backed by SQLite. It continuously polls curated sources (RSS, Hacker News, SEC EDGAR), classifies events into ~100 topics, and exposes the data via CLI commands and MCP tools for agent integration.
 
 > **Part of [enterprise-software-playbook](../../README.md).**
 > This tool is the implementation behind the [`intel` skill](../../skills/intel/SKILL.md).
@@ -8,7 +8,7 @@
 
 ## What it does
 
-- **Collects** events from RSS/Atom feeds, Hacker News, Lobsters, and SEC EDGAR filings
+- **Collects** events from RSS/Atom feeds, Hacker News, and SEC EDGAR filings
 - **Classifies** each event into topics using keyword/regex matching with priority resolution
 - **Extracts** article content via Mozilla Readability for richer search and classification
 - **Deduplicates** across sources using canonical URL normalization

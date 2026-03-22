@@ -3,7 +3,6 @@ import type { FeedConfig, IntelConfig } from '../config.js';
 import type { RawEvent, SourceAdapter } from './adapters/types.js';
 import { RssAdapter } from './adapters/rss.js';
 import { HackerNewsAdapter } from './adapters/hackernews.js';
-import { LobstersAdapter } from './adapters/lobsters.js';
 import { EdgarAdapter } from './adapters/edgar.js';
 import { EarningsAdapter } from './adapters/earnings.js';
 import { classify, loadTopics, type ClassifiedTopic } from './topic-classifier.js';
@@ -55,8 +54,6 @@ function createAdapter(feed: FeedConfig, config: IntelConfig, db: Database.Datab
         modes: feed.modes,
         max_items: feed.max_items,
       });
-    case 'lobsters':
-      return new LobstersAdapter({ name: feed.name });
     case 'edgar':
       return new EdgarAdapter({
         name: feed.name,

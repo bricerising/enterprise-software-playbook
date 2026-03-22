@@ -118,7 +118,7 @@ These skills bias toward practices that make codebases easier for humans to oper
 
 - [`tools/archobs/`](tools/archobs/README.md) -- Architecture observability CLI: measures coupling, boundary health, risk hotspots, and drift. Install with `pip install -e 'tools/archobs[full]'`. Powers the [`archobs` skill](skills/archobs/SKILL.md).
 - **[Codanna](https://codanna.dev)** -- Companion CLI that generates semantic search embeddings, used by archobs for file similarity. Install with `brew install codanna` (macOS) or see the [archobs README](tools/archobs/README.md).
-- [`tools/intelligence/`](tools/intelligence/README.md) -- Intelligence collector and query CLI (`intel`): polls RSS, Hacker News, Lobsters, and SEC EDGAR feeds; stores events in SQLite; exposes trends/search/events via CLI and MCP tools. Install with `cd tools/intelligence && npm install && npm run build && npm link`. Powers the [`intel` skill](skills/intel/SKILL.md).
+- [`tools/intelligence/`](tools/intelligence/README.md) -- Intelligence collector and query CLI (`intel`): polls RSS, Hacker News, and SEC EDGAR feeds; stores events in SQLite; exposes trends/search/events via CLI and MCP tools. Install with `cd tools/intelligence && npm install && npm run build && npm link`. Powers the [`intel` skill](skills/intel/SKILL.md).
 
 ## Docs
 

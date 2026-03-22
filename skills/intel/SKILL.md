@@ -1,6 +1,6 @@
 ---
 name: intel
-description: "Gather and shape intelligence signals from collected feeds (RSS, HackerNews, Lobsters, EDGAR) into audience-aware output. Use when you need current context on a technology, industry trend, or domain — or when you need to present signals to a specific audience. NOT for forward-looking predictions (use forecast); NOT for architecture analysis (use archobs); NOT for writing specs (use spec)."
+description: "Gather and shape intelligence signals from collected feeds (RSS, HackerNews, EDGAR) into audience-aware output. Use when you need current context on a technology, industry trend, or domain — or when you need to present signals to a specific audience. NOT for forward-looking predictions (use forecast); NOT for architecture analysis (use archobs); NOT for writing specs (use spec)."
 metadata: {"stage":"Define","tags":["intelligence","trends","signals","research","briefing","news","feeds","evidence","audience","executive","engineering","decision","digest","synthesis","presentation","stakeholder"],"aliases":["intel","intelligence","signals","executive-brief","daily-digest","decision-brief"]}
 ---
 
@@ -8,7 +8,7 @@ metadata: {"stage":"Define","tags":["intelligence","trends","signals","research"
 
 ## Overview
 
-Produce focused intelligence briefs on a topic by querying the `intel` CLI against locally collected feeds (RSS, HackerNews, Lobsters, EDGAR). Briefs combine trending signals, full-text search hits, and topic breakdowns into a concise, evidence-backed summary an agent or human can act on.
+Produce focused intelligence briefs on a topic by querying the `intel` CLI against locally collected feeds (RSS, HackerNews, EDGAR). Briefs combine trending signals, full-text search hits, and topic breakdowns into a concise, evidence-backed summary an agent or human can act on.
 
 Use this skill when you need current signal on a technology, vendor, standard, or industry trend — or when you need to present signals to a specific audience.
 
