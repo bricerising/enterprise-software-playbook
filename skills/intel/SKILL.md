@@ -153,7 +153,21 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
    intel events --id <event_id>
    ```
 
-6. **Filter and rank** — select the top signals by relevance to the audience:
+6. **Record decisions** (optional) — when signals inform a decision, record it in the journal for cross-session memory:
+   ```bash
+   intel journal add --context "Evaluating queue options after SQS outage signals" \
+     --decision "Stay with SQS, add DLQ" \
+     --rationale "Outage was regional, DLQ covers failure mode" \
+     --tags "infrastructure,messaging"
+   ```
+
+   Review past decisions:
+   ```bash
+   intel journal list --since 30d --tag "infrastructure"
+   intel journal search "SQS"
+   ```
+
+7. **Filter and rank** — select the top signals by relevance to the audience:
    - Practitioner: prioritize signal strength and relevance to stated topic
    - Executive: prioritize business impact, risk, competitive signals
    - Engineering: prioritize stack relevance, deprecations, security advisories
@@ -161,9 +175,9 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
    - Daily digest: prioritize breadth and recency
    - Architecture decision: prioritize signals that affect boundary/technology choices
 
-7. **Synthesize the brief** using the output template for the chosen audience (see below). Do not mix templates.
+8. **Synthesize the brief** using the output template for the chosen audience (see below). Do not mix templates.
 
-8. **Flag gaps** — note stale sources, missing coverage, low-confidence signals.
+9. **Flag gaps** — note stale sources, missing coverage, low-confidence signals.
 
 ## Guardrails
 
@@ -228,6 +242,27 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
 - **Options matrix**: each option scored against structural + ecosystem evidence
 - **Recommendation**: selected option with confidence level
 - **Next skill**: `plan` or `spec`
+
+## Command Reference: Decision Journal
+
+The decision journal closes the signal-to-decision loop. Record decisions alongside the signals that informed them for cross-session memory.
+
+```bash
+# Record a decision
+intel journal add --context "..." --decision "..." [--rationale "..."] [--tags "a,b"] [--refs '[{"type":"event","id":"rss:test:1"}]']
+
+# List recent decisions
+intel journal list [--since 7d] [--tag "..."] [--limit 20] [--cursor ...]
+
+# Search decisions
+intel journal search <query> [--since 7d] [--limit 20]
+```
+
+- **context**: What situation prompted the decision
+- **decision**: What was decided
+- **rationale**: Why this option was chosen (optional)
+- **tags**: Comma-separated freeform tags for filtering
+- **refs**: JSON array of signal references linking to events or topics
 
 ## References
 

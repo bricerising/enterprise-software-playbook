@@ -445,6 +445,24 @@ def show_hot_files(
     _write_or_print(text, out_path)
 
 
+@show_app.command("team")
+def show_team(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    sort: str = typer.Option("bus_factor", "--sort", help="Sort column: bus_factor, concentration, size."),
+    min_size: int = typer.Option(2, help="Minimum cluster size."),
+    fmt: str = typer.Option("table", "--format", help="Output format: table, json, csv."),
+    out_path: Path | None = typer.Option(None, "--out-file", resolve_path=True, help="Write output to file."),
+) -> None:
+    """Show team analysis: bus factor, knowledge concentration per cluster."""
+    from archobs.display import format_team, read_bus_factor, read_cluster_metrics, read_concentration
+
+    bus_factor_df = read_bus_factor(out)
+    concentration_df = read_concentration(out)
+    cluster_metrics_df = read_cluster_metrics(out)
+    text = format_team(bus_factor_df, concentration_df, cluster_metrics_df, sort_by=sort, min_size=min_size, fmt=fmt)
+    _write_or_print(text, out_path)
+
+
 @show_app.command("all")
 def show_all(
     out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
@@ -462,6 +480,62 @@ def show_all(
         top_clusters = top_clusters if top_clusters is not None else 10
     text = format_all(out, top=top, top_risks=top_risks, top_clusters=top_clusters, fmt=fmt, compact=compact)
     _write_or_print(text, out_path)
+
+
+@app.command()
+def check(
+    out: Path = typer.Option(Path(".archobs"), resolve_path=True, help="Artifact directory."),
+    max_file_risk: float = typer.Option(0.8, help="Max file risk score."),
+    max_leakage: float = typer.Option(0.6, help="Max cluster leakage."),
+    min_cohesion: float = typer.Option(0.4, help="Min cluster cohesion."),
+    max_risk_mean: float = typer.Option(0.5, help="Max cluster risk mean."),
+    min_bus_factor: int = typer.Option(2, help="Min bus factor."),
+    min_cluster_size: int = typer.Option(2, help="Min cluster size for cluster-level checks."),
+    fmt: str = typer.Option("table", "--format", help="Output format: json, table."),
+    ci: bool = typer.Option(False, "--ci", help="CI mode: JSON output, exit code 0/1."),
+) -> None:
+    """Evaluate architecture fitness against configurable thresholds."""
+    import json as _json
+
+    from archobs.fitness import Thresholds, evaluate_fitness
+
+    thresholds = Thresholds(
+        max_file_risk=max_file_risk,
+        max_leakage=max_leakage,
+        min_cohesion=min_cohesion,
+        max_risk_mean=max_risk_mean,
+        min_bus_factor=min_bus_factor,
+        min_cluster_size=min_cluster_size,
+    )
+
+    try:
+        result = evaluate_fitness(out, thresholds)
+    except FileNotFoundError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    output_fmt = "json" if ci else fmt
+
+    if output_fmt == "json":
+        print(_json.dumps(result, indent=2))
+    else:
+        # Table output
+        passed = result["pass"]
+        total = result["total_violations"]
+        typer.echo(f"{'PASS' if passed else 'FAIL'}: {total} violation(s)")
+        if result.get("warnings"):
+            for w in result["warnings"]:
+                typer.echo(f"  Warning: {w}")
+        if not passed:
+            typer.echo("")
+            for v in result["violations"]:
+                typer.echo(
+                    f"  [{v['category']}] {v['entity']}: "
+                    f"{v['metric']}={v['value']} (threshold: {v['threshold']})"
+                )
+
+    if not result["pass"]:
+        raise typer.Exit(code=1)
 
 
 @app.command()

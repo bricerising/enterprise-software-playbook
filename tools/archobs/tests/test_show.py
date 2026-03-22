@@ -17,6 +17,7 @@ from archobs.display import (
     format_risks,
     format_schema,
     format_summary,
+    format_team,
     format_velocity,
     read_cluster_metrics,
     read_drift,
@@ -773,3 +774,70 @@ def test_cli_show_all_split_top(tmp_path: Path):
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
     assert len(parsed["risks"]) <= 2
+
+
+# ---------------------------------------------------------------------------
+# Team show tests
+# ---------------------------------------------------------------------------
+
+def _make_team_artifacts(tmp_path: Path) -> None:
+    """Create bus_factor, concentration, and cluster_metrics parquet artifacts."""
+    bus_factor_df = pd.DataFrame({
+        "cluster_id": [0, 1, 2],
+        "bus_factor": [1, 3, 2],
+        "top_author": ["Alice", "Bob", "Carol"],
+        "top_author_pct": [1.0, 0.4, 0.6],
+    })
+    bus_factor_df.to_parquet(tmp_path / "bus_factor.parquet", index=False)
+
+    concentration_df = pd.DataFrame({
+        "cluster_id": [0, 1, 2],
+        "hhi": [1.0, 0.28, 0.52],
+        "author_count": [1, 4, 2],
+    })
+    concentration_df.to_parquet(tmp_path / "concentration.parquet", index=False)
+
+
+def test_format_team_table(tmp_path: Path):
+    _make_team_artifacts(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    from archobs.display import read_bus_factor, read_concentration, read_cluster_metrics as read_cm
+    bf = read_bus_factor(tmp_path)
+    conc = read_concentration(tmp_path)
+    cm = read_cm(tmp_path)
+    text = format_team(bf, conc, cm, fmt="table")
+    assert "bus_factor" in text or "Alice" in text
+
+
+def test_format_team_json(tmp_path: Path):
+    _make_team_artifacts(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    from archobs.display import read_bus_factor, read_concentration, read_cluster_metrics as read_cm
+    bf = read_bus_factor(tmp_path)
+    conc = read_concentration(tmp_path)
+    cm = read_cm(tmp_path)
+    text = format_team(bf, conc, cm, fmt="json")
+    records = json.loads(text)
+    assert len(records) >= 1
+    assert "bus_factor" in records[0]
+
+
+def test_format_team_csv(tmp_path: Path):
+    _make_team_artifacts(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    from archobs.display import read_bus_factor, read_concentration, read_cluster_metrics as read_cm
+    bf = read_bus_factor(tmp_path)
+    conc = read_concentration(tmp_path)
+    cm = read_cm(tmp_path)
+    text = format_team(bf, conc, cm, fmt="csv")
+    assert "bus_factor" in text
+    assert "cluster_id" in text
+
+
+def test_cli_show_team(tmp_path: Path):
+    _make_team_artifacts(tmp_path)
+    _make_cluster_metrics(tmp_path)
+    result = runner.invoke(app, ["show", "team", "--out", str(tmp_path), "--format", "json"])
+    assert result.exit_code == 0
+    records = json.loads(result.stdout)
+    assert len(records) >= 1
