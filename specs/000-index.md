@@ -26,6 +26,8 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/011-archobs-trajectory-feedback.md`](011-archobs-trajectory-feedback.md): Feedback-driven improvements — velocity compare, drift trend, monolith labels, trajectory fast path.
 - [`specs/012-skill-consolidation-and-cross-domain-integration.md`](012-skill-consolidation-and-cross-domain-integration.md): Merge trajectory→forecast and brief→intel; add cross-domain integration (archobs × forecast) to architecture, plan, design, and spec skills.
 - [`specs/013-topic-strategy.md`](013-topic-strategy.md): Topic strategy for the intelligence tool — SDLC decision framework, topic design principles, decision-relevant taxonomy (58 topics across 9 domains), classifier requirements, and topic lifecycle process.
+- [`specs/014-forecast-confidence-gates.md`](014-forecast-confidence-gates.md): Forecast confidence gates (amends spec 007) — lifecycle cold-start guard, chain confidence tiers, scenario score precision, and top-level data quality object. **Co-ships with spec 015; shared v2 schema version bump.**
+- [`specs/015-collection-quality-controls.md`](015-collection-quality-controls.md): Collection quality controls (amends spec 006) — RSS backfill cap, stats health metrics, and classifier coverage tracking. **Co-ships with spec 014; shared v2 schema version bump.**
 - [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)):
   - [`001`](decisions/001-workflow-stage-taxonomy.md): Workflow-stage taxonomy
   - [`002`](decisions/002-code-vs-system-pattern-terms.md): Code vs system pattern terms
