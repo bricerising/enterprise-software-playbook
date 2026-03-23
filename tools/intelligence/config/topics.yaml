@@ -47,18 +47,12 @@ topics:
       - llama 4
       - bedrock
       - amazon bedrock
-      - neural network
-      - deep learning
-      - transformer
-      - attention mechanism
-      - language model
       - diffusion model
       - generative ai
       - gen ai
-      - benchmark
-      - model architecture
-    regex: ['(?i)\bbedrock\b', '(?i)\bLLM\b']
     priority: 60
+    context_required: true
+    context_terms: [llm, gpt, claude, gemini, llama, bedrock, anthropic, openai, foundation, generative]
 
   - id: ai.coding-assistants
     label: AI Coding Assistants
@@ -72,6 +66,8 @@ topics:
       - cline
       - aider
     priority: 55
+    context_required: true
+    context_terms: [code, coding, programming, developer, ide, editor, copilot, cursor, autocomplete]
 
   - id: ai.agents
     label: AI Agents
@@ -90,7 +86,6 @@ topics:
       - retrieval augmented generation
       - rag pipeline
       - rag application
-    regex: ['(?i)\bRAG\b']
     priority: 55
     context_required: true
     context_terms: [retrieval, generation, embedding, vector, context, augment]
@@ -120,15 +115,13 @@ topics:
       - pretraining
       - sagemaker
       - sage maker
-      - dataset
       - training data
       - pre-training
       - model training
-      - gradient
-      - backpropagation
-      - loss function
       - hyperparameter
     priority: 55
+    context_required: true
+    context_terms: [training, fine-tuning, fine tuning, rlhf, dpo, pretrain, sagemaker, train, epoch]
 
   - id: ai.safety
     label: AI Safety & Alignment
@@ -156,9 +149,10 @@ topics:
       - object detection
       - image classification
       - image segmentation
-      - visual
       - video understanding
     priority: 55
+    context_required: true
+    context_terms: [multimodal, image, video, vision, diffusion, generation, speech]
 
   - id: ai.protocols
     label: AI Protocols & Interop
@@ -168,7 +162,6 @@ topics:
       - mcp tool
       - a2a protocol
       - agent protocol
-    regex: ['(?i)\bMCP\b']
     priority: 55
     context_required: true
     context_terms: [model, context, protocol, tool, server, anthropic, agent]
@@ -194,7 +187,6 @@ topics:
       - fermyon
       - wasmcloud
       - component model
-    regex: ['(?i)\blambda\b']
     priority: 40
     context_required: true
     context_terms: [aws, amazon, serverless, function, invoke, cold start, faas, edge, wasm, webassembly, component]
@@ -217,7 +209,6 @@ topics:
       - amazon eks
       - elastic kubernetes
       - fargate
-    regex: ['(?i)\bECS\b', '(?i)\bEKS\b']
     priority: 45
     context_required: true
     context_terms: [aws, amazon, container, fargate, task, kubernetes, k8s, cluster, pod, docker, orchestrat]
@@ -237,7 +228,6 @@ topics:
       - aws cdk
       - cloud development kit
       - infrastructure as code
-    regex: ['(?i)\bCDK\b']
     priority: 40
     context_required: true
     context_terms: [aws, amazon, construct, stack, infrastructure, terraform, iac, provision, opentofu, tofu]
@@ -286,6 +276,7 @@ topics:
 
   - id: compute.cloud-platforms
     label: Cloud Platforms
+    negative_keywords: [recipe, cookbook, bakery]
     keywords:
       - amazon web services
       - amazon s3
@@ -305,7 +296,6 @@ topics:
       - new feature
       - general availability
       - preview
-    regex: ['(?i)\bAWS\b', '(?i)\bS3\b', '(?i)\bEC2\b']
     priority: 35
     context_required: true
     context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp, service, release, update, launch]
@@ -340,13 +330,13 @@ topics:
       - security bulletin
       - security patch
       - remote code execution
-      - privilege escalation
       - denial of service
       - buffer overflow
       - use after free
       - out of bounds
-    regex: ['CVE-\\d{4}-\\d+', '(?i)\bRCE\b']
-    priority: 75
+    priority: 65
+    context_required: true
+    context_terms: [cve, vulnerability, exploit, security, patch, advisory, attack, zero-day, flaw, threat]
 
   - id: security.supply-chain
     label: Supply Chain Security
@@ -374,11 +364,12 @@ topics:
     label: Cloud Security
     keywords:
       - cloud security
-      - misconfiguration
       - data breach
       - iam vulnerability
       - privilege escalation
     priority: 60
+    context_required: true
+    context_terms: [cloud, aws, azure, gcp, iam, bucket, security, breach]
 
   - id: security.cryptography
     label: Cryptography
@@ -403,7 +394,6 @@ topics:
       - identity provider
       - aws iam
       - identity and access
-    regex: ['(?i)\bIAM\b']
     priority: 55
     context_required: true
     context_terms: [aws, amazon, role, policy, permission, identity, auth, access, login]
@@ -430,7 +420,6 @@ topics:
       - turso
       - litestream
       - relational database
-    regex: ['(?i)\bRDS\b']
     priority: 45
     context_required: true
     context_terms: [aws, amazon, database, postgres, mysql, aurora, sql, relational]
@@ -582,16 +571,13 @@ topics:
       - fuzzing
       - unit test
       - integration test
-      - test automation
-      - test strategy
-      - test-driven
       - tdd
-      - code coverage
-      - regression test
       - end-to-end test
       - e2e test
       - test pyramid
     priority: 35
+    context_required: true
+    context_terms: [test, testing, tdd, qa, quality, assertion, mock, spec]
 
   - id: devex.api
     label: API Design & Protocols
@@ -632,7 +618,6 @@ topics:
       - nodejs
       - npm
       - deno
-    regex: ['(?i)\bbun\b']
     priority: 35
     context_required: true
     context_terms: [typescript, javascript, node, runtime, compiler, frontend, web, react, package, npm, js, ecmascript]
@@ -644,7 +629,6 @@ topics:
       - cargo
       - rustc
       - borrow checker
-    regex: ['(?i)\brust\b']
     priority: 35
     context_required: true
     context_terms: [programming, language, cargo, crate, compile, memory]
@@ -698,7 +682,6 @@ topics:
       - wasm
       - wasi
       - component model
-    regex: ['(?i)\bWASM\b']
     priority: 35
     context_required: true
     context_terms: [web, assembly, runtime, browser, component, module, portable]
@@ -787,7 +770,6 @@ topics:
       - cloud migration
       - strangler fig
       - evolutionary architecture
-      - technical debt
       - legacy system
       - system migration
       - migration strategy
@@ -795,10 +777,10 @@ topics:
       - platform migration
       - database migration
       - application modernization
-      - digital transformation
       - re-architecture
-      - technology transformation
     priority: 40
+    context_required: true
+    context_terms: [migration, migrat, moderniz, replatform, strangler, legacy]
 
   # =========================================================================
   # regulation — Compliance & Regulation
@@ -913,20 +895,12 @@ topics:
       - net income
       - beat estimates
       - missed estimates
-      - year-over-year
       - gross margin
       - ebitda
       - free cash flow
-      - dividend
-      - buyback
-      - share repurchase
-      - analyst estimates
-      - earnings forecast
-      - wall street
-      - stock price
-      - share price
-    regex: ['(?i)\bEPS\b', '(?i)\bearnings guidance\b', '(?i)\brevenue outlook\b']
     priority: 45
+    context_required: true
+    context_terms: [earnings, revenue, quarterly, financial, 10-k, 10-q, 8-k, guidance, profit, margin, income, ebitda]
 
   - id: market.talent
     label: Talent & Workforce
@@ -954,14 +928,12 @@ topics:
       - open source initiative
       - open source definition
       - software license
-      - license compliance
       - open source governance
-      - gpl
-      - apache license
-      - mit license
       - license change
       - licensing model
     priority: 50
+    context_required: true
+    context_terms: [license, licensing, relicense, open source, copyleft, source-available]
 
   - id: market.investment
     label: Technology Investment
@@ -981,10 +953,11 @@ topics:
     keywords:
       - ipo
       - initial public offering
-      - s-1
       - direct listing
       - spac
     priority: 50
+    context_required: true
+    context_terms: [ipo, offering, listing, exchange, nasdaq, nyse, prospectus]
 
   # =========================================================================
   # macro — Macroeconomic & Geopolitical Environment
@@ -993,6 +966,7 @@ topics:
 
   - id: macro.energy
     label: Energy & Oil Markets
+    negative_keywords: [medieval, manuscript, metaphor, figurative]
     keywords:
       - oil price
       - oil prices
@@ -1010,7 +984,6 @@ topics:
       - energy market
       - oil market
       - fuel price
-      - electricity price
       - energy transition
       - refinery
       - strait of hormuz
@@ -1024,13 +997,9 @@ topics:
       - energy information administration
       - crude inventory
       - lng
-      - renewable energy
-      - solar energy
-      - wind power
-      - nuclear energy
-      - power grid
-      - electricity
     priority: 50
+    context_required: true
+    context_terms: [oil, crude, opec, petroleum, barrel, refinery, lng, energy market, energy crisis, natural gas, fuel]
 
   - id: macro.geopolitics
     label: Geopolitical Conflicts & Trade
@@ -1056,7 +1025,6 @@ topics:
       - foreign policy
       - diplomacy
       - defense spending
-    regex: ['(?i)\bwar\b']
     priority: 50
     context_required: true
     context_terms: [iran, china, russia, ukraine, israel, taiwan, trade, military, conflict, sanctions, tariff, geopolit, attack, strikes, troops, nato, army, navy]
@@ -1120,8 +1088,6 @@ topics:
       - card network
       - interchange
       - payment gateway
-      - mobile payments
-      - contactless
       - buy now pay later
       - bnpl
       - digital wallet
@@ -1132,6 +1098,8 @@ topics:
       - cross-border payments
       - payment processor
     priority: 45
+    context_required: true
+    context_terms: [payment, fintech, merchant, checkout, transaction, card, stripe, paypal]
 
   - id: market.crypto
     label: Cryptocurrency & Blockchain
@@ -1144,14 +1112,11 @@ topics:
       - decentralized finance
       - smart contract
       - web3
-      - token
-      - mining
-      - staking
       - nft
-      - layer 2
-      - rollup
       - consensus mechanism
     priority: 45
+    context_required: true
+    context_terms: [crypto, bitcoin, ethereum, blockchain, defi, web3, nft, cryptocurrency]
 
   # =========================================================================
   # New AI topic

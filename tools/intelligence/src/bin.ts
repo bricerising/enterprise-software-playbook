@@ -19,6 +19,19 @@ import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
 import {
+  generateTrainingSet,
+  getNextUnreviewed,
+  updateTrainingLabel,
+  trainingProgress,
+  listTrainingSets,
+  exportTrainingSet,
+  evaluateTrainingSet,
+  reclassifyTrainingSet,
+  openTrainingDb,
+  TRAINING_APP_ID,
+} from './queries/training.js';
+import { trainClassifier } from './collector/naive-bayes.js';
+import {
   checkpoint as dbCheckpoint,
   prune as dbPrune,
   incrementalVacuum,
@@ -844,6 +857,229 @@ journal
       output(result, fmt);
     } catch (err) {
       handleError(err, 'read');
+    }
+  });
+
+// --- training-set ---
+const trainingSet = program.command('training-set').description('Training data management');
+
+trainingSet
+  .command('generate')
+  .description('Generate a training database from a random sample of events')
+  .option('--sample-rate <rate>', 'Fraction of events to sample (0.0, 1.0]', '0.1')
+  .option('--output <path>', 'Output database path')
+  .option('--seed <number>', 'Integer seed for reproducible sampling')
+  .option('--dry-run', 'Preview without creating DB')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const sampleRate = parseFloat(opts.sampleRate);
+      let seed: number | undefined;
+      if (opts.seed != null) {
+        seed = Number(opts.seed);
+      }
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          generateTrainingSet(db, {
+            sampleRate,
+            outputPath: opts.output,
+            sourceDbPath: dbPath,
+            seed,
+            dryRun: opts.dryRun ?? false,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('next <training-db>')
+  .description('Get next unreviewed event(s) for classification')
+  .option('--limit <n>', 'Number of events to return', '1')
+  .option('--show-machine-labels', 'Include machine labels in output')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = getNextUnreviewed(
+          db,
+          parseInt(opts.limit, 10),
+          opts.showMachineLabels ?? false,
+        );
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('label <training-db> <event-id>')
+  .description('Assign human-classified topics to a training event')
+  .requiredOption('--topics <csv>', 'Comma-separated topic IDs')
+  .option('--labeler <id>', 'Who/what produced this label')
+  .option('--notes <text>', 'Optional annotation')
+  .action((trainingDbPath, eventId, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, false);
+      try {
+        const topics = opts.topics === ''
+          ? []
+          : opts.topics.split(',').map((t: string) => t.trim()).filter(Boolean);
+        const result = updateTrainingLabel(db, eventId, {
+          human_topics: topics,
+          labeler: opts.labeler,
+          notes: opts.notes,
+        });
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+trainingSet
+  .command('progress <training-db>')
+  .description('Show labeling progress')
+  .option('--verbose', 'Include per-topic coverage')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = trainingProgress(db, opts.verbose ?? false);
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('list')
+  .description('List training databases')
+  .option('--dir <path>', 'Directory to scan')
+  .action((opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const result = listTrainingSets(opts.dir);
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('export <training-db>')
+  .description('Export labeled training data')
+  .option('--output <path>', 'Write JSONL to file')
+  .option('--reviewed-only', 'Only export labeled events')
+  .option('--raw', 'Emit raw JSONL to stdout')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = exportTrainingSet(db, {
+          reviewedOnly: opts.reviewedOnly ?? false,
+          raw: opts.raw ?? false,
+          outputPath: opts.output,
+        });
+        if (typeof result === 'string') {
+          // Raw JSONL output
+          console.log(result);
+        } else {
+          output(result, fmt);
+        }
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('evaluate <training-db>')
+  .description('Evaluate classifier accuracy against human labels')
+  .option('--min-samples <n>', 'Minimum samples per topic for metrics', '30')
+  .option('--labeler <id>', 'Filter to events labeled by this labeler')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = evaluateTrainingSet(db, {
+          minSamples: parseInt(opts.minSamples, 10),
+          labeler: opts.labeler,
+        });
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('reclassify <training-db>')
+  .description('Re-run topic classifier on all events and clear human labels')
+  .action((trainingDbPath) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, false);
+      try {
+        const result = reclassifyTrainingSet(db);
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+// --- classifier ---
+const classifier = program.command('classifier').description('Classifier training and management');
+
+classifier
+  .command('train <training-db>')
+  .description('Train a CNB classifier from labeled training data')
+  .option('--output <path>', 'Output model JSON path')
+  .option('--min-examples <n>', 'Minimum positive examples per topic', '20')
+  .option('--validation-split <ratio>', 'Fraction of data held out for validation', '0.2')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = trainClassifier(db, {
+          outputPath: opts.output,
+          minExamples: parseInt(opts.minExamples, 10),
+          validationSplit: parseFloat(opts.validationSplit),
+        });
+        output(ok(result), fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
     }
   });
 

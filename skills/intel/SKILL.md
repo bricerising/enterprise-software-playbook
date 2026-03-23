@@ -264,6 +264,83 @@ intel journal search <query> [--since 7d] [--limit 20]
 - **tags**: Comma-separated freeform tags for filtering
 - **refs**: JSON array of signal references linking to events or topics
 
+## Training Data Generation
+
+Generate labeled training data for classifier evaluation and evolution. This workflow produces a training set, loads the taxonomy, and uses batched subagent classification to label each event independently.
+
+### Phase 1: Generate
+
+```bash
+intel training-set generate --sample-rate 0.1
+# or with reproducible seed:
+intel training-set generate --sample-rate 0.1 --seed 42
+```
+
+Capture the output path for Phase 3.
+
+### Phase 2: Load taxonomy
+
+```bash
+intel topics
+```
+
+Run `intel topics` once to capture the full topic taxonomy (66 topics across 10 categories). Include this output verbatim in each subagent prompt — do not re-fetch per batch.
+
+### Phase 3: Classify (batched subagent loop)
+
+Iterate in batches of 25 events:
+
+1. Call `intel training-set next <db> --limit 25` to get a batch of unreviewed events (machine labels omitted by default to prevent anchoring)
+2. Spawn up to 25 subagents in parallel (via Task tool), each with one event's `title`, `content`, `url`, `source`, `feed`, and the taxonomy from Phase 2
+3. Each subagent reads its event independently, assigns 1-5 topics (targeting ≤3), and returns the classification
+4. As subagents complete, call `intel training-set label <db> <event-id> --topics <csv> --labeler haiku` for each result
+5. Call `intel training-set progress <db>` every 5 batches (~125 events) to check completion
+6. Repeat until `remaining` reaches 0 or the requested event count is reached
+
+**Subagent classification protocol:**
+- Each subagent receives: event title, content (truncated to ~4,000 chars), url, source, feed, and the full taxonomy
+- Assign 1-5 topics (target ≤3). Assign 4-5 only for genuinely cross-domain events.
+- Do not pass `--show-machine-labels` — blind classification prevents anchoring
+- Do not pass `score` or `comments` to subagents — engagement metrics would anchor classification
+- If no topic matches, return empty topics (`--topics ""` stores `[]`)
+- Use `model: "haiku"` for subagents — topic classification from a fixed taxonomy is within haiku's capabilities
+
+**Partial labeling:** The workflow supports interruption and resumption. Specify an event count (e.g., "classify 500 events") as an orchestrator-level limit. Partial training sets are useful for precision estimates on topics with sufficient samples (≥30).
+
+**Guardrails:**
+- Do not modify the source intelligence database
+- Do not skip events — even uninteresting events must be classified for unbiased precision
+- Do not pass `--show-machine-labels` for classification — blind output only
+- If a subagent fails, skip the event and continue — it remains unreviewed for a future batch
+
+### Command Reference: Training Set
+
+```bash
+# Generate training set
+intel training-set generate [--sample-rate 0.1] [--output <path>] [--seed <n>] [--dry-run]
+
+# Get next unreviewed events
+intel training-set next <training-db> [--limit 25] [--show-machine-labels]
+
+# Label an event
+intel training-set label <training-db> <event-id> --topics "topic1,topic2" [--labeler haiku] [--notes "..."]
+
+# Check progress
+intel training-set progress <training-db> [--verbose]
+
+# List training databases
+intel training-set list [--dir <path>]
+
+# Export labeled data
+intel training-set export <training-db> [--output <path>] [--reviewed-only] [--raw]
+
+# Evaluate classifier accuracy
+intel training-set evaluate <training-db> [--min-samples 30] [--labeler haiku]
+
+# Train CNB classifier (requires ≥500 labeled events)
+intel classifier train <training-db> [--output <path>] [--min-examples 20] [--validation-split 0.2]
+```
+
 ## References
 
 - Forward-looking predictions: [`forecast`](../forecast/SKILL.md)
