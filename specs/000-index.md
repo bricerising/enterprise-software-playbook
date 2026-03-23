@@ -31,6 +31,7 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/016-decision-journal.md`](016-decision-journal.md): Decision journal for the intelligence tool — records decisions with context, rationale, and signal references; FTS search; CLI commands (add/list/search).
 - [`specs/017-archobs-team-analysis.md`](017-archobs-team-analysis.md): Author/team analysis for archobs — git author extraction, per-cluster author distribution, bus factor, knowledge concentration (HHI), and `show team` CLI.
 - [`specs/018-archobs-fitness-check.md`](018-archobs-fitness-check.md): Architecture fitness check for archobs — CI-gatable `archobs check` command evaluating file risk, cluster leakage/cohesion/risk_mean, and bus factor against configurable thresholds.
+- [`specs/019-classifier-training-data.md`](019-classifier-training-data.md): Classifier training data (amends specs 006, 013) — reservoir sampling, standalone training SQLite databases, CLI commands (generate/label/progress/next), and agent skill workflow for subagent-driven topic classification.
 - [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)):
   - [`001`](decisions/001-workflow-stage-taxonomy.md): Workflow-stage taxonomy
   - [`002`](decisions/002-code-vs-system-pattern-terms.md): Code vs system pattern terms
