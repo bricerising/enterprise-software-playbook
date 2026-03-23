@@ -1,6 +1,9 @@
 import type Database from 'better-sqlite3';
 import type { LifecycleItem } from './types.js';
-import { PUB_TS, WINDOWS, PHASE_EMISSIONS, sinceISO } from './types.js';
+import {
+  PUB_TS, WINDOWS, PHASE_EMISSIONS, sinceISO,
+  MIN_LIFECYCLE_DAYS, MIN_COLD_START_CONFIDENCE, MIN_TOPIC_EVENTS,
+} from './types.js';
 
 /* ── A. Lifecycle positioning ───────────────────────────────────────── */
 
@@ -170,6 +173,41 @@ function classifyPhase(
 function gaussianLogPdf(x: number, mean: number, stddev: number): number {
   const z = (x - mean) / stddev;
   return -0.5 * Math.log(2 * Math.PI) - Math.log(stddev) - 0.5 * z * z;
+}
+
+/* ── Spec 014 §A: Cold-start guard and insufficient-data flag ──────── */
+
+/**
+ * Apply graduated confidence cap when data is young, and flag topics
+ * with insufficient event volume.
+ *
+ * @param lifecycles - Lifecycle items to mutate in-place
+ * @param dataAgeDays - Days between oldest and newest event in window
+ * @param topicCounts - Per-topic event counts in the analysis window
+ */
+export function applyColdStartGuard(
+  lifecycles: LifecycleItem[],
+  dataAgeDays: number,
+  topicCounts: Map<string, number>,
+): void {
+  // Cold-start: graduated confidence cap when data_age_days < MIN_LIFECYCLE_DAYS
+  if (dataAgeDays < MIN_LIFECYCLE_DAYS) {
+    const capFraction = dataAgeDays / MIN_LIFECYCLE_DAYS;
+    const confidenceCap = MIN_COLD_START_CONFIDENCE + capFraction * (1.0 - MIN_COLD_START_CONFIDENCE);
+
+    for (const item of lifecycles) {
+      item.cold_start = true;
+      item.phase_confidence = Math.min(item.phase_confidence, confidenceCap);
+    }
+  }
+
+  // Insufficient-data: flag topics with < MIN_TOPIC_EVENTS events
+  for (const item of lifecycles) {
+    const count = topicCounts.get(item.topic) ?? 0;
+    if (count < MIN_TOPIC_EVENTS) {
+      item.insufficient_data = true;
+    }
+  }
 }
 
 /**

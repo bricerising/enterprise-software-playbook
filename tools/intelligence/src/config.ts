@@ -11,6 +11,8 @@ const FeedSchema = z.discriminatedUnion('source', [
     name: z.string(),
     category: z.string().optional(),
     poll_interval: z.number().positive().optional(),
+    /** Cap on items processed per poll cycle (default: 200, range: 5–2000). */
+    max_items: z.number().int().min(5).max(2000).optional().default(200),
     request_options: z
       .object({
         headers: z.record(z.string()).optional(),

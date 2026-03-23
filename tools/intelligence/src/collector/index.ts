@@ -43,6 +43,7 @@ function createAdapter(feed: FeedConfig, config: IntelConfig, db: Database.Datab
       return new RssAdapter({
         url: feed.url,
         name: feed.name,
+        maxItems: feed.max_items,
         request_options: feed.request_options,
         httpEtag: health.httpEtag,
         httpLastModified: health.httpLastModified,

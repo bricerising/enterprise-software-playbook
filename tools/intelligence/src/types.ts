@@ -1,7 +1,7 @@
 /** Response envelope for all intel commands */
 export interface IntelResponse<T> {
   tool: 'intel';
-  schema_version: 'v1';
+  schema_version: 'v2';
   status: 'ok' | 'error';
   data: T;
   warnings: string[];

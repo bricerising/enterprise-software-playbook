@@ -10,7 +10,7 @@ export function ok<T>(
 ): IntelResponse<T> {
   return {
     tool: 'intel',
-    schema_version: 'v1',
+    schema_version: 'v2',
     status: 'ok',
     data,
     warnings: opts?.warnings ?? [],
@@ -22,7 +22,7 @@ export function ok<T>(
 export function error(err: IntelError): IntelResponse<null> {
   return {
     tool: 'intel',
-    schema_version: 'v1',
+    schema_version: 'v2',
     status: 'error',
     data: null,
     warnings: [],

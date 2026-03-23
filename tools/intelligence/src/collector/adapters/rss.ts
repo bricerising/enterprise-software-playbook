@@ -2,11 +2,16 @@ import RSSParser from 'rss-parser';
 import type { SourceType } from '../../types.js';
 import type { RawEvent, Checkpoint, SourceAdapter } from './types.js';
 
+/** Default cap on RSS items processed per poll cycle. */
+export const DEFAULT_RSS_MAX_ITEMS = 200;
+
 interface RssAdapterOptions {
   /** Feed URL to fetch */
   url: string;
   /** Human-readable name for this feed */
   name: string;
+  /** Cap on items processed per poll cycle (default: 200). */
+  maxItems?: number;
   /** Optional request headers (e.g. Authorization) */
   request_options?: {
     headers?: Record<string, string>;
@@ -28,6 +33,7 @@ export class RssAdapter implements SourceAdapter {
   readonly feedName: string;
 
   private readonly url: string;
+  private readonly maxItems: number;
   private readonly requestHeaders: Record<string, string>;
   private readonly httpEtag: string | null;
   private readonly httpLastModified: string | null;
@@ -39,6 +45,7 @@ export class RssAdapter implements SourceAdapter {
   constructor(opts: RssAdapterOptions) {
     this.url = opts.url;
     this.feedName = opts.name;
+    this.maxItems = opts.maxItems ?? DEFAULT_RSS_MAX_ITEMS;
     this.requestHeaders = opts.request_options?.headers ?? {};
     this.httpEtag = opts.httpEtag ?? null;
     this.httpLastModified = opts.httpLastModified ?? null;
@@ -82,7 +89,27 @@ export class RssAdapter implements SourceAdapter {
 
     const items = feed.items ?? [];
 
-    for (const item of items) {
+    // Sort by pubDate descending to guarantee newest-first order.
+    // Most RSS feeds return newest-first, but the RSS 2.0 spec does not mandate
+    // ordering. Sorting defensively ensures the slice always captures the most
+    // recent items regardless of feed behavior.
+    const sorted = [...items].sort((a, b) => {
+      const rawA = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+      const rawB = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+      const ta = Number.isNaN(rawA) ? 0 : rawA;
+      const tb = Number.isNaN(rawB) ? 0 : rawB;
+      return tb - ta || (a.link ?? '').localeCompare(b.link ?? '');
+    });
+
+    // Cap items per poll — slice before checkpoint to preserve newest-first order.
+    if (sorted.length > this.maxItems) {
+      console.info(
+        `Capped feed "${this.feedName}": processed ${this.maxItems} of ${sorted.length} items`,
+      );
+    }
+    const capped = sorted.slice(0, this.maxItems);
+
+    for (const item of capped) {
       const pubDate = item.pubDate ?? item.isoDate ?? null;
 
       // Skip items we have already seen (based on checkpoint cursor = pubDate)

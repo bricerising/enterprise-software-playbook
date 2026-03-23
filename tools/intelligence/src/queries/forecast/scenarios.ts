@@ -1,11 +1,27 @@
 import type Database from 'better-sqlite3';
-import type { ChainItem, LifecycleItem, EntropyItem, ScenarioItem } from './types.js';
+import type { ChainItem, LifecycleItem, EntropyItem, ScenarioItem, ConfidenceTier } from './types.js';
 import {
   PUB_TS, PUB_DAY,
   MAX_TITLES_PER_SCENARIO, MAX_CHAINS_PER_TARGET,
   CUSUM_DISCOUNT_HORIZON_DAYS, SOFTMAX_TEMPERATURE,
+  SCENARIO_DECIMAL_PLACES,
   sanitizeSnippet,
 } from './types.js';
+
+/* ── Spec 014 §C: Worst-tier utility ──────────────────────────────── */
+
+const tierOrder: Record<ConfidenceTier, number> = {
+  spurious: 0, low: 1, moderate: 2, high: 3,
+};
+
+export function worstTier(tiers: ConfidenceTier[]): ConfidenceTier {
+  if (tiers.length === 0) {
+    return 'spurious';
+  }
+  return tiers.reduce((worst, t) =>
+    tierOrder[t] < tierOrder[worst] ? t : worst,
+  );
+}
 
 /* ── J. Bayesian scenario projection ──────────────────────────────── */
 
@@ -131,6 +147,7 @@ export function projectScenariosBayesian(
       chainCount: number;
       avgLagMin: number;
       avgLagMax: number;
+      contributingChainTiers: ConfidenceTier[];
     }
   >();
 
@@ -144,6 +161,7 @@ export function projectScenariosBayesian(
     const triggerContributions = new Map<string, number>();
     let avgLagMin = Infinity;
     let avgLagMax = -Infinity;
+    const contributingChainTiers: ConfidenceTier[] = [];
 
     for (const { chain, effectiveSignal, lagMin, lagMax } of capped) {
       logPosterior += Math.log(Math.max(effectiveSignal, 1.01));
@@ -151,6 +169,7 @@ export function projectScenariosBayesian(
       triggerContributions.set(chain.from_topic, Math.max(existing, effectiveSignal));
       avgLagMin = Math.min(avgLagMin, lagMin);
       avgLagMax = Math.max(avgLagMax, lagMax);
+      contributingChainTiers.push(chain.confidence_tier);
     }
 
     targetMap.set(target, {
@@ -159,6 +178,7 @@ export function projectScenariosBayesian(
       chainCount: capped.length,
       avgLagMin,
       avgLagMax,
+      contributingChainTiers,
     });
   }
 
@@ -186,9 +206,10 @@ export function projectScenariosBayesian(
 
   const scenarios: ScenarioItem[] = [];
   for (const [target, data] of entries) {
+    const roundFactor = Math.pow(10, SCENARIO_DECIMAL_PLACES);
     const score = Math.round(
-      (Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE) / softmaxSum) * 100,
-    ) / 100;
+      (Math.exp((data.logPosterior - maxLogPost) / SOFTMAX_TEMPERATURE) / softmaxSum) * roundFactor,
+    ) / roundFactor;
 
     const titleRows = titleStmt.all(
       target,
@@ -240,6 +261,7 @@ export function projectScenariosBayesian(
       evidence_relevance: evidenceRelevance,
       target_entropy: targetEnt,
       target_base_rate: targetBaseRate,
+      min_chain_tier: worstTier(data.contributingChainTiers),
     });
   }
 
