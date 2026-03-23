@@ -15,7 +15,14 @@ export function computeDataSpan(
   const whereClause = windowStart ? 'WHERE e.fetched_at >= ?' : '';
   const sql = `
     SELECT
-      MIN(COALESCE(published_at, fetched_at)) AS min_ts,
+      MIN(
+        CASE
+          WHEN published_at IS NOT NULL
+               AND julianday(fetched_at) - julianday(published_at) > 365
+          THEN fetched_at
+          ELSE COALESCE(published_at, fetched_at)
+        END
+      ) AS min_ts,
       MAX(COALESCE(published_at, fetched_at)) AS max_ts
     FROM events e
     ${whereClause}

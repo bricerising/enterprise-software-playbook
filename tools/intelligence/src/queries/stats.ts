@@ -201,11 +201,11 @@ export function queryStats(
     ? Math.round((multiTopicEvents / eventsTotal) * 1000) / 1000
     : 0;
 
-  // Top source concentration
+  // Top source concentration (by feed, not adapter type)
   const topSourceRow = db.prepare(`
-    SELECT COALESCE(source, 'unknown') AS source, COUNT(*) AS cnt
+    SELECT COALESCE(feed, source, 'unknown') AS source, COUNT(*) AS cnt
     FROM events
-    GROUP BY source
+    GROUP BY COALESCE(feed, source, 'unknown')
     ORDER BY cnt DESC
     LIMIT 1
   `).get() as { source: string; cnt: number } | undefined;

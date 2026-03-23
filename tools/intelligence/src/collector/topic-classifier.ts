@@ -81,6 +81,14 @@ export function getLoadedTopics(): TopicDef[] {
 }
 
 /**
+ * Cap on combined title+content length for classification.
+ * Longer content (page boilerplate, sidebars, related-article links) triggers
+ * false-positive keyword matches across unrelated topics.  3 000 chars ≈ title
+ * + first ~500 words, which is sufficient to identify the article's core topics.
+ */
+const CLASSIFY_TEXT_CAP = 3_000;
+
+/**
  * Classify text into topics with confidence scores. Returns up to maxTopics
  * ClassifiedTopic entries, sorted by priority (highest first).
  */
@@ -91,7 +99,7 @@ export function classify(
 ): ClassifiedTopic[] {
   if (loadedTopics.length === 0) return [];
 
-  const combined = [title ?? '', content ?? ''].join(' ');
+  const combined = [title ?? '', content ?? ''].join(' ').slice(0, CLASSIFY_TEXT_CAP);
   const lowerCombined = combined.toLowerCase();
 
   const matches: TopicMatchResult[] = [];

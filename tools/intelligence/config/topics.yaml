@@ -47,6 +47,16 @@ topics:
       - llama 4
       - bedrock
       - amazon bedrock
+      - neural network
+      - deep learning
+      - transformer
+      - attention mechanism
+      - language model
+      - diffusion model
+      - generative ai
+      - gen ai
+      - benchmark
+      - model architecture
     regex: ['(?i)\bbedrock\b', '(?i)\bLLM\b']
     priority: 60
 
@@ -110,6 +120,14 @@ topics:
       - pretraining
       - sagemaker
       - sage maker
+      - dataset
+      - training data
+      - pre-training
+      - model training
+      - gradient
+      - backpropagation
+      - loss function
+      - hyperparameter
     priority: 55
 
   - id: ai.safety
@@ -134,6 +152,12 @@ topics:
       - text to video
       - text to speech
       - vision model
+      - computer vision
+      - object detection
+      - image classification
+      - image segmentation
+      - visual
+      - video understanding
     priority: 55
 
   - id: ai.protocols
@@ -164,10 +188,16 @@ topics:
       - vercel edge
       - aws lambda
       - lambda function
+      - wasm
+      - webassembly
+      - spin
+      - fermyon
+      - wasmcloud
+      - component model
     regex: ['(?i)\blambda\b']
     priority: 40
     context_required: true
-    context_terms: [aws, amazon, serverless, function, invoke, cold start, faas, edge]
+    context_terms: [aws, amazon, serverless, function, invoke, cold start, faas, edge, wasm, webassembly, component]
 
   - id: compute.containers
     label: Containers & Orchestration
@@ -198,6 +228,7 @@ topics:
       - terraform
       - hashicorp
       - opentofu
+      - tofu
       - hcl
       - pulumi
       - cloudformation
@@ -209,7 +240,7 @@ topics:
     regex: ['(?i)\bCDK\b']
     priority: 40
     context_required: true
-    context_terms: [aws, amazon, construct, stack, infrastructure, terraform, iac, provision]
+    context_terms: [aws, amazon, construct, stack, infrastructure, terraform, iac, provision, opentofu, tofu]
 
   - id: compute.edge
     label: Edge Computing
@@ -267,10 +298,17 @@ topics:
       - azure
       - gcp
       - google cloud
+      - aws update
+      - aws release
+      - service update
+      - cloud update
+      - new feature
+      - general availability
+      - preview
     regex: ['(?i)\bAWS\b', '(?i)\bS3\b', '(?i)\bEC2\b']
     priority: 35
     context_required: true
-    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp]
+    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp, service, release, update, launch]
 
   - id: compute.networking
     label: Cloud Networking
@@ -297,7 +335,17 @@ topics:
       - zero-day
       - 0day
       - security advisory
-    regex: ['CVE-\\d{4}-\\d+']
+      - security update
+      - patch tuesday
+      - security bulletin
+      - security patch
+      - remote code execution
+      - privilege escalation
+      - denial of service
+      - buffer overflow
+      - use after free
+      - out of bounds
+    regex: ['CVE-\\d{4}-\\d+', '(?i)\bRCE\b']
     priority: 75
 
   - id: security.supply-chain
@@ -411,6 +459,12 @@ topics:
       - rabbitmq
       - nats
       - kinesis
+      - event-driven
+      - pub/sub
+      - pubsub
+      - message broker
+      - queue
+      - async messaging
     priority: 45
 
   - id: data.analytics
@@ -426,6 +480,12 @@ topics:
       - databricks
       - lakehouse
       - data engineering
+      - data observability
+      - data reliability
+      - data quality
+      - data monitoring
+      - monte carlo
+      - lineage
     priority: 40
 
   - id: data.vector
@@ -493,6 +553,11 @@ topics:
       - prometheus
       - tracing
       - metrics
+      - monitoring
+      - alerting
+      - dashboards
+      - log management
+      - apm
     priority: 40
 
   - id: devex.platform
@@ -699,6 +764,17 @@ topics:
       - svelte
       - vue
       - frontend architecture
+      - ios
+      - iphone
+      - ipad
+      - macos
+      - swiftui
+      - swift
+      - xcode
+      - app store
+      - apple developer
+      - wwdc
+      - webkit
     priority: 40
 
   - id: arch.migration
@@ -719,6 +795,9 @@ topics:
       - platform migration
       - database migration
       - application modernization
+      - digital transformation
+      - re-architecture
+      - technology transformation
     priority: 40
 
   # =========================================================================
@@ -810,7 +889,6 @@ topics:
       - revenue
       - quarterly results
       - financial results
-      - guidance
       - cloud revenue
       - aws revenue
       - azure revenue
@@ -823,14 +901,32 @@ topics:
       - 8-k
       - annual report
       - quarterly report
-      - outlook
       - raised guidance
       - lowered guidance
       - forward guidance
       - full-year outlook
+      - earnings per share
+      - revenue growth
+      - operating profit
+      - profit margin
+      - operating income
+      - net income
+      - beat estimates
+      - missed estimates
+      - year-over-year
+      - gross margin
+      - ebitda
+      - free cash flow
+      - dividend
+      - buyback
+      - share repurchase
+      - analyst estimates
+      - earnings forecast
+      - wall street
+      - stock price
+      - share price
+    regex: ['(?i)\bEPS\b', '(?i)\bearnings guidance\b', '(?i)\brevenue outlook\b']
     priority: 45
-    context_required: true
-    context_terms: [earnings, revenue, quarter, fiscal, expects, forecast, financial, profit]
 
   - id: market.talent
     label: Talent & Workforce
@@ -924,6 +1020,16 @@ topics:
       - oil production
       - barrel
       - petrodollar
+      - eia
+      - energy information administration
+      - crude inventory
+      - lng
+      - renewable energy
+      - solar energy
+      - wind power
+      - nuclear energy
+      - power grid
+      - electricity
     priority: 50
 
   - id: macro.geopolitics
@@ -943,6 +1049,13 @@ topics:
       - export controls
       - export ban
       - trade restriction
+      - trade agreement
+      - trade deficit
+      - trade surplus
+      - trade representative
+      - foreign policy
+      - diplomacy
+      - defense spending
     regex: ['(?i)\bwar\b']
     priority: 50
     context_required: true
@@ -969,3 +1082,120 @@ topics:
       - commodity market
       - raw materials shortage
     priority: 45
+
+  - id: macro.monetary-policy
+    label: Monetary Policy & Central Banks
+    keywords:
+      - federal reserve
+      - interest rate
+      - rate hike
+      - rate cut
+      - fomc
+      - monetary policy
+      - quantitative easing
+      - quantitative tightening
+      - inflation
+      - cpi
+      - consumer price index
+      - yield curve
+      - treasury
+      - bond market
+      - central bank
+      - bank of england
+      - bank of japan
+    priority: 50
+
+  # =========================================================================
+  # New market topics
+  # =========================================================================
+
+  - id: market.payments
+    label: Payments & Fintech
+    keywords:
+      - payment processing
+      - fintech
+      - digital payments
+      - point of sale
+      - merchant services
+      - card network
+      - interchange
+      - payment gateway
+      - mobile payments
+      - contactless
+      - buy now pay later
+      - bnpl
+      - digital wallet
+      - neobank
+      - open banking
+      - payment rails
+      - real-time payments
+      - cross-border payments
+      - payment processor
+    priority: 45
+
+  - id: market.crypto
+    label: Cryptocurrency & Blockchain
+    keywords:
+      - cryptocurrency
+      - bitcoin
+      - ethereum
+      - blockchain
+      - defi
+      - decentralized finance
+      - smart contract
+      - web3
+      - token
+      - mining
+      - staking
+      - nft
+      - layer 2
+      - rollup
+      - consensus mechanism
+    priority: 45
+
+  # =========================================================================
+  # New AI topic
+  # =========================================================================
+
+  - id: ai.research
+    label: AI Research
+    keywords:
+      - arxiv
+      - paper
+      - pre-print
+      - preprint
+      - research paper
+      - conference paper
+      - peer review
+      - reinforcement learning
+      - natural language processing
+      - nlp
+      - robotics
+      - autonomous
+      - robot
+    priority: 50
+
+  # =========================================================================
+  # New DevEx topic
+  # =========================================================================
+
+  - id: devex.methodology
+    label: Software Methodology
+    keywords:
+      - agile
+      - extreme programming
+      - continuous delivery
+      - continuous integration
+      - devops
+      - lean
+      - kanban
+      - retrospective
+      - pair programming
+      - mob programming
+      - trunk-based
+      - feature flag
+      - feature toggle
+      - team topology
+      - thoughtworks
+      - technology radar
+    priority: 35
