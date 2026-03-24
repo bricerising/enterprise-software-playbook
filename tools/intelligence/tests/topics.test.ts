@@ -17,7 +17,7 @@ import {
   BM25_THRESHOLDS,
   type TopicDefExtended,
 } from '../src/collector/bm25.js';
-import { trainLogistic, predictLogistic, trainClassifier } from '../src/collector/classifier.js';
+import { trainLogistic, predictLogistic, trainClassifier, type ClassifierModel } from '../src/collector/classifier.js';
 import { buildVocabulary, buildVocabularyChiSquared, computeCorpusIDF, vectorize } from '../src/collector/tfidf.js';
 import { fitPlatt, calibrate } from '../src/collector/platt.js';
 
@@ -1050,7 +1050,7 @@ describe('Stratified train/val split', () => {
     }
   });
 
-  it('model version is 3', () => {
+  it('model version is 4', () => {
     const dbPath = join(tmpDir, 'version-test.db');
     const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
@@ -1104,7 +1104,7 @@ describe('Stratified train/val split', () => {
         minExamples: 5,
       });
       const model = JSON.parse(readFileSync(result.model_path, 'utf-8'));
-      expect(model.version).toBe(3);
+      expect(model.version).toBe(4);
     } finally {
       db.close();
     }
@@ -1131,5 +1131,511 @@ describe('Statistical model ensemble', () => {
     const loaded = loadStatModel('/tmp/nonexistent-stat-model.json');
     expect(loaded).toBe(false);
     expect(hasStatModel()).toBe(false);
+  });
+
+  it('positive LR weights boost BM25 score', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
+    try {
+      // Get baseline score without stat model
+      clearStatModel();
+      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
+      expect(baselineFoundation).toBeDefined();
+      const baselineScore = baselineFoundation!.score;
+
+      // Build a synthetic model with strong positive weights for ai.foundation-models
+      const topics = getLoadedTopics();
+      const vocab: Record<string, number> = {};
+      const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      // Strong positive weights so LR score exceeds threshold
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 2.0; });
+
+      const model: ClassifierModel = {
+        version: 3,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': { weights, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'pos-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+
+      const boosted = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const boostedFoundation = boosted.find((t) => t.id === 'ai.foundation-models');
+      expect(boostedFoundation).toBeDefined();
+      expect(boostedFoundation!.score).toBeGreaterThan(baselineScore);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('negative LR weights penalize BM25 score', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
+    try {
+      // Get baseline score without stat model
+      clearStatModel();
+      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
+      expect(baselineFoundation).toBeDefined();
+      const baselineScore = baselineFoundation!.score;
+
+      // Build a synthetic model with strong negative weights so LR score is below threshold
+      const vocab: Record<string, number> = {};
+      const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = -2.0; });
+
+      const model: ClassifierModel = {
+        version: 3,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': { weights, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'neg-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+
+      const penalized = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const penalizedFoundation = penalized.find((t) => t.id === 'ai.foundation-models');
+      expect(penalizedFoundation).toBeDefined();
+      expect(penalizedFoundation!.score).toBeLessThan(baselineScore);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('clearStatModel returns to exact baseline scores', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
+    try {
+      // Get baseline score without stat model
+      clearStatModel();
+      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
+      expect(baselineFoundation).toBeDefined();
+      const baselineScore = baselineFoundation!.score;
+
+      // Load a model to change scores
+      const vocab: Record<string, number> = { bedrock: 0, agents: 1 };
+      const model: ClassifierModel = {
+        version: 3,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf: [1.0, 1.0],
+        classifiers: {
+          'ai.foundation-models': { weights: { 0: 2.0, 1: 2.0 }, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'clear-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+      expect(hasStatModel()).toBe(true);
+
+      // Clear and verify exact baseline return
+      clearStatModel();
+      expect(hasStatModel()).toBe(false);
+
+      const restored = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const restoredFoundation = restored.find((t) => t.id === 'ai.foundation-models');
+      expect(restoredFoundation).toBeDefined();
+      expect(restoredFoundation!.score).toBe(baselineScore);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// --- V4 ensemble: LR independent scoring (5 tests) ---
+
+describe('V4 ensemble: LR independent scoring', () => {
+  afterEach(() => {
+    clearStatModel();
+  });
+
+  it('LR surfaces topic missed by BM25', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-surface-'));
+    try {
+      clearStatModel();
+
+      // Use a fabricated topic ID that no BM25 keywords match.
+      // The text uses invented terms that only the LR model knows about.
+      const testTitle = 'Zorblax Plinkton Analysis';
+      const testContent = 'Examining zorblax plinkton dynamics and frobnar correlation patterns';
+
+      // Verify BM25 alone returns nothing for this text
+      const baseline = classify(testTitle, testContent);
+      expect(baseline.length).toBe(0);
+
+      // Build a v4 model where LR has strong weights for these invented terms
+      // mapped to a real topic that BM25 won't find via keywords
+      const terms = ['zorblax', 'plinkton', 'dynamics', 'frobnar', 'correlation', 'patterns', 'examining'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      // Strong positive weights so LR sigmoid probability is high (>0.7)
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 3.0; });
+
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.safety': {
+            weights,
+            bias: 0,
+            score_threshold: 0.5,
+            blend_alpha: 0.4,
+            lr_val_f1: 0.6,
+            bm25_val_f1: 0.5,
+          },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.safety': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'v4-surface.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+
+      const result = classify(testTitle, testContent);
+      const surfaced = result.find((t) => t.id === 'ai.safety');
+      expect(surfaced).toBeDefined();
+      expect(surfaced!.score).toBeGreaterThan(0);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('per-topic alpha respected: higher alpha shows more LR influence', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-alpha-'));
+    try {
+      clearStatModel();
+
+      // Get baseline scores without stat model
+      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
+      expect(baselineFoundation).toBeDefined();
+
+      // Build model with two topics at different alphas, both with positive LR weights
+      const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 3.0; });
+
+      // Test with LOW alpha first
+      const modelLow: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': {
+            weights,
+            bias: 0,
+            score_threshold: 0.5,
+            blend_alpha: 0.05,
+            lr_val_f1: 0.2,
+            bm25_val_f1: 0.6,
+          },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const lowPath = join(tmpDir, 'v4-low-alpha.json');
+      writeFileSync(lowPath, JSON.stringify(modelLow));
+      loadStatModel(lowPath);
+      const lowResult = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const lowFoundation = lowResult.find((t) => t.id === 'ai.foundation-models');
+      expect(lowFoundation).toBeDefined();
+      const lowDelta = Math.abs(lowFoundation!.score - baselineFoundation!.score);
+
+      clearStatModel();
+
+      // Test with HIGH alpha
+      const modelHigh: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': {
+            weights,
+            bias: 0,
+            score_threshold: 0.5,
+            blend_alpha: 0.5,
+            lr_val_f1: 0.7,
+            bm25_val_f1: 0.5,
+          },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const highPath = join(tmpDir, 'v4-high-alpha.json');
+      writeFileSync(highPath, JSON.stringify(modelHigh));
+      loadStatModel(highPath);
+      const highResult = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const highFoundation = highResult.find((t) => t.id === 'ai.foundation-models');
+      expect(highFoundation).toBeDefined();
+      const highDelta = Math.abs(highFoundation!.score - baselineFoundation!.score);
+
+      // Higher alpha should produce more score change from baseline
+      expect(highDelta).toBeGreaterThan(lowDelta);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('LR-only requires prob >= 0.7: low-confidence LR is not surfaced', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-minprob-'));
+    try {
+      clearStatModel();
+
+      // Text that won't match any BM25 keywords
+      const testTitle = 'Zorblax Plinkton Analysis';
+      const testContent = 'Examining zorblax plinkton dynamics';
+
+      // Verify baseline returns nothing
+      expect(classify(testTitle, testContent).length).toBe(0);
+
+      // Build a model with WEAK LR weights (prob below 0.7)
+      const terms = ['zorblax', 'plinkton', 'dynamics', 'examining'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      // Very weak weights → sigmoid(sum) will be close to 0.5, below 0.7
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 0.05; });
+
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.safety': {
+            weights,
+            bias: -0.5, // push probability lower
+            score_threshold: 0.5,
+            blend_alpha: 0.4,
+            lr_val_f1: 0.6,
+            bm25_val_f1: 0.5,
+          },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.safety': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'v4-lowprob.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+
+      const result = classify(testTitle, testContent);
+      const surfaced = result.find((t) => t.id === 'ai.safety');
+      expect(surfaced).toBeUndefined();
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('v3 backward compat: classify works with v3 model (no blend_alpha)', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v3-compat-'));
+    try {
+      clearStatModel();
+
+      // Build a v3 model (no blend_alpha fields)
+      const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 2.0; });
+
+      const model: ClassifierModel = {
+        version: 3,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': { weights, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.foundation-models': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'v3-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+      expect(hasStatModel()).toBe(true);
+
+      // classify should work without errors and return results
+      const result = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.find((t) => t.id === 'ai.foundation-models')).toBeDefined();
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('v4 model serialization: trainClassifier outputs blend_alpha and version 4', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-serial-'));
+    try {
+      const dbPath = join(tmpDir, 'v4-train.db');
+      const db = new Database(dbPath);
+      db.pragma('journal_mode = WAL');
+      db.pragma(`application_id = 0x54524E47`);
+
+      db.exec(`
+        CREATE TABLE training_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event_id TEXT UNIQUE NOT NULL,
+          title TEXT, content TEXT, url TEXT, source TEXT, feed TEXT,
+          published_at TEXT, fetched_at TEXT, author TEXT,
+          score INTEGER DEFAULT 0, comments INTEGER DEFAULT 0,
+          machine_topics TEXT NOT NULL DEFAULT '[]',
+          machine_confidences TEXT NOT NULL DEFAULT '[]',
+          machine_scores TEXT NOT NULL DEFAULT '[]',
+          human_topics TEXT, labeler TEXT DEFAULT 'unspecified',
+          notes TEXT, reviewed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        );
+        CREATE TABLE training_labels (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event_id TEXT NOT NULL,
+          human_topics TEXT NOT NULL,
+          labeler TEXT NOT NULL,
+          notes TEXT,
+          labeled_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        );
+        CREATE TABLE training_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      `);
+      db.prepare("INSERT INTO training_meta VALUES ('schema_version', '1')").run();
+
+      const topics = [
+        'ai.foundation-models', 'ai.safety', 'ai.agents',
+        'compute.gpu', 'security.vulnerabilities', 'data.relational',
+      ];
+      const topicKeywords: Record<string, string> = {
+        'ai.foundation-models': 'large language model llm transformer neural network',
+        'ai.safety': 'ai safety alignment red teaming guardrails',
+        'ai.agents': 'ai agent autonomous agentic tool use function calling',
+        'compute.gpu': 'gpu nvidia cuda h100 training accelerator',
+        'security.vulnerabilities': 'vulnerability cve exploit zero-day security advisory',
+        'data.relational': 'postgresql postgres database relational sql query',
+      };
+
+      const insert = db.prepare(`
+        INSERT INTO training_events (event_id, title, content, source, fetched_at,
+          human_topics, labeler, reviewed_at)
+        VALUES (?, ?, ?, 'rss', datetime('now'), ?, 'test', datetime('now'))
+      `);
+
+      db.transaction(() => {
+        for (let i = 0; i < 600; i++) {
+          const topic = topics[i % topics.length];
+          insert.run(
+            `rss:v4:${i}`,
+            `Test ${topic} Event ${i}`,
+            `Content about ${topicKeywords[topic]} with additional context words ${i}`,
+            JSON.stringify([topic]),
+          );
+        }
+      })();
+
+      const result = trainClassifier(db, {
+        outputPath: join(tmpDir, 'v4-model.json'),
+        minExamples: 5,
+        validationSplit: 0.2,
+      });
+
+      const model = JSON.parse(readFileSync(result.model_path, 'utf-8')) as ClassifierModel;
+      expect(model.version).toBe(4);
+
+      // At least one classifier should have blend_alpha
+      const classifierEntries = Object.entries(model.classifiers);
+      expect(classifierEntries.length).toBeGreaterThan(0);
+
+      for (const [, cls] of classifierEntries) {
+        expect(cls.blend_alpha).toBeDefined();
+        expect(typeof cls.blend_alpha).toBe('number');
+        expect(cls.blend_alpha!).toBeGreaterThanOrEqual(0.05);
+        expect(cls.blend_alpha!).toBeLessThanOrEqual(0.5);
+        expect(cls.lr_val_f1).toBeDefined();
+        expect(cls.bm25_val_f1).toBeDefined();
+      }
+
+      db.close();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

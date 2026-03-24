@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { formatISO } from './util/time.js';
-import { classify, loadTopics } from './collector/topic-classifier.js';
+import { join } from 'node:path';
+import { classify, loadTopics, loadStatModel } from './collector/topic-classifier.js';
 
 export interface CheckpointResult {
   busy: boolean;
@@ -157,6 +158,10 @@ export function rebuildTopicIndex(db: Database.Database, batchSize = 1000): numb
  */
 export function reclassifyTopics(db: Database.Database, batchSize = 500): { events_processed: number; topic_rows: number } {
   loadTopics(undefined, db);
+
+  // Load statistical model for ensemble scoring (same default path as collector)
+  const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');
+  loadStatModel(join(defaultDir, 'classifier-model.json'));
 
   db.exec('DELETE FROM event_topics');
 

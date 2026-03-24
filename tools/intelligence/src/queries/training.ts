@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ok, error } from '../util/envelope.js';
-import { loadTopics, classify, mulberry32 } from '../collector/topic-classifier.js';
+import { loadTopics, classify, mulberry32, loadStatModel } from '../collector/topic-classifier.js';
 import type { IntelResponse } from '../types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1057,17 +1057,21 @@ export interface ReclassifyTrainingResult {
   events_processed: number;
   classifier_config_sha256: string;
   topics_yaml_sha256: string;
+  labels_cleared?: number;
 }
 
 /**
- * Re-run the topic classifier on all training events and reset human labels.
+ * Re-run the topic classifier on all training events.
  * Scraps existing machine_topics/confidences/scores, re-classifies from
- * title+content using the current classifier, and clears all human labels
- * so labeling can start fresh.
+ * title+content using the current classifier.
+ *
+ * When clearLabels is true, also NULLs out human_topics/labeler/notes/reviewed_at
+ * and DELETEs all rows from training_labels so labeling can start fresh.
  */
 export function reclassifyTrainingSet(
   db: Database.Database,
   batchSize = 500,
+  clearLabels = false,
 ): IntelResponse<ReclassifyTrainingResult> {
   // Load current classifier
   const topics = loadTopics();
@@ -1079,6 +1083,10 @@ export function reclassifyTrainingSet(
       suggested_action: 'Check that config/topics.yaml exists and is valid.',
     }) as unknown as IntelResponse<ReclassifyTrainingResult>;
   }
+
+  // Load statistical model for ensemble scoring (same default path as collector)
+  const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');
+  loadStatModel(join(defaultDir, 'classifier-model.json'));
 
   // Compute new metadata hashes
   const topicsYamlPath = join(__dirname, '..', '..', 'config', 'topics.yaml');
@@ -1125,6 +1133,17 @@ export function reclassifyTrainingSet(
     if (rows.length < batchSize) break;
   }
 
+  // Clear human labels if requested
+  let labelsCleared: number | undefined;
+  if (clearLabels) {
+    db.prepare(
+      `UPDATE training_events
+       SET human_topics = NULL, labeler = NULL, notes = NULL, reviewed_at = NULL`,
+    ).run();
+    const deleted = db.prepare('DELETE FROM training_labels').run();
+    labelsCleared = deleted.changes;
+  }
+
   // Update metadata
   const upsertMeta = db.prepare(
     'INSERT OR REPLACE INTO training_meta (key, value) VALUES (?, ?)',
@@ -1137,6 +1156,7 @@ export function reclassifyTrainingSet(
     events_processed: eventsProcessed,
     classifier_config_sha256: classifierSha256,
     topics_yaml_sha256: topicsYamlSha256,
+    ...(labelsCleared !== undefined && { labels_cleared: labelsCleared }),
   });
 }
 

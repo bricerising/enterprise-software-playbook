@@ -12,7 +12,7 @@
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 export const BM25_TITLE_BOOST = 2.0;
-export const BM25_THRESHOLDS: number[] = [8.0, 13.0, 18.0, 23.0, 28.0];
+export const BM25_THRESHOLDS: number[] = [8.0, 12.0, 16.0, 20.0, 24.0];
 export const BM25_SIGMOID_MIDPOINT = 14.0;
 export const BM25_SIGMOID_TEMPERATURE = 4.0;
 

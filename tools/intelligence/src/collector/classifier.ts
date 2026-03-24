@@ -11,7 +11,7 @@
 
 import { existsSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tokenize } from './bm25.js';
+import { tokenize, matchesTopicBM25, computeIDF, BM25_THRESHOLDS, type TopicDefExtended } from './bm25.js';
 import { buildVocabularyChiSquared, computeCorpusIDF, vectorize } from './tfidf.js';
 import { loadTopics, mulberry32 } from './topic-classifier.js';
 import type Database from 'better-sqlite3';
@@ -50,6 +50,9 @@ export interface ClassifierModel {
       weights: Record<number, number>;
       bias: number;
       score_threshold?: number;
+      blend_alpha?: number;
+      lr_val_f1?: number;
+      bm25_val_f1?: number;
     }
   >;
   training_meta: {
@@ -105,9 +108,9 @@ export function trainLogistic(
   const nPos = labels.filter((l) => l).length;
   const nNeg = N - nPos;
 
-  // Class-balanced sample weights
-  const posWeight = nNeg / N;
-  const negWeight = nPos / N;
+  // Class-balanced sample weights (sklearn "balanced" formula: N / (2 * n_class))
+  const posWeight = N / (2 * nPos);
+  const negWeight = N / (2 * nNeg);
 
   // Sparse weight vector
   const weights = new Map<number, number>();
@@ -218,6 +221,41 @@ function findOptimalThreshold(
   }
 
   return { threshold: bestThreshold, precision: bestPrecision, recall: bestRecall, f1: bestF1 };
+}
+
+/**
+ * Compute BM25 validation F1 for a single topic by running matchesTopicBM25
+ * on each validation document and comparing predictions to human labels.
+ */
+function computeBM25ValF1(
+  valDocs: string[][],
+  valTopics: string[][],
+  topicId: string,
+  topicDefs: TopicDefExtended[],
+  idf: Map<string, number>,
+): { precision: number; recall: number; f1: number } {
+  const topicDef = topicDefs.find((t) => t.id === topicId);
+  if (!topicDef) return { precision: 0, recall: 0, f1: 0 };
+
+  let tp = 0, fp = 0, fn = 0;
+  for (let i = 0; i < valDocs.length; i++) {
+    const tokens = valDocs[i];
+    const result = matchesTopicBM25(null, tokens.join(' '), topicDef, idf, {
+      tokens,
+      titleTokens: [],
+      avgDocLen: 150,
+    });
+    const predicted = result.matched && !result.suppressed && result.score >= BM25_THRESHOLDS[0];
+    const actual = valTopics[i].includes(topicId);
+    if (predicted && actual) tp++;
+    else if (predicted && !actual) fp++;
+    else if (!predicted && actual) fn++;
+  }
+
+  const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
+  const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+  const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+  return { precision, recall, f1 };
 }
 
 /**
@@ -346,10 +384,20 @@ export function trainClassifier(
     }
   }
 
+  // Compute bootstrap IDF for BM25 validation
+  const bm25Idf = computeIDF(allTopics);
+
   // Train per-topic classifiers
   const classifiers: Record<
     string,
-    { weights: Record<number, number>; bias: number; score_threshold: number }
+    {
+      weights: Record<number, number>;
+      bias: number;
+      score_threshold: number;
+      blend_alpha: number;
+      lr_val_f1: number;
+      bm25_val_f1: number;
+    }
   > = {};
   const perTopicResults: ClassifierTrainResult['per_topic'] = [];
   const valPrecisions: number[] = [];
@@ -379,8 +427,8 @@ export function trainClassifier(
     const trainScores = trainVectors.map((v) => predictLogistic(v, lr));
     const valScores = valVectors.map((v) => predictLogistic(v, lr));
 
-    // Find optimal threshold on TRAIN scores only (no leakage)
-    const optimal = findOptimalThreshold(trainScores, trainLabels);
+    // Find optimal threshold on validation scores (unbiased threshold selection)
+    const optimal = findOptimalThreshold(valScores, valLabels);
 
     // Evaluate threshold on validation set only (unbiased estimate)
     let valTp = 0, valFp = 0, valFn = 0;
@@ -397,6 +445,12 @@ export function trainClassifier(
     valPrecisions.push(valPrec);
     valRecalls.push(valRec);
 
+    // Compute BM25 validation F1 for this topic
+    const bm25Val = computeBM25ValF1(valDocs, valTopics, topicId, allTopics, bm25Idf);
+
+    // Compute per-topic blend_alpha: LR influence proportional to its relative strength
+    const blendAlpha = Math.min(0.5, Math.max(0.05, valF1 / (bm25Val.f1 + valF1 + 0.01)));
+
     // Serialize classifier
     const weightsObj: Record<number, number> = {};
     for (const [idx, val] of lr.weights) {
@@ -407,6 +461,9 @@ export function trainClassifier(
       weights: weightsObj,
       bias: lr.bias,
       score_threshold: optimal.threshold,
+      blend_alpha: Math.round(blendAlpha * 1000) / 1000,
+      lr_val_f1: Math.round(valF1 * 1000) / 1000,
+      bm25_val_f1: Math.round(bm25Val.f1 * 1000) / 1000,
     };
 
     perTopicResults.push({
@@ -445,7 +502,7 @@ export function trainClassifier(
   }
 
   const model: ClassifierModel = {
-    version: 3,
+    version: 4,
     created_at: new Date().toISOString(),
     vocabulary: vocabObj,
     idf,

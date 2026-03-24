@@ -125,7 +125,57 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
 
    **Compensating for blind spots**: When the forecast surfaces a high-scoring scenario or structural break, ask "what signals would I need from outside this system to validate this?" For enterprise-relevant decisions, supplement with analyst reports, job posting trends, and financial data. The system's 120-day retention window with 90d lifecycle timescale enables quarterly trend detection, but cannot detect year-over-year patterns or multi-year trends.
 
-5. **Deepen on high-scoring scenarios** (skip if `--with-context` was used — context is already inlined):
+5. **Ground each structural break in specific events** (do NOT skip even if `--with-context` was used):
+
+   For every topic with a CUSUM change point, calculate the search window from the break's `days_ago` value — **not** a flat `--since 7d`. The rule: `--since {days_ago + 4}d` to capture events that preceded the structural shift.
+
+   **Two query batches are required** — run them in parallel:
+
+   **Batch A — Topic event queries** (one per break topic):
+   ```bash
+   # Example: macro.commodities broke 6 days ago → --since 10d
+   intel events --topic macro.commodities --since 10d --limit 10
+   # Example: compute.semiconductor broke 6 days ago → --since 10d
+   intel events --topic compute.semiconductor --since 10d --limit 10
+   # Example: ai.agents broke 2 days ago → --since 6d
+   intel events --topic ai.agents --since 6d --limit 10
+   ```
+
+   **Batch B — Alternative-mechanism searches** (MANDATORY, run in the SAME parallel call as Batch A):
+   For every break cluster, identify the "obvious" narrative you'd construct from `--with-context` titles or general knowledge, then search for at least 2 alternative mechanisms. These are free-text searches, not topic-filtered — they catch cross-topic mechanisms that topic queries miss.
+   ```bash
+   # If the obvious narrative for a commodities/energy break is "oil prices":
+   intel search "helium" --since 10d --limit 5
+   intel search "lithium" --since 10d --limit 5
+   intel search "neon" --since 10d --limit 5
+   # If the obvious narrative for a semiconductor break is "demand surge":
+   intel search "fab shutdown" --since 10d --limit 5
+   intel search "supply shortage" --since 10d --limit 5
+   ```
+   **Why Batch B cannot be deferred**: Today's event titles are dominated by *consequences* of the break (oil price articles, stock moves), not the *cause* (e.g., helium supply disruption to EUV lithography). If you read Batch A results first, you will anchor on the consequence narrative and Batch B becomes a confirmation exercise rather than a genuine search. Running both batches in the same parallel call prevents this anchoring.
+
+   **Cluster rule**: When multiple breaks share a similar date (within 2 days of each other), they likely share a root cause. Use the *oldest* break date in each cluster to set the window for all topics in that cluster.
+
+   **Why break-relative windows**: A flat `--since 7d` misses the mechanism when the break is older than 3 days. Today's highest-scoring events are about the *consequences* of the break (e.g., oil price articles citing the Iran war), not the *cause* (e.g., helium supply disruption from drone attacks on Qatar). The break-relative window ensures you see the events that were publishing *when* the structural shift actually happened.
+
+   If `--with-context` was used, the response includes `break_titles` for change-point topics where `days_ago > 3` — these are event titles from ±2 days around the break date. Use them as a starting point, but still run the full `intel events` query if the break_titles suggest a mechanism you didn't expect.
+
+   **Anti-pattern to avoid**: Do not search only for catalysts you already expect to find. Searching for "Iran energy" when commodities broke will confirm an energy thesis while missing that the actual mechanism is helium supply disruption to EUV lithography. Let the events within each topic tell you what happened — then construct the narrative.
+
+5b. **Name the specific mechanism for each break** (mandatory — do NOT proceed to step 6 or synthesis without completing this):
+
+   For each structural break, write one sentence naming the specific mechanism. **You must cite which search results (from both Batch A and Batch B) informed your mechanism.** If your mechanism is informed only by Batch A results, you have not done Batch B properly — go back and run it.
+
+   | Break topic | Mechanism (one sentence) | Source |
+   |---|---|---|
+   | `macro.commodities` | *e.g., "Drone attacks shut down Qatar's helium hub (33% of global supply), threatening EUV lithography gas supply"* | *Batch B: `intel search "helium"` returned "Qatar helium shutdown puts chip supply chain on a two-week clock"* |
+   | `compute.semiconductor` | *e.g., "Helium shortage from Qatar disruption directly threatens EUV chip fabrication"* | *Batch A: `intel events --topic compute.semiconductor` + Batch B: helium search* |
+
+   **Default-association check**: If your named mechanism matches the "obvious" association for the topic (e.g., Iran conflict → oil prices for a commodities break), your Batch B searches should have already surfaced alternatives. Review them now. If Batch B returned a more specific upstream mechanism (e.g., helium, neon, rare earth disruption) that explains both the topic break AND co-occurring breaks in other topics, prefer it over the default.
+
+   **Cross-check**: Do the Batch A event titles support your named mechanism, or are they about something else? If Batch B says "helium" but Batch A titles say "oil," the Batch A titles are likely about consequences. Check the older titles in the break-relative window — they should confirm the upstream mechanism.
+
+6. **Deepen on high-scoring scenarios** (skip if `--with-context` was used AND step 5 already covered the relevant topics):
    ```bash
    # Free-text search (FTS5 syntax) — use natural language, not topic IDs
    intel search "AI agents" --since 7d --limit 10
@@ -134,7 +184,7 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    intel events --id <event_id>
    ```
 
-6. **Deepen on accumulation signals**: When the dynamics section shows `accumulation` entries (pressure building without release), these need context to be actionable. The key question is: "what is the threshold event?" Search for recent content on the accumulating topic to identify what could trigger a release:
+7. **Deepen on accumulation signals**: When the dynamics section shows `accumulation` entries (pressure building without release), these need context to be actionable. The key question is: "what is the threshold event?" Search for recent content on the accumulating topic to identify what could trigger a release:
    ```bash
    # For each accumulation topic, search for recent context
    intel search "kubernetes security" --since 7d --limit 10
@@ -142,12 +192,12 @@ All volume counts use `COALESCE(canonical_url, event_id)` by default (`--dedup c
    ```
    Look for: policy announcements, vulnerability disclosures, conference deadlines, or competitive moves that could serve as the threshold event. Accumulations without an identifiable trigger are noted but lower-priority.
 
-7. **Cross-reference with current trends** (skip if already run in step 1):
+8. **Cross-reference with current trends** (skip if already run in step 1):
    ```bash
    intel trends --since 24h
    intel trends --since 7d          # if medium/long-term question
    ```
 
-8. **Synthesize** using the output template in the main skill document.
+9. **Synthesize** using the output template in the main skill document.
 
 **Parallelism note**: `intel stats`, `intel trends`, and `intel forecast` are independent queries with no data dependency. Run them in parallel when possible to minimize latency (e.g., stats + trends in step 1, or trends + forecast if data freshness is already confirmed).

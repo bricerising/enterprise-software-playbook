@@ -9,6 +9,8 @@ import {
   buildCorpusIDF,
   matchesTopicBM25,
   BM25_THRESHOLDS,
+  BM25_SIGMOID_MIDPOINT,
+  BM25_SIGMOID_TEMPERATURE,
   type TopicDefExtended,
   type BM25Result,
 } from './bm25.js';
@@ -36,8 +38,21 @@ let statModel: ClassifierModel | null = null;
 let statVocabulary: Map<string, number> | null = null;
 let statIdf: number[] | null = null;
 
-/** Ensemble boost/penalize factor when stat model agrees/disagrees with BM25. */
+/** Ensemble boost/penalize factor when stat model agrees/disagrees with BM25 (v3 fallback). */
 const STAT_ENSEMBLE_FACTOR = 0.15;
+
+/** Minimum LR sigmoid probability for LR-only topics (BM25 missed). */
+const LR_ONLY_MIN_PROB = 0.7;
+
+/**
+ * Inverse BM25 sigmoid: convert a probability in (0,1) back to BM25 raw-score scale.
+ * Inverse of: p = 1 / (1 + exp(-(score - midpoint) / temperature))
+ */
+function inverseSigmoid(prob: number): number {
+  // Clamp to avoid log(0) or log(negative)
+  const p = Math.min(Math.max(prob, 1e-6), 1 - 1e-6);
+  return -Math.log(1 / p - 1) * BM25_SIGMOID_TEMPERATURE + BM25_SIGMOID_MIDPOINT;
+}
 
 /**
  * Load a serialized statistical classifier model for ensemble scoring.
@@ -258,27 +273,59 @@ export function classify(
     }
   }
 
-  // Statistical model ensemble: nudge BM25 scores based on LR agreement/disagreement
+  // Phase 2+3: Statistical model ensemble — blend LR scores with BM25
   if (statModel && statVocabulary && statIdf) {
     const statVector = vectorize(tokens, statVocabulary, statIdf, true);
-    for (const result of scored) {
-      const topicClassifier = statModel.classifiers[result.topicId];
-      if (!topicClassifier) continue;
+    const bm25TopicIds = new Set(scored.map((r) => r.topicId));
 
-      // Compute LR raw score: dot(w, x) + b
+    // Compute LR sigmoid probability for each topic
+    const lrProbs = new Map<string, number>();
+    for (const [topicId, topicClassifier] of Object.entries(statModel.classifiers)) {
       let lrScore = topicClassifier.bias;
       for (const [idx, val] of statVector) {
         const weight = topicClassifier.weights[idx] ?? 0;
         lrScore += val * weight;
       }
+      // Convert raw logit to sigmoid probability
+      lrProbs.set(topicId, 1 / (1 + Math.exp(-lrScore)));
+    }
 
-      // Binary ensemble signal: boost if LR agrees, penalize if not
-      const threshold = topicClassifier.score_threshold ?? 0;
-      if (lrScore >= threshold) {
-        result.score *= 1 + STAT_ENSEMBLE_FACTOR;
-      } else {
-        result.score *= 1 - STAT_ENSEMBLE_FACTOR;
-      }
+    // Phase 3a: Blend scores for topics already in BM25 results
+    // Uses multiplicative approach: LR confidence scaled by alpha nudges BM25 score.
+    // This avoids sigmoid saturation issues that occur with probability-space blending
+    // at extreme BM25 scores (where sigmoid → 1.0 makes round-tripping lossy).
+    for (const result of scored) {
+      const topicClassifier = statModel.classifiers[result.topicId];
+      if (!topicClassifier) continue;
+
+      const lrProb = lrProbs.get(result.topicId) ?? 0;
+      const alpha = topicClassifier.blend_alpha ?? STAT_ENSEMBLE_FACTOR;
+
+      // Map LR prob [0,1] to boost factor [-alpha, +alpha]
+      const lrBoost = alpha * (2 * lrProb - 1);
+      result.score *= 1 + lrBoost;
+      const bm25Prob = 1 / (1 + Math.exp(-(result.score - BM25_SIGMOID_MIDPOINT) / BM25_SIGMOID_TEMPERATURE));
+      result.confidence = Math.round(Math.min(1.0, bm25Prob) * 1000) / 1000;
+    }
+
+    // Phase 3b: LR-only topics (BM25 missed) — surface if LR is confident enough
+    for (const [topicId, topicClassifier] of Object.entries(statModel.classifiers)) {
+      if (bm25TopicIds.has(topicId)) continue;
+
+      const lrProb = lrProbs.get(topicId) ?? 0;
+      if (lrProb < LR_ONLY_MIN_PROB) continue;
+
+      const alpha = topicClassifier.blend_alpha ?? STAT_ENSEMBLE_FACTOR;
+      const blended = alpha * lrProb;
+      const blendedScore = inverseSigmoid(blended);
+
+      scored.push({
+        topicId,
+        score: blendedScore,
+        confidence: Math.round(Math.min(1.0, blended) * 1000) / 1000,
+        matched: true,
+        suppressed: false,
+      });
     }
   }
 

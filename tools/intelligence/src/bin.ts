@@ -1055,8 +1055,9 @@ trainingSet
 
 trainingSet
   .command('reclassify <training-db>')
-  .description('Re-run topic classifier on all events (preserves human labels)')
+  .description('Re-run topic classifier on all events (preserves human labels unless --clear-labels)')
   .option('--model <path>', 'Load a stat model for ensemble classification')
+  .option('--clear-labels', 'Also clear all human labels so labeling can start fresh')
   .action((trainingDbPath, opts) => {
     try {
       const fmt = program.opts().format ?? 'json';
@@ -1074,7 +1075,7 @@ trainingSet
       }
       const db = openTrainingDb(trainingDbPath, false);
       try {
-        const result = reclassifyTrainingSet(db);
+        const result = reclassifyTrainingSet(db, 500, opts.clearLabels ?? false);
         output(result, fmt);
       } finally {
         db.close();
