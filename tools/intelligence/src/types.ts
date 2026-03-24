@@ -1,7 +1,7 @@
 /** Response envelope for all intel commands */
 export interface IntelResponse<T> {
   tool: 'intel';
-  schema_version: 'v1';
+  schema_version: 'v2';
   status: 'ok' | 'error';
   data: T;
   warnings: string[];
@@ -30,7 +30,7 @@ export type IntelErrorCode =
   | 'INVALID_CURSOR'
   | 'INTERNAL_ERROR';
 
-export type SourceType = 'rss' | 'hackernews' | 'lobsters' | 'edgar' | 'earnings';
+export type SourceType = 'rss' | 'hackernews' | 'edgar' | 'earnings';
 
 export interface StoredEvent {
   id: number;

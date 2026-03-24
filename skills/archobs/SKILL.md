@@ -62,6 +62,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    archobs show summary --format json
    archobs show velocity --window 30 --compare --format json
    archobs show suggestions --format json
+   archobs show team --format json
    ```
 
    **Note:** `show edges` requires a `cluster_id` from `show clusters` or `show velocity`. Run it **after** those complete, targeting the top 2-3 leakiest or most active clusters:
@@ -174,7 +175,42 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    For detailed velocity signal interpretation (feature adjacency reasoning, acceleration context, convergent hub patterns), see the [forecast skill](../forecast/SKILL.md) (internal engine).
 
-6. **Route findings to the right skill**:
+6. **Team analysis** — check bus factor and knowledge concentration per cluster:
+   ```bash
+   archobs show team --format json
+   archobs show team --sort concentration --format json
+   archobs show team --sort bus_factor --min-size 3 --format json
+   ```
+
+   | Signal | Threshold | Meaning |
+   |--------|-----------|---------|
+   | `bus_factor` | 1 | Single point of failure — one person owns the cluster |
+   | `hhi` | > 0.5 | High knowledge concentration — few authors dominate |
+   | `top_author_pct` | > 0.8 | Top contributor owns 80%+ of commits |
+
+7. **Fitness check** — CI-gatable architecture health evaluation:
+   ```bash
+   # Quick check with defaults
+   archobs check --format json
+
+   # CI mode (JSON output, exit code 0/1)
+   archobs check --ci
+
+   # Custom thresholds
+   archobs check --max-file-risk 0.7 --max-leakage 0.5 --min-bus-factor 2 --ci
+   ```
+
+   The `check` command is **read-only** — it never runs the pipeline or writes artifacts, making it safe for CI. Add to your CI pipeline:
+   ```yaml
+   - name: Architecture fitness check
+     run: archobs check --out .archobs --ci
+   ```
+
+   Default thresholds: `--max-file-risk 0.8 --max-leakage 0.6 --min-cohesion 0.4 --max-risk-mean 0.5 --min-bus-factor 2 --min-cluster-size 2`
+
+   Bus factor check is optional — skipped if `bus_factor.parquet` doesn't exist (team analysis not run).
+
+8. **Route findings to the right skill**:
    - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
    - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
@@ -183,7 +219,7 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    - Pre-merge health check: `finish` (verify metrics did not regress)
    - Thorough assessment of structural findings: `review` (type: architecture)
 
-7. **Read suggestions** (if generated):
+9. **Read suggestions** (if generated):
    If you already ran `archobs show all --format json` in step 4, suggestions are included under the `"suggestions"` key — no additional command needed.
 
    **When using individual parallel queries (step 4)**, add `archobs show suggestions --format json` to your parallel batch — this reads `suggestions.json` directly with no extra computation:

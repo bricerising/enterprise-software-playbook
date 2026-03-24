@@ -1,9 +1,12 @@
 import type Database from 'better-sqlite3';
-import type { ChainItem, TransitiveChainItem, RankedChainItem, LifecycleItem, MultiscaleItem } from './types.js';
+import type { ChainItem, TransitiveChainItem, RankedChainItem, LifecycleItem, MultiscaleItem, ConfidenceTier } from './types.js';
 import {
   PUB_TS, PUB_DAY,
   DECAY_LAMBDA,
   MAX_TRANSITIVE_PER_PREFIX, MAX_RANKED_PER_TRIGGER,
+  MIN_CHAIN_TOPIC_EVENTS,
+  CHAIN_TIER_HIGH_VOLUME, CHAIN_TIER_HIGH_DIVERSITY, CHAIN_TIER_HIGH_SUPPORT,
+  CHAIN_TIER_MODERATE_VOLUME, CHAIN_TIER_MODERATE_DIVERSITY, CHAIN_TIER_MODERATE_SUPPORT,
   sinceISO, julianDay,
 } from './types.js';
 
@@ -16,6 +19,7 @@ export function detectChains(
   minSupport: number,
   useDedup: boolean,
   lifecycles: LifecycleItem[],
+  topicCounts?: Map<string, number>,
 ): ChainItem[] {
   const volumeExpr = useDedup
     ? 'COUNT(DISTINCT COALESCE(e.canonical_url, e.event_id))'
@@ -127,7 +131,7 @@ export function detectChains(
     const temporalPattern: 'weekday_correlated' | undefined =
       trigWd > 0.75 && tgtWd > 0.75 ? 'weekday_correlated' : undefined;
 
-    return {
+    const chainItem: ChainItem = {
       from_topic: row.from_topic,
       to_topic: row.to_topic,
       support: row.support,
@@ -144,7 +148,9 @@ export function detectChains(
       trigger_base_rate: Math.round((row.trigger_base_rate ?? 0) * 100) / 100,
       ...(temporalPattern ? { temporal_pattern: temporalPattern } : {}),
       weekday_ratio: weekdayRatio,
+      confidence_tier: 'low', // provisional; assigned below
     };
+    return chainItem;
   });
 
   // Compute directionality: support(A→B) / (support(A→B) + support(B→A))
@@ -160,7 +166,41 @@ export function detectChains(
       : Math.round((forward / (forward + reverse)) * 100) / 100;
   }
 
+  // Assign confidence tiers based on topic volume, source diversity, and support
+  if (topicCounts) {
+    for (const c of chainList) {
+      c.confidence_tier = assignConfidenceTier(c, topicCounts);
+    }
+  }
+
   return chainList;
+}
+
+/* ── Spec 014 §B: Chain confidence tier assignment ─────────────────── */
+
+export function assignConfidenceTier(
+  chain: ChainItem,
+  topicCounts: Map<string, number>,
+): ConfidenceTier {
+  const fromCount = topicCounts.get(chain.from_topic) ?? 0;
+  const toCount = topicCounts.get(chain.to_topic) ?? 0;
+  const minCount = Math.min(fromCount, toCount);
+
+  if (minCount < MIN_CHAIN_TOPIC_EVENTS) return 'spurious';
+
+  if (
+    minCount >= CHAIN_TIER_HIGH_VOLUME &&
+    chain.source_diversity >= CHAIN_TIER_HIGH_DIVERSITY &&
+    chain.support >= CHAIN_TIER_HIGH_SUPPORT
+  ) return 'high';
+
+  if (
+    minCount >= CHAIN_TIER_MODERATE_VOLUME &&
+    chain.source_diversity >= CHAIN_TIER_MODERATE_DIVERSITY &&
+    chain.support >= CHAIN_TIER_MODERATE_SUPPORT
+  ) return 'moderate';
+
+  return 'low';
 }
 
 /* ── B2. Transitive chain detection ────────────────────────────────── */

@@ -1154,3 +1154,18 @@ def test_recent_commits_in_cluster_metrics(tmp_path: Path) -> None:
     assert c0["recent_file_changes_90d"] == 2
     assert c1["recent_file_changes_30d"] == 0
     assert c1["recent_file_changes_90d"] == 1
+
+
+def test_git_history_includes_author(tmp_path: Path) -> None:
+    """Verify that extract_git_history returns an 'author' column."""
+    from archobs.git_history import extract_git_history
+    from archobs.inventory import build_inventory
+
+    repo = build_sample_repo(tmp_path)
+    files_df = build_inventory(repo, default_config().filters)
+    commit_files_df = extract_git_history(repo, set(files_df["path"].tolist()))
+
+    assert "author" in commit_files_df.columns
+    assert not commit_files_df.empty
+    # All commits in the sample repo are by "Test User"
+    assert set(commit_files_df["author"].unique()) == {"Test User"}

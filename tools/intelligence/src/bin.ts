@@ -9,6 +9,7 @@ import { runCollector } from './collector/index.js';
 import { searchEvents } from './queries/search.js';
 import { computeTrends } from './queries/trends.js';
 import { listEvents, getEvent } from './queries/events.js';
+import { addEntry, listEntries, searchJournal } from './queries/journal.js';
 import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
 import { queryStats } from './queries/stats.js';
@@ -18,6 +19,19 @@ import { startMcpServer } from './mcp/server.js';
 import { loadTopics } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
 import {
+  generateTrainingSet,
+  getNextUnreviewed,
+  updateTrainingLabel,
+  trainingProgress,
+  listTrainingSets,
+  exportTrainingSet,
+  evaluateTrainingSet,
+  reclassifyTrainingSet,
+  openTrainingDb,
+  TRAINING_APP_ID,
+} from './queries/training.js';
+import { trainClassifier } from './collector/naive-bayes.js';
+import {
   checkpoint as dbCheckpoint,
   prune as dbPrune,
   incrementalVacuum,
@@ -25,6 +39,7 @@ import {
   vacuumInto,
   rebuildFts,
   rebuildTopicIndex,
+  reclassifyTopics,
   optimizeFts,
   quickCheck,
 } from './db-maintenance.js';
@@ -351,7 +366,7 @@ const forecast = program
   .option('--compact', 'Return compact summary (top-N per section)')
   .option('--summary', 'Return minimal summary (top-3 scenarios, top-5 chains, change points)')
   .option('--with-context', 'Inline top event titles per change point and top chain topic')
-  .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.openai,hw.gpu)')
+  .option('--topics <topics>', 'Comma-separated topic IDs to filter output (e.g., ai.foundation-models,compute.gpu)')
   .option('--section <sections>', 'Comma-separated sections to include (e.g., lifecycles,entropy)')
   .option('--snapshot', 'Save forecast snapshot for later evaluation')
   .action((opts) => {
@@ -670,6 +685,24 @@ db.command('rebuild-topic-index')
     }
   });
 
+db.command('reclassify')
+  .description('Re-run topic classifier on all events using current topics.yaml')
+  .action(async () => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const writer = openWriter(dbPath);
+      try {
+        const result = reclassifyTopics(writer);
+        output(ok({ status: 'completed', ...result }), program.opts().format ?? 'json');
+      } finally {
+        writer.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
 db.command('optimize-fts')
   .description('Merge FTS index segments')
   .action(async () => {
@@ -712,6 +745,341 @@ db.command('quick-check')
       output(result, fmt);
     } catch (err) {
       handleError(err, 'read');
+    }
+  });
+
+// --- journal ---
+const journal = program.command('journal').description('Decision journal');
+
+journal
+  .command('add')
+  .description('Record a decision')
+  .requiredOption('--context <text>', 'What situation prompted the decision')
+  .requiredOption('--decision <text>', 'What was decided')
+  .option('--rationale <text>', 'Why this option was chosen')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--refs <json>', 'JSON array of signal refs [{type,id}]')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const writer = openWriter(dbPath);
+      try {
+        const tags = opts.tags
+          ? opts.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : undefined;
+        let signalRefs: Array<{ type: 'event' | 'topic'; id: string }> | undefined;
+        if (opts.refs) {
+          try {
+            signalRefs = JSON.parse(opts.refs);
+          } catch {
+            output(
+              error({
+                code: 'INVALID_QUERY',
+                message: 'Invalid JSON in --refs.',
+                retryable: false,
+                suggested_action: 'Provide valid JSON array, e.g. [{"type":"event","id":"rss:test:1"}]',
+              }),
+              fmt,
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
+        const result = addEntry(writer, {
+          context: opts.context,
+          decision: opts.decision,
+          rationale: opts.rationale,
+          tags,
+          signal_refs: signalRefs,
+        });
+        output(result, fmt);
+      } finally {
+        writer.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+journal
+  .command('list')
+  .description('List journal entries')
+  .option('--since <duration>', 'Time bound (e.g., 7d)')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--limit <n>', 'Max results', '20')
+  .option('--cursor <token>', 'Pagination cursor')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          listEntries(db, {
+            since: parseSince(opts.since),
+            tag: opts.tag,
+            limit: parseInt(opts.limit, 10),
+            cursor: opts.cursor,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+journal
+  .command('search <query>')
+  .description('Full-text search across journal entries')
+  .option('--since <duration>', 'Time bound (e.g., 7d)')
+  .option('--limit <n>', 'Max results', '20')
+  .option('--cursor <token>', 'Pagination cursor')
+  .action((query, opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          searchJournal(db, query, {
+            since: parseSince(opts.since),
+            limit: parseInt(opts.limit, 10),
+            cursor: opts.cursor,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+// --- training-set ---
+const trainingSet = program.command('training-set').description('Training data management');
+
+trainingSet
+  .command('generate')
+  .description('Generate a training database from a random sample of events')
+  .option('--sample-rate <rate>', 'Fraction of events to sample (0.0, 1.0]', '0.1')
+  .option('--output <path>', 'Output database path')
+  .option('--seed <number>', 'Integer seed for reproducible sampling')
+  .option('--dry-run', 'Preview without creating DB')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      const sampleRate = parseFloat(opts.sampleRate);
+      let seed: number | undefined;
+      if (opts.seed != null) {
+        seed = Number(opts.seed);
+      }
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          generateTrainingSet(db, {
+            sampleRate,
+            outputPath: opts.output,
+            sourceDbPath: dbPath,
+            seed,
+            dryRun: opts.dryRun ?? false,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('next <training-db>')
+  .description('Get next unreviewed event(s) for classification')
+  .option('--limit <n>', 'Number of events to return', '1')
+  .option('--show-machine-labels', 'Include machine labels in output')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = getNextUnreviewed(
+          db,
+          parseInt(opts.limit, 10),
+          opts.showMachineLabels ?? false,
+        );
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('label <training-db> <event-id>')
+  .description('Assign human-classified topics to a training event')
+  .requiredOption('--topics <csv>', 'Comma-separated topic IDs')
+  .option('--labeler <id>', 'Who/what produced this label')
+  .option('--notes <text>', 'Optional annotation')
+  .action((trainingDbPath, eventId, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, false);
+      try {
+        const topics = opts.topics === ''
+          ? []
+          : opts.topics.split(',').map((t: string) => t.trim()).filter(Boolean);
+        const result = updateTrainingLabel(db, eventId, {
+          human_topics: topics,
+          labeler: opts.labeler,
+          notes: opts.notes,
+        });
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+trainingSet
+  .command('progress <training-db>')
+  .description('Show labeling progress')
+  .option('--verbose', 'Include per-topic coverage')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = trainingProgress(db, opts.verbose ?? false);
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('list')
+  .description('List training databases')
+  .option('--dir <path>', 'Directory to scan')
+  .action((opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const result = listTrainingSets(opts.dir);
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('export <training-db>')
+  .description('Export labeled training data')
+  .option('--output <path>', 'Write JSONL to file')
+  .option('--reviewed-only', 'Only export labeled events')
+  .option('--raw', 'Emit raw JSONL to stdout')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = exportTrainingSet(db, {
+          reviewedOnly: opts.reviewedOnly ?? false,
+          raw: opts.raw ?? false,
+          outputPath: opts.output,
+        });
+        if (typeof result === 'string') {
+          // Raw JSONL output
+          console.log(result);
+        } else {
+          output(result, fmt);
+        }
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('evaluate <training-db>')
+  .description('Evaluate classifier accuracy against human labels')
+  .option('--min-samples <n>', 'Minimum samples per topic for metrics', '30')
+  .option('--labeler <id>', 'Filter to events labeled by this labeler')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = evaluateTrainingSet(db, {
+          minSamples: parseInt(opts.minSamples, 10),
+          labeler: opts.labeler,
+        });
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+trainingSet
+  .command('reclassify <training-db>')
+  .description('Re-run topic classifier on all events and clear human labels')
+  .action((trainingDbPath) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, false);
+      try {
+        const result = reclassifyTrainingSet(db);
+        output(result, fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+// --- classifier ---
+const classifier = program.command('classifier').description('Classifier training and management');
+
+classifier
+  .command('train <training-db>')
+  .description('Train a CNB classifier from labeled training data')
+  .option('--output <path>', 'Output model JSON path')
+  .option('--min-examples <n>', 'Minimum positive examples per topic', '20')
+  .option('--validation-split <ratio>', 'Fraction of data held out for validation', '0.2')
+  .action((trainingDbPath, opts) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const db = openTrainingDb(trainingDbPath, true);
+      try {
+        const result = trainClassifier(db, {
+          outputPath: opts.output,
+          minExamples: parseInt(opts.minExamples, 10),
+          validationSplit: parseFloat(opts.validationSplit),
+        });
+        output(ok(result), fmt);
+      } finally {
+        db.close();
+      }
+    } catch (err) {
+      handleError(err, 'maintenance');
     }
   });
 

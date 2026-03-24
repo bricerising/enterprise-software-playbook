@@ -186,6 +186,7 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 - Feature adjacency patterns: [`references/feature-adjacency.md`](references/feature-adjacency.md)
 - Git-only fallback: [`references/manual-fallback.md`](references/manual-fallback.md)
 - Raw signal gathering: [`intel`](../intel/SKILL.md)
+- Decision journal (signal-to-decision closure): `intel journal add` — record forecast-informed decisions for cross-session memory. See [`intel` SKILL.md § Decision Journal](../intel/SKILL.md#command-reference-decision-journal)
 - Architecture observability: [`archobs`](../archobs/SKILL.md)
 - Implementation planning: [`plan`](../plan/SKILL.md)
 - Architecture decisions: [`architecture`](../architecture/SKILL.md)

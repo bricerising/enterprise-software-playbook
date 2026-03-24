@@ -61,6 +61,18 @@ def read_graph_edges(out: Path) -> pd.DataFrame:
     return _require_parquet(out, "graph_edges")
 
 
+def read_author_stats(out: Path) -> pd.DataFrame:
+    return _require_parquet(out, "author_stats")
+
+
+def read_bus_factor(out: Path) -> pd.DataFrame:
+    return _require_parquet(out, "bus_factor")
+
+
+def read_concentration(out: Path) -> pd.DataFrame:
+    return _require_parquet(out, "concentration")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1117,3 +1129,73 @@ def format_schema(base: Path, artifact_name: str) -> str:
     for col in df.columns:
         lines.append(f"  {col:<25s} {df[col].dtype}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Format: team
+# ---------------------------------------------------------------------------
+
+
+def format_team(
+    bus_factor_df: pd.DataFrame,
+    concentration_df: pd.DataFrame,
+    cluster_metrics_df: pd.DataFrame,
+    *,
+    sort_by: str = "bus_factor",
+    min_size: int = 2,
+    fmt: str = "table",
+) -> str:
+    """Format team analysis (bus factor + concentration) joined with cluster labels."""
+    if bus_factor_df.empty or concentration_df.empty:
+        return "No team metrics available. Run `archobs report` first."
+
+    # Join bus_factor with concentration
+    merged = bus_factor_df.merge(concentration_df, on="cluster_id", how="outer")
+
+    # Add cluster size and label if available
+    if not cluster_metrics_df.empty:
+        label_cols = ["cluster_id"]
+        if "size" in cluster_metrics_df.columns:
+            label_cols.append("size")
+        if "label" in cluster_metrics_df.columns:
+            label_cols.append("label")
+        cluster_info = cluster_metrics_df[label_cols].drop_duplicates("cluster_id")
+        merged = merged.merge(cluster_info, on="cluster_id", how="left")
+
+    # Filter by min size
+    if "size" in merged.columns:
+        merged = merged[merged["size"] >= min_size]
+
+    if merged.empty:
+        return "No clusters meet the minimum size filter."
+
+    # Sort
+    valid_sort_cols = {"bus_factor", "concentration", "size"}
+    if sort_by == "concentration" and "hhi" in merged.columns:
+        merged = merged.sort_values("hhi", ascending=False)
+    elif sort_by == "size" and "size" in merged.columns:
+        merged = merged.sort_values("size", ascending=False)
+    else:
+        merged = merged.sort_values("bus_factor", ascending=True)
+
+    merged = merged.reset_index(drop=True)
+
+    # Select display columns
+    display_cols = ["cluster_id"]
+    if "label" in merged.columns:
+        display_cols.append("label")
+    if "size" in merged.columns:
+        display_cols.append("size")
+    display_cols.extend(["bus_factor", "top_author", "top_author_pct"])
+    if "hhi" in merged.columns:
+        display_cols.append("hhi")
+    if "author_count" in merged.columns:
+        display_cols.append("author_count")
+
+    display = _round_floats(merged[[c for c in display_cols if c in merged.columns]])
+
+    if fmt == "json":
+        return _to_json_records(display)
+    elif fmt == "csv":
+        return _to_csv(display)
+    return _to_table(display)

@@ -11,6 +11,8 @@ const FeedSchema = z.discriminatedUnion('source', [
     name: z.string(),
     category: z.string().optional(),
     poll_interval: z.number().positive().optional(),
+    /** Cap on items processed per poll cycle (default: 200, range: 5–2000). */
+    max_items: z.number().int().min(5).max(2000).optional().default(200),
     request_options: z
       .object({
         headers: z.record(z.string()).optional(),
@@ -23,11 +25,6 @@ const FeedSchema = z.discriminatedUnion('source', [
     modes: z.array(z.enum(['new', 'top', 'best'])).optional().default(['new', 'top']),
     poll_interval: z.number().positive().optional(),
     max_items: z.number().positive().optional().default(100),
-  }),
-  z.object({
-    source: z.literal('lobsters'),
-    name: z.string(),
-    poll_interval: z.number().positive().optional(),
   }),
   z.object({
     source: z.literal('edgar'),

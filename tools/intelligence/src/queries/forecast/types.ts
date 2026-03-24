@@ -24,6 +24,39 @@ export const WINDOWS = [
 
 export const MAX_TITLES_PER_SCENARIO = 3;
 
+/* ── Spec 014: Confidence gate constants ───────────────────────────── */
+
+/** Data age threshold below which cold-start applies.
+ *  Aligned with spec 015's MIN_DATA_AGE_DAYS. */
+export const MIN_LIFECYCLE_DAYS = 90;
+
+/** Floor of the graduated confidence cap at 0 days of data. */
+export const MIN_COLD_START_CONFIDENCE = 0.3;
+
+/** Minimum events for a topic to not be flagged as insufficient. */
+export const MIN_TOPIC_EVENTS = 50;
+
+/** Minimum events per topic for a chain to avoid `spurious` tier.
+ *  Aligned with MIN_TOPIC_EVENTS. */
+export const MIN_CHAIN_TOPIC_EVENTS = 50;
+
+/** Minimum topic volume (both topics) for `high` confidence tier. */
+export const CHAIN_TIER_HIGH_VOLUME = 500;
+/** Minimum source diversity for `high` confidence tier. */
+export const CHAIN_TIER_HIGH_DIVERSITY = 0.6;
+/** Minimum support for `high` confidence tier. */
+export const CHAIN_TIER_HIGH_SUPPORT = 30;
+
+/** Minimum topic volume (both topics) for `moderate` confidence tier. */
+export const CHAIN_TIER_MODERATE_VOLUME = 100;
+/** Minimum source diversity for `moderate` confidence tier. */
+export const CHAIN_TIER_MODERATE_DIVERSITY = 0.5;
+/** Minimum support for `moderate` confidence tier. */
+export const CHAIN_TIER_MODERATE_SUPPORT = 10;
+
+/** Decimal places for scenario score rounding. */
+export const SCENARIO_DECIMAL_PLACES = 3;
+
 /** Exponential decay half-life in days. Chains with recent co-occurrences
  *  are weighted higher than old ones. */
 export const DECAY_HALF_LIFE_DAYS = 14;
@@ -57,7 +90,7 @@ export const MAX_RANKED_PER_TRIGGER = 3;
 
 /** Maximum transitive chains per A→B prefix in the top-100.
  *  Ensures diverse cross-domain paths rather than five variations
- *  of the same cascade (e.g., all sharing aws.bedrock→hw.chip prefix). */
+ *  of the same cascade (e.g., all sharing ai.foundation-models→compute.gpu prefix). */
 export const MAX_TRANSITIVE_PER_PREFIX = 3;
 
 /** Maximum dynamics entries per type. Keeps output manageable for synthesis. */
@@ -115,6 +148,30 @@ export const MIN_OUTCOMES_FOR_WEIGHT = 5;
  *  where skill = 1 - brier / brier_ref (Brier Skill Score). */
 export const WEIGHT_FLOOR = 0.5;
 
+/* ── Spec 014: Confidence gate types ───────────────────────────────── */
+
+export type ConfidenceTier = 'spurious' | 'low' | 'moderate' | 'high';
+
+export interface ChainTierCounts {
+  spurious: number;
+  low: number;
+  moderate: number;
+  high: number;
+}
+
+export interface DataQuality {
+  data_age_days: number;
+  cold_start: boolean;
+  total_events: number;
+  lifecycle_topic_count: number;
+  insufficient_data_count: number;
+  insufficient_data_pct: number;
+  window_unclassified_pct: number;
+  window_top_source_name: string;
+  window_top_source_pct: number;
+  chain_tier_counts: ChainTierCounts;
+}
+
 /* ── Interfaces ─────────────────────────────────────────────────────── */
 
 export interface ChangePointSummary {
@@ -147,6 +204,8 @@ export interface ForecastData {
   /** Present when --with-context is used. Top event titles per change point topic
    *  and per top ranked chain topic, inlined to save deepening round-trips. */
   context?: TopicContext[];
+  /** Always present; survives --section filtering. */
+  data_quality: DataQuality;
 }
 
 export interface LifecycleItem {
@@ -157,6 +216,10 @@ export interface LifecycleItem {
   volumes: Record<string, number>;
   accelerations: Record<string, number>;
   change_points: number[];
+  /** True when data_age_days < 90; omitted when false. */
+  cold_start?: boolean;
+  /** True when topic has < 50 events in the analysis window; omitted when false. */
+  insufficient_data?: boolean;
 }
 
 export interface ChainItem {
@@ -182,6 +245,8 @@ export interface ChainItem {
    *  chain's trigger and target, averaged. Always present so consumers can
    *  programmatically assess calendar artifacts even below the binary threshold. */
   weekday_ratio: number;
+  /** Data-quality classification based on underlying topic volume, source diversity, and support. */
+  confidence_tier: ConfidenceTier;
 }
 
 export interface TransitiveChainItem {
@@ -222,6 +287,8 @@ export interface ScenarioItem {
    *  High values (> 0.8) indicate omnipresent targets — predicting they'll
    *  spike is trivially true and not actionable. */
   target_base_rate: number;
+  /** Worst confidence tier among contributing chains. */
+  min_chain_tier: ConfidenceTier;
 }
 
 export interface EntropyItem {
@@ -264,7 +331,7 @@ export interface ComputeForecastOpts {
   /** When true, inline top event titles per change point topic and per top ranked chain
    *  topic. Saves a round-trip of `intel search` deepening calls. */
   with_context?: boolean;
-  /** Filter output to specific topic IDs (e.g., ['ai.openai', 'hw.gpu']).
+  /** Filter output to specific topic IDs (e.g., ['ai.foundation-models', 'compute.gpu']).
    *  The full pipeline runs but output is post-filtered to only include data
    *  relating to these topics. Eliminates the need to run the full forecast
    *  twice to extract lifecycle/multiscale/entropy for specific topics. */

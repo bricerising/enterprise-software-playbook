@@ -346,6 +346,22 @@ class AnalysisRun:
             cluster_metrics_df, commit_files_df, file_metrics_df,
         )
 
+        # Compute team metrics (author distribution, bus factor, concentration)
+        if "author" in commit_files_df.columns:
+            from archobs.team_metrics import (
+                compute_author_stats,
+                compute_bus_factor,
+                compute_knowledge_concentration,
+            )
+
+            author_stats_df = compute_author_stats(commit_files_df, file_metrics_df)
+            if not author_stats_df.empty:
+                bus_factor_df = compute_bus_factor(author_stats_df)
+                concentration_df = compute_knowledge_concentration(author_stats_df)
+                write_parquet(author_stats_df, self.store.base_path, "author_stats")
+                write_parquet(bus_factor_df, self.store.base_path, "bus_factor")
+                write_parquet(concentration_df, self.store.base_path, "concentration")
+
         # Compute canonical cluster labels once and store in cluster_metrics
         cluster_metrics_df = _attach_canonical_labels(
             cluster_metrics_df, file_metrics_df,

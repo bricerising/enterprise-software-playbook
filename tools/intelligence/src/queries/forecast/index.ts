@@ -4,16 +4,18 @@ import { ok } from '../../util/envelope.js';
 import type {
   ForecastData, ComputeForecastOpts,
   ChangePointSummary, DynamicItem,
+  DataQuality, ChainTierCounts, ConfidenceTier, LifecycleItem, ChainItem,
 } from './types.js';
-import { COMPACT_LIMITS, SUMMARY_LIMITS, sinceISO, formatISO } from './types.js';
+import { COMPACT_LIMITS, SUMMARY_LIMITS, MIN_LIFECYCLE_DAYS, sinceISO, formatISO } from './types.js';
 
-import { computeLifecycles } from './lifecycle.js';
+import { computeLifecycles, applyColdStartGuard } from './lifecycle.js';
 import { detectChains, detectTransitiveChains, buildMultiscaleView, computeRankedChains } from './chains.js';
 import { computeEntropy } from './entropy.js';
 import { detectChangePoints } from './cusum.js';
 import { projectScenariosBayesian } from './scenarios.js';
 import { detectDynamics } from './dynamics.js';
 import { buildTopicContext } from './context.js';
+import { computeDataSpan, computeTopicCounts } from '../shared.js';
 
 /* ── Re-exports ────────────────────────────────────────────────────── */
 
@@ -24,6 +26,7 @@ export type {
   DynamicType, DynamicItem,
   ComputeForecastOpts,
   SnapshotResult, EvaluateResult,
+  ConfidenceTier, ChainTierCounts, DataQuality,
 } from './types.js';
 
 export { detectDynamics } from './dynamics.js';
@@ -51,6 +54,18 @@ export function computeForecast(
       scenarios: [],
       dynamics: [],
       change_points_summary: [],
+      data_quality: {
+        data_age_days: 0,
+        cold_start: true,
+        total_events: 0,
+        lifecycle_topic_count: 0,
+        insufficient_data_count: 0,
+        insufficient_data_pct: 0,
+        window_unclassified_pct: 0,
+        window_top_source_name: '',
+        window_top_source_pct: 0,
+        chain_tier_counts: { spurious: 0, low: 0, moderate: 0, high: 0 },
+      },
     } as ForecastData, {
       warnings: [`Invalid window_days: ${requestedWindowDays}. Must be > 0.`],
     });
@@ -76,6 +91,10 @@ export function computeForecast(
   `;
   const { cnt: eventsAnalyzed } = db.prepare(countSql).get(windowStart) as { cnt: number };
 
+  // Spec 014 §A: Compute data age and per-topic event counts
+  const dataAgeDays = computeDataSpan(db, windowStart);
+  const topicCounts = computeTopicCounts(db, windowStart);
+
   const lifecycles = computeLifecycles(db, now, useDedup);
 
   // G. CUSUM change-point detection — merge into lifecycle items
@@ -84,7 +103,10 @@ export function computeForecast(
     lc.change_points = changePointMap.get(lc.topic) ?? [];
   }
 
-  const chains = detectChains(db, windowStart, lagWindowDays, minSupport, useDedup, lifecycles);
+  // Spec 014 §A: Apply cold-start guard and insufficient-data flag
+  applyColdStartGuard(lifecycles, dataAgeDays, topicCounts);
+
+  const chains = detectChains(db, windowStart, lagWindowDays, minSupport, useDedup, lifecycles, topicCounts);
   const transitive_chains = detectTransitiveChains(chains);
 
   // F. Entropy scoring
@@ -94,6 +116,17 @@ export function computeForecast(
   const scenarios = projectScenariosBayesian(
     db, chains, lifecycles, entropy, windowStart, topScenarios, useDedup,
   );
+
+  // Spec 014 §C: Low-probability warning
+  if (scenarios.length > 0 && scenarios.every(s => s.score < 0.01)) {
+    warnings.push(
+      'All scenario probabilities are below 0.01 — chain data may be insufficient for meaningful projection. ' +
+      'Consider widening the analysis window or lowering min_support.',
+    );
+  }
+
+  // Spec 014 §D: Compute data quality object
+  const dataQuality = computeDataQuality(db, windowStart, eventsAnalyzed, dataAgeDays, lifecycles, chains);
 
   const multiscale = buildMultiscaleView(lifecycles);
   const ranked_chains = computeRankedChains(chains, lifecycles);
@@ -201,6 +234,7 @@ export function computeForecast(
       scenarios: filteredScenarios.slice(0, effectiveLimits.scenarios),
       dynamics: capDynamicsPerType(filteredDynamics, effectiveLimits.dynamics_per_type),
       change_points_summary: filteredChangePoints,
+      data_quality: dataQuality,
     };
     if (effectiveLimits.lifecycles > 0) result.lifecycles = filteredLifecycles.slice(0, effectiveLimits.lifecycles);
     if (effectiveLimits.chains > 0) result.chains = filteredChains.slice(0, effectiveLimits.chains);
@@ -228,6 +262,7 @@ export function computeForecast(
     dynamics: filteredDynamics,
     change_points_summary: filteredChangePoints,
     ...(filteredContext ? { context: filteredContext } : {}),
+    data_quality: dataQuality,
   };
 
   if (sectionFilter) {
@@ -248,11 +283,12 @@ function capDynamicsPerType(items: DynamicItem[], maxPerType: number): DynamicIt
   });
 }
 
-/** Strip a ForecastData to only the sections named in the filter set. */
+/** Strip a ForecastData to only the sections named in the filter set.
+ *  data_quality is always preserved (metadata, not a filterable section). */
 function filterSections(data: ForecastData, keep: Set<string>): ForecastData {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const out: any = { window: data.window };
-  const keys: Array<keyof Omit<ForecastData, 'window'>> = [
+  const out: any = { window: data.window, data_quality: data.data_quality };
+  const keys: Array<keyof Omit<ForecastData, 'window' | 'data_quality'>> = [
     'lifecycles', 'chains', 'ranked_chains', 'scenarios', 'multiscale',
     'transitive_chains', 'entropy', 'dynamics', 'change_points_summary', 'context',
   ];
@@ -260,4 +296,79 @@ function filterSections(data: ForecastData, keep: Set<string>): ForecastData {
     if (keep.has(k) && data[k] !== undefined) out[k] = data[k];
   }
   return out as ForecastData;
+}
+
+/* ── Spec 014 §D: Data quality computation ─────────────────────────── */
+
+function countInsufficientData(lifecycles: LifecycleItem[]): number {
+  return lifecycles.filter(item => item.insufficient_data === true).length;
+}
+
+function countChainTiers(chains: ChainItem[]): ChainTierCounts {
+  const counts: ChainTierCounts = { spurious: 0, low: 0, moderate: 0, high: 0 };
+  for (const c of chains) {
+    counts[c.confidence_tier]++;
+  }
+  return counts;
+}
+
+function computeDataQuality(
+  db: Database.Database,
+  windowStart: string,
+  totalEvents: number,
+  dataAgeDays: number,
+  lifecycles: LifecycleItem[],
+  chains: ChainItem[],
+): DataQuality {
+  // Window-scoped unclassified events
+  let windowUnclassifiedPct = 0;
+  if (totalEvents > 0) {
+    const unclassifiedSql = `
+      SELECT COUNT(*) AS unclassified
+      FROM events e
+      WHERE e.fetched_at >= ?
+        AND NOT EXISTS (
+          SELECT 1 FROM event_topics et WHERE et.event_id = e.event_id
+        )
+    `;
+    const { unclassified } = db.prepare(unclassifiedSql).get(windowStart) as { unclassified: number };
+    windowUnclassifiedPct = Math.round((unclassified / totalEvents) * 1000) / 1000;
+  }
+
+  // Window-scoped top source
+  let windowTopSourceName = '';
+  let windowTopSourcePct = 0;
+  if (totalEvents > 0) {
+    const topSourceSql = `
+      SELECT COALESCE(source, 'unknown') AS source, COUNT(*) AS cnt
+      FROM events
+      WHERE fetched_at >= ?
+      GROUP BY source
+      ORDER BY cnt DESC
+      LIMIT 1
+    `;
+    const topRow = db.prepare(topSourceSql).get(windowStart) as { source: string; cnt: number } | undefined;
+    if (topRow) {
+      windowTopSourceName = topRow.source;
+      windowTopSourcePct = Math.round((topRow.cnt / totalEvents) * 1000) / 1000;
+    }
+  }
+
+  const insufficientCount = countInsufficientData(lifecycles);
+  const lifecycleTopicCount = lifecycles.length;
+
+  return {
+    data_age_days: dataAgeDays,
+    cold_start: dataAgeDays < MIN_LIFECYCLE_DAYS,
+    total_events: totalEvents,
+    lifecycle_topic_count: lifecycleTopicCount,
+    insufficient_data_count: insufficientCount,
+    insufficient_data_pct: lifecycleTopicCount > 0
+      ? Math.round((insufficientCount / lifecycleTopicCount) * 1000) / 1000
+      : 0,
+    window_unclassified_pct: windowUnclassifiedPct,
+    window_top_source_name: windowTopSourceName,
+    window_top_source_pct: windowTopSourcePct,
+    chain_tier_counts: countChainTiers(chains),
+  };
 }
