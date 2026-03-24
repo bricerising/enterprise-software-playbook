@@ -67,6 +67,9 @@ const ConfigSchema = z.object({
   collector: CollectorSchema.default({}),
   feeds: z.array(FeedSchema).default([]),
   topics_file: z.string().optional(),
+  stat_model_file: z.string().optional(),
+  /** @deprecated Use stat_model_file instead */
+  cnb_model_file: z.string().optional(),
   output: OutputSchema.default({}),
 });
 
@@ -137,6 +140,15 @@ export function loadConfig(configPath?: string): IntelConfig {
 
   if (parsed.topics_file) {
     parsed.topics_file = expandHome(parsed.topics_file);
+  }
+  // Backward compat: cnb_model_file → stat_model_file
+  if (!parsed.stat_model_file && parsed.cnb_model_file) {
+    parsed.stat_model_file = parsed.cnb_model_file;
+  }
+  delete (parsed as any).cnb_model_file;
+
+  if (parsed.stat_model_file) {
+    parsed.stat_model_file = expandHome(parsed.stat_model_file);
   }
 
   // Validate SEC constraints (EDGAR + earnings)

@@ -25,7 +25,7 @@ export const MAX_NEXT_LIMIT = 50;
 export const MIN_TOPIC_SAMPLES = 30;
 export const TRAINING_APP_ID = 0x54524E47; // "TRNG"
 export const SAMPLING_ALGORITHM = 'reservoir_sampling_algorithm_r';
-export const CNB_MIN_TRAINING_EVENTS = 500;
+export const MIN_TRAINING_EVENTS = 500;
 
 // --- Types (§E) ---
 
@@ -105,6 +105,8 @@ export interface UnreviewedEvent {
 export interface EvaluationOpts {
   minSamples: number;
   labeler?: string;
+  /** When true, re-run classify() on title/content instead of reading stored machine_topics. */
+  reclassify?: boolean;
 }
 
 export interface EvaluationResult {
@@ -871,8 +873,12 @@ export function evaluateTrainingSet(
   opts: EvaluationOpts = { minSamples: MIN_TOPIC_SAMPLES },
 ): IntelResponse<EvaluationResult> {
   // Get all reviewed events
-  let query = `SELECT machine_topics, human_topics, labeler
-               FROM training_events WHERE reviewed_at IS NOT NULL`;
+  const needsContent = opts.reclassify ?? false;
+  let query = needsContent
+    ? `SELECT title, content, machine_topics, human_topics, labeler
+       FROM training_events WHERE reviewed_at IS NOT NULL`
+    : `SELECT machine_topics, human_topics, labeler
+       FROM training_events WHERE reviewed_at IS NOT NULL`;
   const params: string[] = [];
   if (opts.labeler) {
     query += ' AND labeler = ?';
@@ -880,6 +886,8 @@ export function evaluateTrainingSet(
   }
 
   const rows = db.prepare(query).all(...params) as Array<{
+    title?: string | null;
+    content?: string | null;
     machine_topics: string;
     human_topics: string;
     labeler: string;
@@ -914,7 +922,13 @@ export function evaluateTrainingSet(
   let totalSymmetricDiff = 0;
 
   for (const row of rows) {
-    const machineSet = new Set<string>(parseJsonArray(row.machine_topics));
+    let machineSet: Set<string>;
+    if (needsContent) {
+      const classified = classify(row.title ?? null, row.content ?? null);
+      machineSet = new Set(classified.map((t) => t.id));
+    } else {
+      machineSet = new Set<string>(parseJsonArray(row.machine_topics));
+    }
     const humanSet = new Set<string>(parseJsonArray(row.human_topics));
 
     // Over-classification
@@ -1041,7 +1055,6 @@ export function evaluateTrainingSet(
 
 export interface ReclassifyTrainingResult {
   events_processed: number;
-  labels_cleared: number;
   classifier_config_sha256: string;
   topics_yaml_sha256: string;
 }
@@ -1082,8 +1095,7 @@ export function reclassifyTrainingSet(
   );
   const updateStmt = db.prepare(`
     UPDATE training_events
-    SET machine_topics = ?, machine_confidences = ?, machine_scores = ?,
-        human_topics = NULL, labeler = 'unspecified', notes = NULL, reviewed_at = NULL
+    SET machine_topics = ?, machine_confidences = ?, machine_scores = ?
     WHERE event_id = ?
   `);
 
@@ -1113,12 +1125,6 @@ export function reclassifyTrainingSet(
     if (rows.length < batchSize) break;
   }
 
-  // Clear label history
-  const labelCount = (
-    db.prepare('SELECT COUNT(*) AS cnt FROM training_labels').get() as { cnt: number }
-  ).cnt;
-  db.exec('DELETE FROM training_labels');
-
   // Update metadata
   const upsertMeta = db.prepare(
     'INSERT OR REPLACE INTO training_meta (key, value) VALUES (?, ?)',
@@ -1129,7 +1135,6 @@ export function reclassifyTrainingSet(
 
   return ok({
     events_processed: eventsProcessed,
-    labels_cleared: labelCount,
     classifier_config_sha256: classifierSha256,
     topics_yaml_sha256: topicsYamlSha256,
   });

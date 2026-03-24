@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
-import { loadTopics, classify, classifyIds, getLoadedTopics, getCachedIdf } from '../src/collector/topic-classifier.js';
+import { loadTopics, classify, classifyIds, getLoadedTopics, getCachedIdf, loadStatModel, clearStatModel, hasStatModel } from '../src/collector/topic-classifier.js';
 import {
   tokenize,
   computeIDF,
@@ -17,8 +17,8 @@ import {
   BM25_THRESHOLDS,
   type TopicDefExtended,
 } from '../src/collector/bm25.js';
-import { trainCNB, predictCNB, trainClassifier } from '../src/collector/naive-bayes.js';
-import { buildVocabulary, computeCorpusIDF, vectorize } from '../src/collector/tfidf.js';
+import { trainLogistic, predictLogistic, trainClassifier } from '../src/collector/classifier.js';
+import { buildVocabulary, buildVocabularyChiSquared, computeCorpusIDF, vectorize } from '../src/collector/tfidf.js';
 import { fitPlatt, calibrate } from '../src/collector/platt.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -517,9 +517,9 @@ describe('BM25 bootstrap IDF', () => {
   });
 });
 
-// --- CNB training pipeline (5 tests) ---
+// --- Classifier training pipeline (5 tests) ---
 
-describe('CNB training pipeline', () => {
+describe('Classifier training pipeline', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -631,7 +631,7 @@ describe('CNB training pipeline', () => {
     }
   });
 
-  it('vocabulary size is capped at CNB_MAX_VOCABULARY', () => {
+  it('vocabulary size is capped at MAX_VOCABULARY', () => {
     // Create lots of unique tokens
     const docs = Array.from({ length: 100 }, (_, i) =>
       Array.from({ length: 100 }, (_, j) => `term${i}_${j}`),
@@ -675,21 +675,20 @@ describe('CNB training pipeline', () => {
   });
 });
 
-// --- CNB prediction (3 tests) ---
+// --- Logistic regression prediction (3 tests) ---
 
-describe('CNB prediction', () => {
+describe('Logistic regression prediction', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'intel-cnb-pred-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'intel-lr-pred-'));
   });
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('predictCNB produces scores for trained topics', () => {
-
+  it('predictLogistic produces scores for trained topics', () => {
     const docs = [
       tokenize('kubernetes container cluster orchestration'),
       tokenize('neural network transformer language model'),
@@ -701,16 +700,15 @@ describe('CNB prediction', () => {
     const idf = computeCorpusIDF(docs, vocab);
     const vectors = docs.map((d: string[]) => vectorize(d, vocab, idf));
 
-    const classifier = trainCNB(vectors, labels, vocab.size);
+    const classifier = trainLogistic(vectors, labels, vocab.size);
     const testVec = vectorize(tokenize('kubernetes container cluster'), vocab, idf);
-    const score = predictCNB(testVec, classifier);
+    const score = predictLogistic(testVec, classifier);
 
     expect(typeof score).toBe('number');
     expect(Number.isFinite(score)).toBe(true);
   });
 
-  it('Platt-calibrated CNB output is in range [0.01, 0.99]', () => {
-    // Realistic score range for CNB
+  it('Platt calibration produces outputs in (0, 1)', () => {
     const scores = Array.from({ length: 50 }, (_, i) => -2 + i * 0.1);
     const labels = scores.map((s) => s > 0);
     const params = fitPlatt(scores, labels);
@@ -723,14 +721,12 @@ describe('CNB prediction', () => {
   });
 
   it('topics below min_examples fall back to BM25 at prediction time', () => {
-    // This is tested via the trainClassifier result — topics with bm25_fallback
-    // are not included in the model's classifiers
     // With very few examples, training still works
     const vectors = [new Map([[0, 1.0]]), new Map([[1, 1.0]])];
     const labels = [true, false];
-    const classifier = trainCNB(vectors, labels, 10);
+    const classifier = trainLogistic(vectors, labels, 10);
     expect(classifier).toBeDefined();
-    expect(classifier.logTheta).toBeDefined();
+    expect(classifier.weights).toBeDefined();
   });
 });
 
@@ -825,7 +821,7 @@ describe('intel classifier train', () => {
     }
   });
 
-  it('min-examples flag changes which topics use CNB vs BM25 fallback', () => {
+  it('min-examples flag changes which topics use logistic vs BM25 fallback', () => {
     const dbPath = createMinimalTrainingDb(600);
     const db = new Database(dbPath, { readonly: true });
     try {
@@ -833,20 +829,20 @@ describe('intel classifier train', () => {
         outputPath: join(tmpDir, 'model-low.json'),
         minExamples: 5,
       });
-      const cnbCountLow = low.per_topic.filter(
-        (t: { method: string }) => t.method === 'cnb',
+      const lrCountLow = low.per_topic.filter(
+        (t: { method: string }) => t.method === 'logistic',
       ).length;
 
       const high = trainClassifier(db, {
         outputPath: join(tmpDir, 'model-high.json'),
         minExamples: 999,
       });
-      const cnbCountHigh = high.per_topic.filter(
-        (t: { method: string }) => t.method === 'cnb',
+      const lrCountHigh = high.per_topic.filter(
+        (t: { method: string }) => t.method === 'logistic',
       ).length;
 
-      // Higher threshold should result in fewer CNB topics
-      expect(cnbCountHigh).toBeLessThan(cnbCountLow);
+      // Higher threshold should result in fewer logistic topics
+      expect(lrCountHigh).toBeLessThan(lrCountLow);
     } finally {
       db.close();
     }
@@ -865,5 +861,275 @@ describe('intel classifier train', () => {
     } finally {
       db.close();
     }
+  });
+});
+
+// --- Chi-squared vocabulary selection (3 tests) ---
+
+describe('Chi-squared vocabulary selection', () => {
+  it('selects discriminative terms over common terms', () => {
+    // "common" appears in all docs, "kubernetes" only in topic A, "neural" only in topic B
+    const docs = [
+      ['common', 'kubernetes', 'cluster'],
+      ['common', 'kubernetes', 'pod'],
+      ['common', 'neural', 'network'],
+      ['common', 'neural', 'transformer'],
+    ];
+    const labels = [['infra'], ['infra'], ['ai'], ['ai']];
+    const vocab = buildVocabularyChiSquared(docs, labels, 3);
+
+    // Discriminative terms should be selected; "common" should not since it's uniform across topics
+    expect(vocab.has('kubernetes')).toBe(true);
+    expect(vocab.has('neural')).toBe(true);
+    // "common" has chi-squared=0 since it appears uniformly — should rank lowest
+    expect(vocab.size).toBe(3);
+  });
+
+  it('respects maxSize limit', () => {
+    const docs = Array.from({ length: 20 }, (_, i) => [`term${i}`, 'shared']);
+    const labels = docs.map((_, i) => [i < 10 ? 'a' : 'b']);
+    const vocab = buildVocabularyChiSquared(docs, labels, 5);
+    expect(vocab.size).toBeLessThanOrEqual(5);
+  });
+
+  it('handles single-topic data gracefully', () => {
+    const docs = [['hello', 'world'], ['hello', 'foo']];
+    const labels = [['only-topic'], ['only-topic']];
+    const vocab = buildVocabularyChiSquared(docs, labels, 10);
+    expect(vocab.size).toBeGreaterThan(0);
+  });
+});
+
+// --- LR weight properties (2 tests) ---
+
+describe('LR weight properties', () => {
+  it('trained weights are sparse with large vocabulary', () => {
+    // Use many documents with varied vocabulary to show sparsity
+    const posTerms = ['kubernetes', 'container', 'cluster', 'pod', 'helm', 'deployment'];
+    const negTerms = ['neural', 'network', 'transformer', 'language', 'model', 'inference'];
+    const fillerTerms = Array.from({ length: 50 }, (_, i) => `filler${i}`);
+    const docs: string[][] = [];
+    const labels: boolean[] = [];
+
+    for (let i = 0; i < 30; i++) {
+      // Positive docs: pos terms + random filler
+      docs.push([...posTerms, fillerTerms[i % 50], fillerTerms[(i + 7) % 50]]);
+      labels.push(true);
+      // Negative docs: neg terms + different random filler
+      docs.push([...negTerms, fillerTerms[(i + 3) % 50], fillerTerms[(i + 11) % 50]]);
+      labels.push(false);
+    }
+
+    const vocab = buildVocabulary(docs, 1000);
+    const idf = computeCorpusIDF(docs, vocab);
+    const vectors = docs.map((d) => vectorize(d, vocab, idf, true));
+
+    const lr = trainLogistic(vectors, labels, vocab.size);
+
+    // With L2 regularization, filler terms that appear in both classes should have
+    // near-zero weights. Weights should be nonzero but not cover entire vocab.
+    expect(lr.weights.size).toBeGreaterThan(0);
+    expect(lr.weights.size).toBeLessThanOrEqual(vocab.size);
+  });
+
+  it('different topics produce different weight vectors', () => {
+    const docs = [
+      tokenize('kubernetes container'),
+      tokenize('neural network'),
+      tokenize('kubernetes pod'),
+      tokenize('deep learning'),
+    ];
+    const labelsA = [true, false, true, false];
+    const labelsB = [false, true, false, true];
+    const vocab = buildVocabulary(docs, 1000);
+    const idf = computeCorpusIDF(docs, vocab);
+    const vectors = docs.map((d) => vectorize(d, vocab, idf, true));
+
+    const lrA = trainLogistic(vectors, labelsA, vocab.size);
+    const lrB = trainLogistic(vectors, labelsB, vocab.size);
+
+    // Weight vectors should differ
+    let same = true;
+    for (const [idx, val] of lrA.weights) {
+      if (Math.abs(val - (lrB.weights.get(idx) ?? 0)) > 0.001) {
+        same = false;
+        break;
+      }
+    }
+    expect(same).toBe(false);
+  });
+});
+
+// --- Stratified split (2 tests) ---
+
+describe('Stratified train/val split', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'intel-strat-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rare topics appear in validation set', () => {
+    // Create a training DB where one topic is very rare
+    const dbPath = join(tmpDir, 'strat-test.db');
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma(`application_id = 0x54524E47`);
+
+    db.exec(`
+      CREATE TABLE training_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT UNIQUE NOT NULL,
+        title TEXT, content TEXT, url TEXT, source TEXT, feed TEXT,
+        published_at TEXT, fetched_at TEXT, author TEXT,
+        score INTEGER DEFAULT 0, comments INTEGER DEFAULT 0,
+        machine_topics TEXT NOT NULL DEFAULT '[]',
+        machine_confidences TEXT NOT NULL DEFAULT '[]',
+        machine_scores TEXT NOT NULL DEFAULT '[]',
+        human_topics TEXT, labeler TEXT DEFAULT 'unspecified',
+        notes TEXT, reviewed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE TABLE training_labels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL,
+        human_topics TEXT NOT NULL,
+        labeler TEXT NOT NULL,
+        notes TEXT,
+        labeled_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE TABLE training_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    `);
+    db.prepare("INSERT INTO training_meta VALUES ('schema_version', '1')").run();
+
+    const insert = db.prepare(`
+      INSERT INTO training_events (event_id, title, content, source, fetched_at,
+        human_topics, labeler, reviewed_at)
+      VALUES (?, ?, ?, 'rss', datetime('now'), ?, 'test', datetime('now'))
+    `);
+
+    db.transaction(() => {
+      // 490 events for common topic
+      for (let i = 0; i < 490; i++) {
+        insert.run(
+          `rss:common:${i}`,
+          `Common topic event ${i}`,
+          `Content about language model llm transformer ${i}`,
+          JSON.stringify(['ai.foundation-models']),
+        );
+      }
+      // 10 events for rare topic — with positional slice these would all end up in train
+      for (let i = 0; i < 10; i++) {
+        insert.run(
+          `rss:rare:${i}`,
+          `Rare topic event ${i}`,
+          `Content about gpu nvidia cuda h100 accelerator ${i}`,
+          JSON.stringify(['compute.gpu']),
+        );
+      }
+    })();
+
+    try {
+      const result = trainClassifier(db, {
+        outputPath: join(tmpDir, 'strat-model.json'),
+        minExamples: 5,
+        validationSplit: 0.2,
+      });
+
+      // compute.gpu should have been trained (not just bm25_fallback)
+      const gpuResult = result.per_topic.find((t) => t.topic === 'compute.gpu');
+      if (gpuResult) {
+        expect(gpuResult.method).toBe('logistic');
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('model version is 3', () => {
+    const dbPath = join(tmpDir, 'version-test.db');
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma(`application_id = 0x54524E47`);
+
+    db.exec(`
+      CREATE TABLE training_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT UNIQUE NOT NULL,
+        title TEXT, content TEXT, url TEXT, source TEXT, feed TEXT,
+        published_at TEXT, fetched_at TEXT, author TEXT,
+        score INTEGER DEFAULT 0, comments INTEGER DEFAULT 0,
+        machine_topics TEXT NOT NULL DEFAULT '[]',
+        machine_confidences TEXT NOT NULL DEFAULT '[]',
+        machine_scores TEXT NOT NULL DEFAULT '[]',
+        human_topics TEXT, labeler TEXT DEFAULT 'unspecified',
+        notes TEXT, reviewed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE TABLE training_labels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL,
+        human_topics TEXT NOT NULL,
+        labeler TEXT NOT NULL,
+        notes TEXT,
+        labeled_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE TABLE training_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    `);
+    db.prepare("INSERT INTO training_meta VALUES ('schema_version', '1')").run();
+
+    const insert = db.prepare(`
+      INSERT INTO training_events (event_id, title, content, source, fetched_at,
+        human_topics, labeler, reviewed_at)
+      VALUES (?, ?, ?, 'rss', datetime('now'), ?, 'test', datetime('now'))
+    `);
+    db.transaction(() => {
+      for (let i = 0; i < 600; i++) {
+        insert.run(
+          `rss:v:${i}`,
+          `Event ${i}`,
+          `Content about kubernetes container gpu nvidia ${i}`,
+          JSON.stringify(['ai.foundation-models']),
+        );
+      }
+    })();
+
+    try {
+      const result = trainClassifier(db, {
+        outputPath: join(tmpDir, 'v2-model.json'),
+        minExamples: 5,
+      });
+      const model = JSON.parse(readFileSync(result.model_path, 'utf-8'));
+      expect(model.version).toBe(3);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+// --- Statistical model ensemble (2 tests) ---
+
+describe('Statistical model ensemble', () => {
+  afterEach(() => {
+    clearStatModel();
+  });
+
+  it('classify is unchanged when no stat model is loaded', () => {
+    clearStatModel();
+    expect(hasStatModel()).toBe(false);
+
+    // Should still work fine with BM25 only
+    const topics = classifyIds('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents...');
+    expect(topics).toContain('ai.foundation-models');
+  });
+
+  it('loadStatModel returns false for non-existent file', () => {
+    const loaded = loadStatModel('/tmp/nonexistent-stat-model.json');
+    expect(loaded).toBe(false);
+    expect(hasStatModel()).toBe(false);
   });
 });

@@ -12,7 +12,7 @@
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 export const BM25_TITLE_BOOST = 2.0;
-export const BM25_THRESHOLDS: number[] = [8.0, 12.0, 16.0, 20.0, 24.0];
+export const BM25_THRESHOLDS: number[] = [8.0, 13.0, 18.0, 23.0, 28.0];
 export const BM25_SIGMOID_MIDPOINT = 14.0;
 export const BM25_SIGMOID_TEMPERATURE = 4.0;
 
@@ -97,6 +97,45 @@ export function computeIDF(topicDefs: TopicDefExtended[]): Map<string, number> {
   for (const [token, df] of docFreq) {
     // Standard BM25 IDF: ln((N - df + 0.5) / (df + 0.5) + 1)
     idf.set(token, Math.log((N - df + 0.5) / (df + 0.5) + 1));
+  }
+
+  return idf;
+}
+
+/**
+ * Build IDF from a corpus of documents (title+content pairs).
+ * Uses actual document frequencies across the corpus instead of topic keyword counts.
+ * Falls back to bootstrap IDF for tokens not seen in the corpus.
+ */
+export function buildCorpusIDF(
+  documents: Array<{ title: string | null; content: string | null }>,
+  bootstrapIdf?: Map<string, number>,
+  opts?: { maxIdf?: number },
+): Map<string, number> {
+  const N = documents.length;
+  const maxIdf = opts?.maxIdf ?? Infinity;
+  const docFreq = new Map<string, number>();
+
+  for (const doc of documents) {
+    const text = ((doc.title ?? '') + ' ' + (doc.content ?? '')).slice(0, 3000);
+    const uniqueTokens = new Set(tokenize(text));
+    for (const token of uniqueTokens) {
+      docFreq.set(token, (docFreq.get(token) ?? 0) + 1);
+    }
+  }
+
+  const idf = new Map<string, number>();
+  for (const [token, df] of docFreq) {
+    idf.set(token, Math.min(maxIdf, Math.log((N - df + 0.5) / (df + 0.5) + 1)));
+  }
+
+  // Merge bootstrap IDF for tokens not in the corpus
+  if (bootstrapIdf) {
+    for (const [token, val] of bootstrapIdf) {
+      if (!idf.has(token)) {
+        idf.set(token, Math.min(maxIdf, val));
+      }
+    }
   }
 
   return idf;

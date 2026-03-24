@@ -5,7 +5,7 @@ import { RssAdapter } from './adapters/rss.js';
 import { HackerNewsAdapter } from './adapters/hackernews.js';
 import { EdgarAdapter } from './adapters/edgar.js';
 import { EarningsAdapter } from './adapters/earnings.js';
-import { classify, loadTopics, type ClassifiedTopic } from './topic-classifier.js';
+import { classify, loadTopics, loadStatModel, type ClassifiedTopic } from './topic-classifier.js';
 import { loadCheckpoint, saveCheckpoint, updateCollectorHealth } from './checkpoints.js';
 import { fetchContent } from './content-fetcher.js';
 import { canonicalizeUrl } from '../util/url.js';
@@ -13,6 +13,7 @@ import { formatISO } from '../util/time.js';
 import { openWriter, checkSqliteVersion } from '../db.js';
 import { quickCheck } from '../db-maintenance.js';
 import { ControlClient } from '../control/channel.js';
+import { join } from 'node:path';
 
 const DEFAULT_BATCH_SIZE = 100;
 
@@ -119,6 +120,16 @@ export async function runCollector(opts: CollectorOpts): Promise<void> {
 
   // Load topics (pass db for learned topic weights)
   loadTopics(config.topics_file, db);
+
+  // Load statistical model for ensemble scoring (falls back to BM25-only if not found)
+  const defaultDir = join(
+    process.env.HOME ?? process.env.USERPROFILE ?? '.',
+    '.local', 'share', 'intel',
+  );
+  const statModelPath = config.stat_model_file ?? join(defaultDir, 'classifier-model.json');
+  if (loadStatModel(statModelPath)) {
+    console.error(`[intel] Loaded stat model: ${statModelPath}`);
+  }
 
   // Check for unclean shutdown via stale PID file
   const { running, pid } = ControlClient.isDaemonRunning();

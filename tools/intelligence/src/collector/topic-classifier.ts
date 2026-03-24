@@ -6,11 +6,14 @@ import type Database from 'better-sqlite3';
 import {
   tokenize,
   computeIDF,
+  buildCorpusIDF,
   matchesTopicBM25,
   BM25_THRESHOLDS,
   type TopicDefExtended,
   type BM25Result,
 } from './bm25.js';
+import { computeCorpusIDF, vectorize } from './tfidf.js';
+import type { ClassifierModel } from './classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_TOPICS_PATH = join(__dirname, '..', '..', 'config', 'topics.yaml');
@@ -26,6 +29,56 @@ export interface ClassifiedTopic {
 let loadedTopics: TopicDefExtended[] = [];
 let topicWeights: Map<string, number> = new Map();
 let cachedIdf: Map<string, number> = new Map();
+let topicThresholds: Map<string, number> = new Map();
+
+// --- Statistical model ensemble state ---
+let statModel: ClassifierModel | null = null;
+let statVocabulary: Map<string, number> | null = null;
+let statIdf: number[] | null = null;
+
+/** Ensemble boost/penalize factor when stat model agrees/disagrees with BM25. */
+const STAT_ENSEMBLE_FACTOR = 0.15;
+
+/**
+ * Load a serialized statistical classifier model for ensemble scoring.
+ * Returns true if loaded successfully, false if file not found.
+ */
+export function loadStatModel(filePath: string): boolean {
+  if (!existsSync(filePath)) return false;
+  try {
+    const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as ClassifierModel;
+    if (raw.version < 3) {
+      console.error(`[intel] Skipping model ${filePath}: version ${raw.version} (need ≥3, re-train with logistic regression)`);
+      return false;
+    }
+    statModel = raw;
+    statVocabulary = new Map(Object.entries(raw.vocabulary));
+    statIdf = raw.idf;
+    return true;
+  } catch {
+    statModel = null;
+    statVocabulary = null;
+    statIdf = null;
+    return false;
+  }
+}
+
+/** Clear loaded stat model (for testing). */
+export function clearStatModel(): void {
+  statModel = null;
+  statVocabulary = null;
+  statIdf = null;
+}
+
+/** Check if a stat model is loaded (for testing). */
+export function hasStatModel(): boolean {
+  return statModel !== null;
+}
+
+// Backward-compatible aliases
+export const loadCNBModel = loadStatModel;
+export const clearCNBModel = clearStatModel;
+export const hasCNBModel = hasStatModel;
 
 export function loadTopics(topicsPath?: string, db?: Database.Database): TopicDefExtended[] {
   const path = topicsPath ?? DEFAULT_TOPICS_PATH;
@@ -101,6 +154,60 @@ export function getCachedIdf(): Map<string, number> {
   return cachedIdf;
 }
 
+/** Replace the cached IDF with an externally-computed IDF (e.g., corpus-derived). */
+export function setCachedIdf(idf: Map<string, number>): void {
+  cachedIdf = idf;
+}
+
+/**
+ * Load corpus IDF from a JSON file. Falls back to bootstrap IDF for
+ * any keyword tokens not present in the corpus.
+ * Returns true if file was loaded, false if not found.
+ */
+export function loadCorpusIDF(filePath: string): boolean {
+  if (!existsSync(filePath)) return false;
+  try {
+    const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, number>;
+    const corpusIdf = new Map(Object.entries(raw));
+    // Merge: corpus IDF takes precedence, bootstrap fills gaps
+    for (const [token, val] of cachedIdf) {
+      if (!corpusIdf.has(token)) {
+        corpusIdf.set(token, val);
+      }
+    }
+    cachedIdf = corpusIdf;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Load per-topic score thresholds from a JSON file.
+ * Each topic gets an individually optimized threshold instead of the global default.
+ * Returns true if file was loaded, false if not found.
+ */
+export function loadTopicThresholds(filePath: string): boolean {
+  if (!existsSync(filePath)) return false;
+  try {
+    const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, number>;
+    topicThresholds = new Map(Object.entries(raw));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Set per-topic thresholds directly (for testing). */
+export function setTopicThresholds(thresholds: Map<string, number>): void {
+  topicThresholds = thresholds;
+}
+
+/** Get per-topic thresholds map. */
+export function getTopicThresholds(): Map<string, number> {
+  return topicThresholds;
+}
+
 /**
  * Cap on combined title+content length for classification.
  * Longer content (page boilerplate, sidebars, related-article links) triggers
@@ -148,6 +255,30 @@ export function classify(
         Math.min(1.0, result.confidence * weight) * 1000,
       ) / 1000;
       scored.push(result);
+    }
+  }
+
+  // Statistical model ensemble: nudge BM25 scores based on LR agreement/disagreement
+  if (statModel && statVocabulary && statIdf) {
+    const statVector = vectorize(tokens, statVocabulary, statIdf, true);
+    for (const result of scored) {
+      const topicClassifier = statModel.classifiers[result.topicId];
+      if (!topicClassifier) continue;
+
+      // Compute LR raw score: dot(w, x) + b
+      let lrScore = topicClassifier.bias;
+      for (const [idx, val] of statVector) {
+        const weight = topicClassifier.weights[idx] ?? 0;
+        lrScore += val * weight;
+      }
+
+      // Binary ensemble signal: boost if LR agrees, penalize if not
+      const threshold = topicClassifier.score_threshold ?? 0;
+      if (lrScore >= threshold) {
+        result.score *= 1 + STAT_ENSEMBLE_FACTOR;
+      } else {
+        result.score *= 1 - STAT_ENSEMBLE_FACTOR;
+      }
     }
   }
 
