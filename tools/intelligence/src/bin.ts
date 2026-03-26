@@ -19,7 +19,7 @@ import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
 import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
 import { startMcpServer } from './mcp/server.js';
-import { loadTopics, loadStatModel } from './collector/topic-classifier.js';
+import { loadTopics, loadStatModel, classify, getLoadedTopics, getStatModelMeta } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
 import {
   generateTrainingSet,
@@ -1216,6 +1216,104 @@ classifier
       }), fmt);
     } catch (err) {
       handleError(err, 'maintenance');
+    }
+  });
+
+classifier
+  .command('test <text>')
+  .description('Classify a text snippet and print topic scores (debugging)')
+  .option('--model <path>', 'Path to stat model (default: ~/.local/share/intel/classifier-model.json)')
+  .option('--top <n>', 'Max topics to return', '10')
+  .action((text: string, opts: { model?: string; top: string }) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+
+      loadTopics();
+
+      const defaultDir = joinPath(
+        process.env.HOME ?? process.env.USERPROFILE ?? '.',
+        '.local', 'share', 'intel',
+      );
+      const modelPath = opts.model
+        ? resolvePath(opts.model)
+        : joinPath(defaultDir, 'classifier-model.json');
+      const modelLoaded = loadStatModel(modelPath);
+
+      const maxTopics = parseInt(opts.top, 10) || 10;
+      const results = classify(null, text, maxTopics);
+
+      const meta = getStatModelMeta();
+      const lrTopicIds = meta ? new Set(meta.topic_ids) : new Set<string>();
+
+      const scored = results.map((r) => ({
+        id: r.id,
+        confidence: r.confidence,
+        score: r.score,
+        method: lrTopicIds.has(r.id) ? 'logistic' : 'bm25_fallback',
+      }));
+
+      const warnings: string[] = [];
+      if (!modelLoaded) {
+        warnings.push('No stat model loaded; all topics scored via BM25 fallback.');
+      }
+
+      output(ok({
+        input: text,
+        scoring_engine: modelLoaded ? 'logistic+bm25_fallback' : 'bm25_fallback',
+        topics_loaded: getLoadedTopics().length,
+        results: scored,
+      }, { warnings }), fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+classifier
+  .command('status')
+  .description('Show classifier model status and scoring engine info')
+  .option('--model <path>', 'Path to stat model (default: ~/.local/share/intel/classifier-model.json)')
+  .action((opts: { model?: string }) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+
+      loadTopics();
+      const topics = getLoadedTopics();
+
+      const defaultDir = joinPath(
+        process.env.HOME ?? process.env.USERPROFILE ?? '.',
+        '.local', 'share', 'intel',
+      );
+      const modelPath = opts.model
+        ? resolvePath(opts.model)
+        : joinPath(defaultDir, 'classifier-model.json');
+      loadStatModel(modelPath);
+
+      const meta = getStatModelMeta();
+      let scoring_engine: string;
+      if (meta) {
+        scoring_engine = 'logistic';
+      } else if (topics.length > 0) {
+        scoring_engine = 'bm25_fallback';
+      } else {
+        scoring_engine = 'uninitialized';
+      }
+
+      output(ok({
+        scoring_engine,
+        topics_loaded: topics.length,
+        model: meta
+          ? {
+              version: meta.version,
+              created_at: meta.created_at,
+              training_date: meta.training_date,
+              vocabulary_size: meta.vocabulary_size,
+              num_classifiers: meta.num_classifiers,
+              model_path: modelPath,
+            }
+          : null,
+      }), fmt);
+    } catch (err) {
+      handleError(err, 'read');
     }
   });
 

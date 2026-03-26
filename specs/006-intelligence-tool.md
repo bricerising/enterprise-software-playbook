@@ -683,8 +683,8 @@ Classifier management and evaluation commands. Core commands (`evaluate`, `train
 ```
 intel classifier evaluate            # run classifier against labeled training set
 intel classifier train               # retrain classifier from current training set
-intel classifier test <text>         # Deferred (2026-03-26): low priority until LR model matures
-intel classifier status              # Deferred (2026-03-26): low priority until LR model matures
+intel classifier test <text>         # Classify text and print topic scores (debugging)
+intel classifier status              # Show model version, training date, topic count, scoring engine
 ```
 
 ## Collector Design

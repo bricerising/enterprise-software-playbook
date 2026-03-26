@@ -75,6 +75,26 @@ export function hasStatModel(): boolean {
   return statModel !== null;
 }
 
+/** Return metadata about the loaded stat model, or null if none loaded. */
+export function getStatModelMeta(): {
+  version: number;
+  created_at: string;
+  training_date: string | null;
+  vocabulary_size: number;
+  num_classifiers: number;
+  topic_ids: string[];
+} | null {
+  if (!statModel) return null;
+  return {
+    version: statModel.version,
+    created_at: statModel.created_at,
+    training_date: statModel.training_meta?.training_date ?? null,
+    vocabulary_size: Object.keys(statModel.vocabulary).length,
+    num_classifiers: Object.keys(statModel.classifiers).length,
+    topic_ids: Object.keys(statModel.classifiers),
+  };
+}
+
 // Backward-compatible aliases
 export const loadCNBModel = loadStatModel;
 export const clearCNBModel = clearStatModel;

@@ -141,9 +141,10 @@ Keep tasks small, orderable, and testable. Prefer “acceptance” that is obser
 
 ## T018: Implement deferred classifier CLI commands
 
-- **Status**: Pending
+- **Status**: Done (2026-03-26)
 - **Acceptance**:
   - `intel classifier test <text>` classifies a text snippet and prints topic scores for debugging.
   - `intel classifier status` shows model version, training date, topic count, and scoring engine (BM25 vs LR).
   - Spec 006 stub annotations updated to reference implementation.
+  - `getStatModelMeta()` added to topic-classifier.ts for model introspection.
 - **Notes**: Deferred from spec 006 stubs. Low priority until LR model is mature and field-tested.
