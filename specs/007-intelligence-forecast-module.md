@@ -81,7 +81,7 @@ Add a `computeForecast` query module (`tools/intelligence/src/queries/forecast.t
 │  │ F2. detectDynamics    │  (systems thinking interpretation)        │
 │  └───────────────────────┘                                           │
 │                                                                      │
-│  ──▶ ForecastData (9 sections)                                       │
+│  ──▶ ForecastData (10 sections)                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -140,7 +140,8 @@ intel forecast evaluate                      # evaluate pending outcomes and upd
       "compact": { "type": "boolean", "description": "Return compact summary with top-N per section (default: false)" },
       "summary": { "type": "boolean", "description": "Return minimal summary: top-3 scenarios, top-5 chains, change points (default: false)" },
       "topics": { "type": "array", "items": { "type": "string" }, "description": "Filter output to specific topic IDs" },
-      "sections": { "type": "array", "items": { "type": "string" }, "description": "Include only these sections in the response" }
+      "sections": { "type": "array", "items": { "type": "string" }, "description": "Include only these sections in the response" },
+      "with_context": { "type": "boolean", "description": "Include recent event titles as context alongside change points and scenarios (default: false)" }
     }
   }
 }
@@ -156,7 +157,7 @@ intel forecast evaluate                      # evaluate pending outcomes and upd
 | `dedup` | string | `'canonical'` | `'canonical'` deduplicates by `canonical_url`; `'none'` counts all events |
 | `window_days` | number | 120 | Overall analysis window in days (7, 14, 30, 60, 90, or 120) |
 | `compact` | boolean | false | When true, return top-N per section for reduced output size |
-| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
+| `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points, dynamics at 1/type). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). Uses `dynamics_per_type: 1` (not 5 as in compact mode) for maximum brevity. **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
 | `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
 | `sections` | string[] | — | Include only named sections in the response. Valid values: lifecycles, chains, ranked_chains, scenarios, multiscale, transitive_chains, entropy, dynamics, change_points_summary, context. |
 | `with_context` | boolean | false | When true, include recent event titles as context alongside change points and scenarios. Useful for understanding what's driving signals. |
@@ -196,6 +197,8 @@ All responses are wrapped in the standard `IntelResponse<ForecastData>` envelope
 Classify each topic's current trajectory so agents can distinguish "newly appearing" from "winding down" from "steady state." Lifecycle phase is an input to scenario projection (acceleration modulates chain scores).
 
 ### Algorithm
+
+**Window independence:** `computeLifecycles` always uses the full data range relative to the current time, regardless of the `--window` parameter. Each of the 5 time windows (1d, 7d, 14d, 30d, 90d) is computed from `now` backward. The `--window` parameter scopes chain detection and entropy, but lifecycle acceleration vectors always reflect the same absolute windows to ensure phase classification stability.
 
 For each of the 5 time windows (1d, 7d, 14d, 30d, 90d):
 
@@ -260,12 +263,12 @@ Aggregate events into topic-day pairs, keeping only "spike days" (volume >= 3). 
 
 ```sql
 daily_volumes AS (
-  SELECT et.topic, DATE(e.fetched_at) AS day,
+  SELECT et.topic, DATE(COALESCE(e.published_at, e.fetched_at)) AS day,
          COUNT(DISTINCT COALESCE(e.canonical_url, e.event_id)) AS volume,
          COUNT(DISTINCT e.source) AS sources
   FROM event_topics et JOIN events e ON e.event_id = et.event_id
-  WHERE e.fetched_at >= :window_start
-  GROUP BY et.topic, DATE(e.fetched_at)
+  WHERE COALESCE(e.published_at, e.fetched_at) >= :window_start
+  GROUP BY et.topic, DATE(COALESCE(e.published_at, e.fetched_at))
   HAVING volume >= 3
 )
 ```
@@ -495,7 +498,7 @@ For each topic from lifecycles:
 | short < 0 AND d7 < 0 AND long < 0 | `aligned_down` |
 | (short > 0 AND long < 0) OR (short < 0 AND long > 0) | `diverging` |
 | (short > 0 AND d7 < 0) OR (short < 0 AND d7 > 0) | `transitioning` |
-| default (all near zero) | `aligned_up` (neutral-up) |
+| default (all near zero) | `aligned_down` (neutral-down; prevents false accumulation signals from inactive topics) |
 
 ### Output
 
@@ -547,7 +550,7 @@ Measure how predictable or bursty each topic's event cadence is. Low-entropy top
 
 ### Algorithm
 
-For each topic, compute daily event counts over the 30-day window:
+For each topic, compute daily event counts over the full analysis window (matching the `--window` parameter, default 120 days). Using the full window rather than a fixed 30-day window provides more stable entropy estimates, especially for topics with irregular cadences:
 
 1. Normalize daily counts into a probability distribution: `p_i = count_i / total`
 2. Compute Shannon entropy: `H = -Σ p_i × log₂(p_i)`
@@ -583,7 +586,7 @@ Scans the computed lifecycles, chains, multiscale, and entropy data to detect fo
 | `reinforcing_loop` | Bidirectional chains with directionality 0.3-0.7 and mutual lift > 1 | Reinforcing feedback loop — topics amplify each other |
 | `delay` | Active chains with avg_lag_days and lag_stddev | System delay — gap between cause and effect |
 | `accumulation` | aligned_up + emerging/accelerating + rising entropy + freshness gate | Stock accumulation — pressure building without release. Requires `published_at` events in the analysis window (backfill-only topics excluded). |
-| `dampening` | Decaying phase + recent CUSUM change point | Balancing feedback loop — something arrested growth |
+| `dampening` | Decaying phase + CUSUM change point within `DAMPENING_RECENCY_DAYS` (14) days | Balancing feedback loop — something arrested growth |
 
 ### Output
 
@@ -733,16 +736,19 @@ Both jobs are installed and managed by `service/install.sh` alongside the collec
 
 ### Weight Update
 
-After evaluation, topic weights are updated using Laplace-smoothed precision:
+After evaluation, topic weights are updated using Brier Skill Score:
 
 ```
-precision = (TP + 1) / (TP + FP + 2)     // Laplace smoothing, default = 0.5
-weight = 0.5 + 0.5 × precision            // Maps [0,1] → [0.5, 1.0]
+brier = (predicted_score - outcome)²        // per outcome
+brier_ref = base_rate × (1 - base_rate)² + (1 - base_rate) × base_rate²   // naive base-rate predictor
+skill = 1 - brier / brier_ref              // Brier Skill Score (>0 = better than naive)
+weight = WEIGHT_FLOOR + (1 - WEIGHT_FLOOR) × max(0, avg_skill)   // Maps [0,1] → [WEIGHT_FLOOR, 1.0]
 ```
 
-- Topics with many accurate forecasts → weight trends toward 1.0
-- Topics with many false positives → weight trends toward 0.5 (50% discount, never fully silenced)
-- Topics with no data → default ~0.75 (neutral)
+Where `WEIGHT_FLOOR = 0.5`. Falls back to raw Brier formula (`weight = WEIGHT_FLOOR + (1 - WEIGHT_FLOOR) * (1 - avg_brier)`) when `brier_ref` is unavailable (legacy rows without base_rate).
+
+- Topics with accurate forecasts (positive skill) → weight trends toward 1.0
+- Topics with no skill improvement over base rate → weight stays at `WEIGHT_FLOOR` (0.5, never fully silenced)
 - Minimum 5 evaluated outcomes before updating weight (avoids swinging on sparse data)
 
 ### Schema
@@ -761,6 +767,9 @@ CREATE TABLE forecast_outcomes (
     target_topic  TEXT NOT NULL,
     predicted_probability REAL NOT NULL,
     outcome       INTEGER,  -- NULL=pending, 1=observed, 0=not observed
+    brier_score   REAL,     -- (predicted - outcome)²; NULL until evaluated
+    base_rate     REAL,     -- target topic spike rate at snapshot time; NULL for legacy rows
+    brier_ref     REAL,     -- naive base-rate predictor score; NULL when base_rate unavailable
     evaluated_at  TEXT,
     UNIQUE(snapshot_id, target_topic)
 );
@@ -770,6 +779,7 @@ CREATE TABLE topic_weights (
     weight          REAL NOT NULL DEFAULT 1.0,
     true_positives  INTEGER NOT NULL DEFAULT 0,
     false_positives INTEGER NOT NULL DEFAULT 0,
+    avg_brier_score REAL,   -- rolling average Brier score across evaluated outcomes
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 ```
@@ -781,9 +791,22 @@ CREATE TABLE topic_weights (
 ### File Structure
 
 ```
-tools/intelligence/src/queries/forecast.ts    — forecast computation + snapshot + evaluation
+tools/intelligence/src/queries/forecast/     — forecast module directory
+├── index.ts        — main entry point (computeForecast orchestrator, data quality, section filtering)
+├── types.ts        — interfaces, constants, SQL expressions, utility re-exports
+├── lifecycle.ts    — lifecycle positioning + cold-start guard
+├── chains.ts       — chain detection, transitive chains, multiscale view, ranked chains
+├── scenarios.ts    — Bayesian scenario projection with signal enrichment
+├── entropy.ts      — Shannon entropy per topic
+├── cusum.ts        — CUSUM change-point detection
+├── dynamics.ts     — systems dynamics detection (reinforcing loops, delays, accumulations, dampening)
+├── snapshot.ts     — forecast snapshot persistence + evaluation + weight update
+└── context.ts      — --with-context topic title inlining
+tools/intelligence/src/queries/shared.ts     — shared queries (computeDataSpan, computeTopicCounts)
 tools/intelligence/src/collector/topic-classifier.ts — confidence-weighted classification
-tools/intelligence/migrations/004-confidence-learning.sql — schema migration
+tools/intelligence/migrations/004-confidence-learning.sql — schema migration (confidence + learning loop)
+tools/intelligence/migrations/005-brier-score.sql — add brier_score to forecast_outcomes, avg_brier_score to topic_weights
+tools/intelligence/migrations/006-brier-skill.sql — add base_rate, brier_ref to forecast_outcomes
 tools/intelligence/tests/forecast.test.ts     — tests
 ```
 
@@ -825,6 +848,7 @@ tools/intelligence/tests/forecast.test.ts     — tests
 | HMM override threshold | +0.15 | HMM must beat rule-based by this margin to override |
 | `MAX_CHAINS_PER_TARGET` | 5 | Maximum trigger chains contributing to a single target's posterior |
 | `MAX_DYNAMICS_PER_TYPE` | 10 | Maximum dynamics entries per type (reinforcing/delay/accumulation/dampening) |
+| `DAMPENING_RECENCY_DAYS` | 14 | Days within which a decaying topic's CUSUM change point triggers a dampening dynamic |
 | `MAX_RANKED_PER_TRIGGER` | 3 | Maximum ranked chains per trigger topic in top-50 output |
 | `SOFTMAX_TEMPERATURE` | 0.5 | Temperature for scenario softmax; < 1.0 sharpens probability differentiation |
 
@@ -862,7 +886,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 ### Test Cases (61 tests, 14 describe blocks)
 
 **`computeForecast` (8 tests)**:
-- Response envelope shape includes all 9 sections (including `transitive_chains`, `entropy`, `dynamics`)
+- Response envelope shape includes all 10 sections (including `transitive_chains`, `entropy`, `dynamics`, `context`)
 - Chain support counts >= min_support, avg_lag_days > 0, source_diversity in [0, 1]
 - Chain fields include `lift`, `confidence`, `directionality`, `lag_stddev`
 - Active chains when trigger topic is spiking
@@ -951,7 +975,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 | Normalized transitive confidence | Geometric mean of leg confidences | `normalized_confidence = sqrt(conf_AB * conf_BC)` — calibrated [0,1] metric for comparing transitive chain strength without raw combined_lift inflation. |
 | Adaptive summary mode | Auto-upgrade thin sections when scenario yield < 3 | Summary mode upgrades ranked_chains, dynamics, lifecycles to compact limits when fewer than 3 scenarios qualify. Eliminates manual --compact retry round-trip. |
 | Confidence-weighted tagging | Classifier emits confidence per tag | Replaces binary match with 4-signal confidence formula (keyword density, regex hits, context validation, priority). Stored in `event_topics.confidence`. |
-| Forecast learning loop | Snapshot → evaluate → weight update | Laplace-smoothed precision per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. Scheduled via launchd/systemd: weekly snapshot (Sun 03:00), daily evaluate (04:00). 90-day retention. |
+| Forecast learning loop | Snapshot → evaluate → weight update | Brier Skill Score per topic; weight floor at 0.5 (never fully silenced); min 5 outcomes before update. Scheduled via launchd/systemd: weekly snapshot (Sun 03:00), daily evaluate (04:00). 90-day retention. |
 | Combined evidence relevance | topicConfidence × topicCountFactor | Replaces topic-count-only heuristic with combined score that accounts for classifier confidence and tag specificity. |
 
 ---

@@ -96,6 +96,10 @@ export const MAX_TRANSITIVE_PER_PREFIX = 3;
 /** Maximum dynamics entries per type. Keeps output manageable for synthesis. */
 export const MAX_DYNAMICS_PER_TYPE = 10;
 
+/** Days within which a decaying topic's change point triggers a dampening dynamic.
+ *  Used in detectDampening to filter recent structural breaks. */
+export const DAMPENING_RECENCY_DAYS = 14;
+
 /** HMM-style Gaussian emission model parameters.
  *  Each phase has expected accelerations at each window and a spread. */
 export const PHASE_EMISSIONS: Record<

@@ -83,6 +83,12 @@ Topics must generate enough signal to produce actionable trends:
 - **Overlap ceiling**: If >50% of events classified into topic A are also classified into topic B, they likely inform the same decision. Evaluate merging.
 - **False positive ceiling**: If >30% of events classified into a topic are false positives (per manual audit or learning loop feedback), the topic definition needs refinement or the topic should be absorbed.
 
+**Known Overlaps:** Some topic pairs share keywords by design and will exhibit elevated co-classification rates that do not indicate a merge candidate:
+- `compute.serverless` and `lang.wasm` — WebAssembly/WASI/component model keywords appear in both because serverless is a primary deployment target for Wasm workloads. The topics inform different decisions (serverless platform selection vs language/runtime adoption).
+- `data.streaming` and `arch.event-driven` — event-driven, message queue, and pub/sub keywords appear in both because streaming infrastructure implements event-driven architecture patterns. The topics inform different decisions (streaming platform selection vs architecture pattern adoption).
+
+These overlaps should be monitored but not automatically flagged for merge unless co-classification exceeds 70% (above the standard 50% ceiling).
+
 ### P4. Forecast Chain Value
 
 Topics that frequently appear in cross-domain chains provide disproportionate forecast value and should be preserved even if their standalone volume is moderate:
@@ -114,19 +120,19 @@ Ten domains organized by the SDLC decisions they primarily inform:
 
 | Domain | Primary decisions informed | Topic count | % of total |
 |---|---|---|---|
-| `ai` | AI integration, stack selection, build vs buy | 9 | 14.8% |
-| `compute` | Stack selection, architecture evolution, operational model | 8 | 13.1% |
-| `security` | Security posture, dependency governance | 6 | 9.8% |
-| `data` | Stack selection, architecture evolution | 7 | 11.5% |
-| `devex` | Build vs buy, operational model | 6 | 9.8% |
-| `lang` | Stack selection, dependency governance | 6 | 9.8% |
-| `arch` | Architecture evolution | 5 | 8.2% |
-| `regulation` | Compliance & regulation | 4 | 6.6% |
-| `market` | Market position, build vs buy | 7 | 11.5% |
-| `macro` | Macro environment, supply chain risk, cost planning | 3 | 4.9% |
+| `ai` | AI integration, stack selection, build vs buy | 10 | 15.2% |
+| `compute` | Stack selection, architecture evolution, operational model | 8 | 12.1% |
+| `security` | Security posture, dependency governance | 6 | 9.1% |
+| `data` | Stack selection, architecture evolution | 7 | 10.6% |
+| `devex` | Build vs buy, operational model | 7 | 10.6% |
+| `lang` | Stack selection, dependency governance | 6 | 9.1% |
+| `arch` | Architecture evolution | 5 | 7.6% |
+| `regulation` | Compliance & regulation | 4 | 6.1% |
+| `market` | Market position, build vs buy | 9 | 13.6% |
+| `macro` | Macro environment, supply chain risk, cost planning | 4 | 6.1% |
 | **Total** | | **66** | |
 
-Maximum domain density: 14.8% (ai). All domains under 30%.
+Maximum domain density: 15.2% (ai). All domains under 30%.
 
 ### Topic ID Convention
 
@@ -347,6 +353,11 @@ The 71 current topics map to the 58 new topics. Vendor-specific topics are absor
 | `macro.energy` | Energy/oil market disruptions directly affect cloud infrastructure costs and data center economics; no prior coverage |
 | `macro.geopolitics` | Geopolitical conflicts and trade policy (wars, sanctions, tariffs) disrupt semiconductor supply chains and vendor availability; no prior coverage |
 | `macro.commodities` | Commodity shortages (helium, rare earths, neon) constrain chip fabrication and hardware procurement; no prior coverage |
+| `ai.research` | AI research papers, pre-prints, and academic advances inform foundation model direction and capability expectations; no prior coverage |
+| `macro.monetary-policy` | Central bank decisions (rate changes, QE/QT) affect technology investment climate, hiring budgets, and cloud cost economics; no prior coverage |
+| `market.payments` | Payments and fintech developments inform build-vs-buy decisions for transaction infrastructure and digital commerce capabilities; no prior coverage |
+| `market.crypto` | Cryptocurrency and blockchain developments inform architecture decisions around decentralized systems and digital asset integration; no prior coverage |
+| `devex.methodology` | Software methodology trends (agile, DevOps, trunk-based) inform team structure and delivery process decisions; no prior coverage |
 
 ---
 
@@ -389,7 +400,7 @@ These are mechanical remappings: the keywords stay the same, only the target top
 
 The current priority system (1-100) carries forward. New priority assignments should follow this hierarchy:
 
-1. **Security events (70-80):** Vulnerabilities and supply-chain threats demand immediate attention
+1. **Security events (70-80):** Vulnerabilities and supply-chain threats demand immediate attention (informational range, not a hard constraint)
 2. **AI developments (55-65):** Fast-moving domain where trends change decisions quickly
 3. **Architecture and data (40-55):** Core SDLC decisions, moderate pace
 4. **Languages and compute (35-45):** Stack selection, slower-moving trends
@@ -464,7 +475,7 @@ intel topics audit                  # full quarterly review
 intel topics audit --domain ai      # single domain
 intel topics audit --flagged        # only topics with review flags
 intel topics audit --below-minimum  # only topics below 5 events/month
-intel topics audit --overlap        # only topics with >50% co-classification
+intel topics audit --overlap ai.rag  # show co-classification for a specific topic
 ```
 
 #### Per-Topic Metrics
@@ -654,7 +665,7 @@ The review is not marked complete automatically when `intel topics audit` runs b
 | Decision | Selected | Rationale |
 |---|---|---|
 | Organize by decision-relevance | 9 domains mapped to SDLC decisions | Vendor-organized topics fragment decision-relevant signals and create granularity mismatches |
-| 61 topics (down from 71) | Reduction via vendor merging, expansion via decision gaps | Every topic passes decision-relevance test; removed topics were redundant vendor splits |
+| 66 topics (down from 71) | Reduction via vendor merging, expansion via decision gaps | Every topic passes decision-relevance test; removed topics were redundant vendor splits |
 | Absorb individual AI vendor topics | Single `ai.foundation-models` | OpenAI/Anthropic/Google/Meta all inform the same "which model?" decision |
 | Absorb AWS service topics into domain topics | 16 AWS topics → distributed across 7 domain topics | AWS Lambda informs serverless decisions, not "AWS" decisions; DynamoDB informs document DB decisions |
 | Hyphenated topic IDs | `domain.hyphenated-name` | More readable and URL-friendly than underscores; establishes forward convention |

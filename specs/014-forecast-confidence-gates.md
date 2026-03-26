@@ -10,7 +10,7 @@ The forecast engine (spec 007) produces lifecycle phases, chain co-movement patt
 
 2. **Spurious chains from low-volume topics** — Chain detection (spec 007 §B) requires only `min_support >= 2` co-occurrence pairs. Two topics that each have 8 total events can produce a chain with support=2 and lift=4.0 — statistically "significant" but practically meaningless. The chain looks identical to one backed by 500 events per topic.
 
-3. **Scenario probability collapse** — Scenario probabilities (the `probability` field on `ScenarioItem` — spec 007's softmax-normalized output) are rounded to 2 decimal places (`Math.round(x * 100) / 100`). When many scenarios cluster near 0.005, they all round to 0.01 and become indistinguishable. The rounding also masks a degenerate state: when all scenario probabilities are below 0.01, the output contains only zeros — a silent failure.
+3. **Scenario score collapse** — Scenario scores (the `score` field on `ScenarioItem` — spec 007's softmax-normalized output) are rounded to 2 decimal places (`Math.round(x * 100) / 100`). When many scenarios cluster near 0.005, they all round to 0.01 and become indistinguishable. The rounding also masks a degenerate state: when all scenario scores are below 0.01, the output contains only zeros — a silent failure.
 
 All three issues share a root cause: the forecast engine lacks confidence gates that distinguish "real signal" from "insufficient data."
 
@@ -20,7 +20,7 @@ Add confidence gates to the forecast engine that:
 
 1. Flag lifecycle items computed from insufficient data (`cold_start`, `insufficient_data`)
 2. Assign confidence tiers to every chain based on underlying topic volume, source diversity, and support
-3. Increase scenario `probability` rounding precision and warn when probabilities collapse
+3. Increase scenario `score` rounding precision and warn when scores collapse
 4. Surface a top-level `data_quality` object on every forecast response so consumers can assess data sufficiency without inspecting individual items
 
 All changes are additive — existing fields retain their semantics. New fields are either optional booleans (omitted when false) or required enums/objects (always present). Note: adding new required fields (`confidence_tier`, `min_chain_tier`, `data_quality`) changes the response shape — consumers that perform strict JSON schema validation will need to update their schemas. See the schema version note in Risks.
@@ -40,7 +40,7 @@ All changes are additive — existing fields retain their semantics. New fields 
 | Lifecycle cold-start flag and confidence cap | Custom cold-start thresholds per topic |
 | Insufficient-data flag for low-volume topics | Minimum volume enforcement (events are still classified) |
 | Chain confidence tiers (spurious/low/moderate/high) | Chain filtering by tier (consumers decide) |
-| Scenario `probability` rounding precision increase (2→3 decimal places) | Scenario algorithm changes |
+| Scenario `score` rounding precision increase (2→3 decimal places) | Scenario algorithm changes |
 | Top-level `data_quality` object on ForecastData | Historical data quality tracking |
 | Warning when all scenario probabilities < 0.01 | Automatic fallback behavior |
 
@@ -60,11 +60,20 @@ In `computeForecast()`, before lifecycle computation, query the event timestamp 
 
 ```sql
 SELECT
-  MIN(COALESCE(published_at, fetched_at)) AS min_ts,
+  MIN(
+    CASE
+      WHEN published_at IS NOT NULL
+           AND julianday(fetched_at) - julianday(published_at) > 365
+      THEN fetched_at
+      ELSE COALESCE(published_at, fetched_at)
+    END
+  ) AS min_ts,
   MAX(COALESCE(published_at, fetched_at)) AS max_ts
 FROM events e
 WHERE e.fetched_at >= :window_start;
 ```
+
+**>365d `published_at` guard:** When `published_at` is more than 365 days before `fetched_at`, it indicates a backfilled historical article. Using such a stale `published_at` as `min_ts` would inflate `data_age_days` far beyond the system's actual data collection history, causing cold-start to clear prematurely. The CASE expression falls back to `fetched_at` for these rows, ensuring `data_age_days` reflects real collection span rather than historical publication dates.
 
 ```typescript
 const data_age_days = (min_ts == null || max_ts == null)
@@ -246,25 +255,25 @@ interface ChainItem {
 
 ### Purpose
 
-Increase probability precision so that closely-ranked scenarios remain distinguishable, and surface a warning when all scenarios collapse to near-zero probabilities (indicating insufficient chain data for meaningful projection).
+Increase score precision so that closely-ranked scenarios remain distinguishable, and surface a warning when all scenarios collapse to near-zero scores (indicating insufficient chain data for meaningful projection).
 
 ### Algorithm
 
 **Step 1: Increase rounding precision**
 
-Change scenario `probability` rounding from 2 to 3 decimal places:
+Change scenario `score` rounding from 2 to 3 decimal places:
 
 ```typescript
 // Before (spec 007):
-probability: Math.round(probability * 100) / 100
+score: Math.round(score * 100) / 100
 
 // After:
-probability: Math.round(probability * 1000) / 1000
+score: Math.round(score * 1000) / 1000
 ```
 
-This preserves probabilities like 0.005 and 0.003 that previously both rounded to 0.01.
+This preserves scores like 0.005 and 0.003 that previously both rounded to 0.01.
 
-**Why round at all:** Rounding prevents floating-point representation noise (e.g., `0.004999999999999997` from softmax arithmetic) from leaking into JSON output and confusing consumers who compare probabilities across runs. Three decimal places retain enough precision for ranking while keeping output clean. The `SCENARIO_DECIMAL_PLACES` constant makes this tunable if 3 proves insufficient. Note: `probability` is spec 007's temperature-scaled softmax output — the values are softmax-normalized and sum to ~1.0, but should be used for ranking, not real-world likelihood estimation.
+**Why round at all:** Rounding prevents floating-point representation noise (e.g., `0.004999999999999997` from softmax arithmetic) from leaking into JSON output and confusing consumers who compare scores across runs. Three decimal places retain enough precision for ranking while keeping output clean. The `SCENARIO_DECIMAL_PLACES` constant makes this tunable if 3 proves insufficient. Note: `score` is spec 007's temperature-scaled softmax output — the values are softmax-normalized and sum to ~1.0, but should be used for ranking, not real-world likelihood estimation.
 
 **Step 2: Propagate worst chain tier to scenarios**
 
@@ -296,14 +305,14 @@ scenario.min_chain_tier = worstTier(
 );
 ```
 
-A scenario built entirely from `spurious` chains will have `min_chain_tier: 'spurious'`, making it immediately apparent that the projection lacks reliable chain data — even if the probability itself looks reasonable.
+A scenario built entirely from `spurious` chains will have `min_chain_tier: 'spurious'`, making it immediately apparent that the projection lacks reliable chain data — even if the score itself looks reasonable.
 
-**Step 3: Low-probability warning**
+**Step 3: Low-score warning**
 
-After scenario computation, check if all scenario probabilities are below 0.01:
+After scenario computation, check if all scenario scores are below 0.01:
 
 ```typescript
-if (scenarios.length > 0 && scenarios.every(s => s.probability < 0.01)) {
+if (scenarios.length > 0 && scenarios.every(s => s.score < 0.01)) {
   warnings.push(
     'All scenario probabilities are below 0.01 — chain data may be insufficient for meaningful projection. ' +
     'Consider widening the analysis window or lowering min_support.'
@@ -322,15 +331,15 @@ interface ScenarioItem {
 }
 ```
 
-`min_chain_tier` is a **required** field. `probability` remains `number` (now rounded to 3 decimal places instead of 2). `warnings` is already `string[]` on the envelope.
+`min_chain_tier` is a **required** field. `score` remains `number` (now rounded to 3 decimal places instead of 2). `warnings` is already `string[]` on the envelope.
 
 ### Files
 
 | File | Change |
 |------|--------|
 | `forecast/types.ts` | Add `min_chain_tier` field to `ScenarioItem` |
-| `forecast/scenarios.ts` | Change `probability` rounding from `* 100 / 100` to `* 1000 / 1000`; compute `min_chain_tier` from contributing chains |
-| `forecast/index.ts` | Add low-probability warning check after scenario computation |
+| `forecast/scenarios.ts` | Change `score` rounding from `* 100 / 100` to `* 1000 / 1000`; compute `min_chain_tier` from contributing chains |
+| `forecast/index.ts` | Add low-score warning check after scenario computation |
 
 ---
 
@@ -447,7 +456,7 @@ interface ForecastData {
 | `CHAIN_TIER_MODERATE_VOLUME` | 100 | Minimum topic volume (both topics) for `moderate` confidence tier |
 | `CHAIN_TIER_MODERATE_DIVERSITY` | 0.5 | Minimum source diversity for `moderate` confidence tier |
 | `CHAIN_TIER_MODERATE_SUPPORT` | 10 | Minimum support for `moderate` confidence tier |
-| `SCENARIO_DECIMAL_PLACES` | 3 | Decimal places for scenario `probability` rounding |
+| `SCENARIO_DECIMAL_PLACES` | 3 | Decimal places for scenario `score` rounding |
 
 ---
 
@@ -460,10 +469,10 @@ tools/intelligence/src/queries/
 ├── shared.ts       — computeDataSpan(), computeTopicCounts() shared queries (used by forecast + stats)
 └── forecast/
     ├── types.ts        — DataQuality, ConfidenceTier, updated LifecycleItem/ChainItem/ScenarioItem/ForecastData
-    ├── index.ts        — data_quality assembly, low-probability warning
+    ├── index.ts        — data_quality assembly, low-score warning
     ├── lifecycle.ts    — graduated cold-start cap, insufficient-data flag
     ├── chains.ts       — confidence tier assignment
-    └── scenarios.ts    — probability rounding precision change, min_chain_tier computation
+    └── scenarios.ts    — score rounding precision change, min_chain_tier computation
 ```
 
 ### Internal Functions
@@ -508,10 +517,10 @@ No new dependencies. All computations use existing SQLite queries and in-memory 
 - Chain between topics with 500+ events, diversity >= 0.6, support >= 30 → `high`
 - Tier propagates to `RankedChainItem`
 
-**`scenario probability precision and chain tier propagation` (5 tests)**:
-- Probabilities retain 3 decimal places (e.g., 0.005 not rounded to 0.01)
-- When all probabilities < 0.01, warnings array contains low-probability warning
-- When at least one probability >= 0.01, no low-probability warning
+**`scenario score precision and chain tier propagation` (5 tests)**:
+- Scores retain 3 decimal places (e.g., 0.005 not rounded to 0.01)
+- When all scores < 0.01, warnings array contains low-score warning
+- When at least one score >= 0.01, no low-score warning
 - Every scenario has a `min_chain_tier` field (not undefined)
 - Scenario built from one `high` chain and one `spurious` chain has `min_chain_tier: 'spurious'`
 
@@ -538,7 +547,7 @@ No new dependencies. All computations use existing SQLite queries and in-memory 
 **`existing field regression` (3 tests)**:
 - All existing `LifecycleItem` fields from spec 007 are still present and retain their semantics (phase, phase_confidence, acceleration, etc.)
 - All existing `ChainItem` fields from spec 007 are still present (confidence, lift, support, source_diversity, etc.)
-- All existing `ScenarioItem` fields from spec 007 are still present (target_topic, trigger_topics, supporting_chains, probability, timeframe_days, etc.)
+- All existing `ScenarioItem` fields from spec 007 are still present (target_topic, trigger_topics, supporting_chains, score, timeframe_days, etc.)
 
 ### Test Fixtures
 
@@ -556,7 +565,7 @@ Extend existing fixtures with:
 |------|-----------|
 | Cold-start flag is too conservative (90 days) for fast-moving topics | 90 days aligns with the 90d lifecycle window; graduated confidence cap (0.3→1.0) softens the impact for datasets approaching the threshold |
 | `spurious` tier label may alarm consumers | Label is descriptive, not pejorative; documentation clarifies it means "insufficient data," not "definitely wrong" |
-| Rounding change (2→3 decimals) may break consumers that parse probabilities as strings | Probabilities are `number` type in JSON; 0.005 and 0.01 are both valid floats; no string-parsing contract exists |
+| Rounding change (2→3 decimals) may break consumers that parse scores as strings | Scores are `number` type in JSON; 0.005 and 0.01 are both valid floats; no string-parsing contract exists |
 | `data_quality` computation adds two SQL queries per forecast | Both queries scan the analysis window (bounded); negligible cost vs. existing chain detection SQL |
 | `MIN_TOPIC_EVENTS = 50` may flag legitimate niche topics | Flag is informational, not filtering; niche topics still get lifecycle phases and chain participation |
 | `data_quality.window_unclassified_pct` vs spec 015's `StatsData.unclassified_pct` use different scoping (window vs all-time) | Consumers using both `intel forecast` and `intel stats` will see different values for conceptually similar metrics. The `window_` prefix on the forecast field disambiguates the scoping at the API level — consumers cannot accidentally conflate the two fields. Inline JSDoc comments at both call sites further specify the scoping |
@@ -575,8 +584,8 @@ Extend existing fixtures with:
 | Confidence tier is required, not optional | Always present on ChainItem | Consumers should always consider data quality; an optional field is too easy to ignore |
 | `min_chain_tier` on scenarios | Required `ConfidenceTier` on `ScenarioItem` | Scenarios inherit the worst chain tier so consumers can assess data quality without inspecting individual chains; a scenario from `spurious` chains is immediately identifiable |
 | `window_top_source_name` on `DataQuality` | Required string alongside `window_top_source_pct` | Consumers need to know *which* source dominates, not just the percentage; avoids requiring a separate `intel stats` call |
-| 3 decimal places for scenario probabilities | `SCENARIO_DECIMAL_PLACES = 3` | 2 decimal places caused silent information loss; 3 preserves differentiation for closely-ranked scenarios |
-| Warning, not error, for sub-0.01 probabilities | Warning in envelope | Sub-0.01 probabilities are informational (insufficient chain data), not a computation failure; the forecast is still valid, just low-confidence |
+| 3 decimal places for scenario scores | `SCENARIO_DECIMAL_PLACES = 3` | 2 decimal places caused silent information loss; 3 preserves differentiation for closely-ranked scenarios |
+| Warning, not error, for sub-0.01 scores | Warning in envelope | Sub-0.01 scores are informational (insufficient chain data), not a computation failure; the forecast is still valid, just low-confidence |
 | `data_quality` always present, not filterable | Metadata, not a section | Quality context is a prerequisite for interpreting any section; filtering it out defeats its purpose |
 | `window_` prefix for all window-scoped metrics on `DataQuality` | Disambiguated field names: `window_unclassified_pct`, `window_top_source_name`, `window_top_source_pct` | Spec 015's `StatsData` has `unclassified_pct`, `top_source_name`, and `top_source_pct` (all-time scope). This spec's metrics are window-scoped. Using the same field names on different interfaces creates a footgun — the `window_` prefix makes the scoping explicit at the API level for all three fields, not just `unclassified_pct`. No external consumers exist yet, so this is the cheapest moment to establish distinct names |
 | `lifecycle_topic_count`, `insufficient_data_count`, and `insufficient_data_pct` on `DataQuality` | Lifecycle-level data quality summary (denominator + count + percentage) | The count parallels `chain_tier_counts`; `lifecycle_topic_count` makes `DataQuality` self-contained (consumers can verify `insufficient_data_pct` without inspecting the lifecycle array); the percentage (rounded to 3dp for consistency with `window_unclassified_pct` and `window_top_source_pct`) makes the count immediately interpretable ("32% of topics have insufficient data" vs "12 topics"). Consistent with spec 015's pattern of pairing counts with percentages (`unclassified_events`/`unclassified_pct`, `multi_topic_events`/`multi_topic_pct`). All three return 0 when lifecycle section is excluded via `--section`, since no lifecycle items exist to be flagged |
@@ -621,11 +630,11 @@ intel forecast | jq '[.data.chains[].confidence_tier] | unique'
 intel forecast | jq '[.data.chains[] | select(.confidence_tier == null)] | length'
 # Expected: 0
 
-# 8. Verify scenario probabilities have 3 decimal places
-intel forecast | jq '[.data.scenarios[].probability]'
+# 8. Verify scenario scores have 3 decimal places
+intel forecast | jq '[.data.scenarios[].score]'
 # Expected: values like 0.045, 0.012, 0.005 (not all 0.01)
 
-# 9. Verify low-probability warning when applicable
+# 9. Verify low-score warning when applicable
 intel forecast --window 7 --min-support 1 | jq '.warnings'
 
 # 10. Verify confidence_tier propagates to ranked_chains
@@ -668,7 +677,7 @@ intel forecast | jq '{tiers: .data.data_quality.chain_tier_counts, total_chains:
 
 - **Spec 007** §A (Lifecycle Positioning) — cold-start guard amends phase confidence semantics
 - **Spec 007** §B (Chain Detection) — confidence tier extends ChainItem interface
-- **Spec 007** §C (Scenario Projection) — `probability` rounding change and `min_chain_tier` amend scenario output
+- **Spec 007** §C (Scenario Projection) — `score` rounding change and `min_chain_tier` amend scenario output
 - **Spec 015** (Collection Quality Controls) — upstream data quality improvements reduce how often confidence gates trigger
 
 ### Shared concerns with spec 015
@@ -687,4 +696,4 @@ If both specs land in the same release, bump `schema_version` once (to `"v2"`) t
 
 ### Schema version
 
-Bump `IntelResponse.schema_version` from `"v1"` to `"v2"` when this spec ships. The version bump covers all new required fields across both spec 014 and spec 015 (if co-released). Consumers should key on `schema_version` to detect the new response shape. There are no external consumers of the forecast API today — the only consumer is the `intel` CLI itself — so no deprecation period or v1 compatibility shim is needed. If external consumers are added before this ships, revisit.
+~~Bump `IntelResponse.schema_version` from `"v1"` to `"v2"` when this spec ships.~~ **Completed.** `schema_version` has been bumped to `"v2"`. The version bump covers all new required fields across both spec 014 and spec 015. Consumers should key on `schema_version` to detect the new response shape. There are no external consumers of the forecast API today — the only consumer is the `intel` CLI itself — so no deprecation period or v1 compatibility shim was needed.

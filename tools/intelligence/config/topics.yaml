@@ -3,7 +3,6 @@
 #
 # Each topic has:
 #   keywords: terms that trigger classification (case-insensitive)
-#   regex: optional regex patterns for more precise matching
 #   priority: higher values win when multiple topics match (1-100)
 #   context_required: if true, short acronyms require surrounding context terms
 #

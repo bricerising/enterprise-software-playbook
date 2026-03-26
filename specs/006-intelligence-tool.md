@@ -10,7 +10,7 @@ More importantly, the data is locked inside the pipeline. Agents can't query it.
 
 Redesign as a lightweight tool in `tools/intelligence/` that:
 
-1. **Collects data** continuously from curated sources (RSS, HN, Lobsters, EDGAR, Earnings)
+1. **Collects data** continuously from curated sources (RSS, HN, EDGAR, Earnings)
 2. **Exposes intelligence** as CLI commands and MCP tools that agents can invoke
 3. **Runs on SQLite** — no Postgres, no Redis, no Kafka, no Docker required
 
@@ -44,7 +44,13 @@ The collector runs as a daemon. Everything else is on-demand query. Agents synth
 │  │ intel trends    │◀───────────────────┤                    │
 │  │ intel search    │◀───────────────────┤                    │
 │  │ intel events    │◀───────────────────┤                    │
-│  │ intel sources   │◀───────────────────┘                    │
+│  │ intel sources   │◀───────────────────┤                    │
+│  │ intel forecast  │◀───────────────────┤                    │
+│  │ intel topics    │◀───────────────────┤                    │
+│  │ intel stats     │◀───────────────────┤                    │
+│  │ intel pack      │◀───────────────────┤                    │
+│  │ intel journal   │◀───────────────────┤                    │
+│  │ intel audit     │◀───────────────────┘                    │
 │  └─────────────────┘                                         │
 │        │                                                     │
 │        ▼                                                     │
@@ -209,8 +215,10 @@ END;
 
 -- Normalized topic index for fast topic queries and trend computation
 CREATE TABLE event_topics (
-    event_id TEXT NOT NULL,
-    topic    TEXT NOT NULL,
+    event_id   TEXT NOT NULL,
+    topic      TEXT NOT NULL,
+    confidence REAL,                                  -- classifier confidence (0.0-1.0)
+    score      REAL,                                  -- raw classifier score before thresholding
     PRIMARY KEY (event_id, topic),
     FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
 );
@@ -237,6 +245,22 @@ CREATE TABLE collector_health (
     http_last_modified TEXT,                      -- Last-Modified from last successful response
     PRIMARY KEY (source, feed)
 );
+
+-- Tool operational metadata (key-value store for timestamps, state)
+CREATE TABLE tool_metadata (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Operator journal entries
+CREATE TABLE journal_entries (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    content    TEXT    NOT NULL,
+    tags       TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(tags)),
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_journal_entries_created ON journal_entries(created_at);
 
 -- Data retention: events older than retention_days are prunable
 -- Enforced by `intel db prune`
@@ -528,9 +552,18 @@ intel stats
   "events_24h": 487,
   "events_7d": 3201,
   "sources": 12,
+  "sources_healthy": 10,
+  "sources_stale": 1,
+  "sources_error": 1,
+  "topics_total": 66,
   "topics_active_7d": 38,
   "oldest_event": "2026-02-01T00:00:00Z",
-  "newest_event": "2026-03-13T14:35:00Z"
+  "newest_event": "2026-03-13T14:35:00Z",
+  "collector_running": true,
+  "last_collect_at": "2026-03-13T14:30:00Z",
+  "retention_days": 30,
+  "topic_review_last_completed": "2026-01-15T10:00:00Z",
+  "topic_review_overdue": true
 }
 ```
 
@@ -620,6 +653,39 @@ The command reports the checkpoint result triple: busy flag (whether the checkpo
 `backup --mode vacuum-into` is available as an alternative that uses `VACUUM INTO <path>`. This produces a minimal-sized, defragmented copy and purges deleted content (including free pages), but is not incremental and uses more CPU. Prefer this for archival snapshots where size matters; prefer the default online backup for routine operational snapshots where speed matters.
 
 `quick-check` runs `PRAGMA quick_check`, a faster alternative to `PRAGMA integrity_check` that skips some index consistency checks but detects common corruption. Use periodically or after unexpected crashes. The collector daemon should run `quick_check` automatically at startup if a stale PID file is detected (indicating a previous unclean shutdown) and log the result. If corruption is detected, the daemon should refuse to start and surface the error clearly, rather than silently operating on a damaged database.
+
+### `intel journal`
+
+Operator journal for recording observations, decisions, and notes alongside the intelligence data. Stub — full specification TBD.
+
+```
+intel journal add "Observed unusual correlation between ai.training and compute.gpu"
+intel journal list                   # recent entries
+intel journal list --since 7d        # entries from last 7 days
+intel journal list --tag review      # entries with a specific tag
+```
+
+### `intel training-set`
+
+Manage labeled training data for the topic classifier. Stub — full specification TBD.
+
+```
+intel training-set list              # show training set summary
+intel training-set add <event-id>    # add event to training set with current labels
+intel training-set export            # export labeled data for classifier training
+intel training-set progress          # show labeling progress per topic
+```
+
+### `intel classifier`
+
+Classifier management and evaluation commands. Stub — full specification TBD.
+
+```
+intel classifier evaluate            # run classifier against labeled training set
+intel classifier train               # retrain classifier from current training set
+intel classifier test <text>         # classify a text snippet for debugging
+intel classifier status              # show classifier model info and last training date
+```
 
 ## Collector Design
 
@@ -955,10 +1021,6 @@ feeds:
     poll_interval: 300
     max_items: 100
 
-  - source: lobsters
-    name: Lobsters
-    poll_interval: 300
-
   - source: edgar
     name: SEC EDGAR
     form_types: [8-K, 10-K, 10-Q]
@@ -1000,7 +1062,6 @@ tools/intelligence/
 │   │   │   ├── types.ts                 # SourceAdapter interface
 │   │   │   ├── rss.ts                   # RSS/Atom adapter
 │   │   │   ├── hackernews.ts            # HN API adapter
-│   │   │   ├── lobsters.ts              # Lobsters adapter
 │   │   │   ├── edgar.ts                 # SEC EDGAR adapter
 │   │   │   └── earnings.ts             # SEC Earnings (10-K/10-Q) adapter
 │   │   ├── content-fetcher.ts           # Readability extraction

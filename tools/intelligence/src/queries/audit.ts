@@ -11,6 +11,9 @@ export interface AuditTopicItem {
   topic: string;
   domain: string;
   volume_3m: number;
+  vol_recent: number;
+  vol_mid: number;
+  vol_old: number;
   trend: 'increasing' | 'decreasing' | 'stable' | 'flat';
   overlap: Array<{ topic: string; pct: number }>;
   learning_weight: number | null;
@@ -24,10 +27,11 @@ export interface AuditDomainSummary {
   topic_count: number;
   pct: number;
   volume_3m: number;
-  flagged_count: number;
+  flagged_topics: number;
 }
 
 export interface AuditData {
+  window: { start: string; end: string };
   topics: AuditTopicItem[];
   domains: AuditDomainSummary[];
   total_topics: number;
@@ -44,9 +48,11 @@ export interface TopicAuditOpts {
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const MINIMUM_VOLUME_3M = 10;
+const MINIMUM_VOLUME_PER_MONTH = 5;
 const OVERLAP_THRESHOLD = 0.1;
+const HIGH_OVERLAP_FLAG_THRESHOLD = 0.5;
 const MAX_OVERLAP_PER_TOPIC = 5;
-const LOW_WEIGHT_THRESHOLD = 0.7;
+const LOW_WEIGHT_THRESHOLD = 0.65;
 const DOMAIN_IMBALANCE_THRESHOLD = 0.3;
 
 /* ── Audit query ───────────────────────────────────────────────────── */
@@ -83,7 +89,7 @@ export function auditTopics(
 
   const volumeMap = new Map<
     string,
-    { volume_3m: number; trend: AuditTopicItem['trend'] }
+    { volume_3m: number; vol_recent: number; vol_mid: number; vol_old: number; trend: AuditTopicItem['trend'] }
   >();
   for (const row of volumeRows) {
     let trend: AuditTopicItem['trend'];
@@ -102,7 +108,13 @@ export function auditTopics(
     } else {
       trend = 'stable';
     }
-    volumeMap.set(row.topic, { volume_3m: row.volume_3m, trend });
+    volumeMap.set(row.topic, {
+      volume_3m: row.volume_3m,
+      vol_recent: row.vol_recent,
+      vol_mid: row.vol_mid,
+      vol_old: row.vol_old,
+      trend,
+    });
   }
 
   // 2. Co-classification overlap via self-join on event_topics (>10%, top 5)
@@ -118,7 +130,8 @@ export function auditTopics(
     )
     SELECT a.topic AS topic_a, b.topic AS topic_b,
       COUNT(*) AS shared,
-      CAST(COUNT(*) AS REAL) / MIN(ta.total, tb.total) AS overlap_pct
+      CAST(COUNT(*) AS REAL) / ta.total AS overlap_pct_a,
+      CAST(COUNT(*) AS REAL) / tb.total AS overlap_pct_b
     FROM event_topics a
     JOIN event_topics b ON a.event_id = b.event_id AND a.topic < b.topic
     JOIN events e ON e.event_id = a.event_id
@@ -126,29 +139,30 @@ export function auditTopics(
     JOIN topic_totals tb ON tb.topic = b.topic
     WHERE e.fetched_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')
     GROUP BY a.topic, b.topic
-    HAVING overlap_pct > ?
-    ORDER BY overlap_pct DESC
+    HAVING MAX(overlap_pct_a, overlap_pct_b) > ?
+    ORDER BY MAX(overlap_pct_a, overlap_pct_b) DESC
     `,
     )
     .all(OVERLAP_THRESHOLD) as Array<{
     topic_a: string;
     topic_b: string;
     shared: number;
-    overlap_pct: number;
+    overlap_pct_a: number;
+    overlap_pct_b: number;
   }>;
 
-  // Build per-topic overlap map (both directions, top 5)
+  // Build per-topic overlap map (asymmetric: each topic gets its own directional pct)
   const overlapMap = new Map<string, Array<{ topic: string; pct: number }>>();
   for (const row of overlapRows) {
-    for (const [self, other] of [
-      [row.topic_a, row.topic_b],
-      [row.topic_b, row.topic_a],
+    for (const [self, other, pct] of [
+      [row.topic_a, row.topic_b, row.overlap_pct_a],
+      [row.topic_b, row.topic_a, row.overlap_pct_b],
     ] as const) {
       const existing = overlapMap.get(self) ?? [];
       if (existing.length < MAX_OVERLAP_PER_TOPIC) {
         existing.push({
           topic: other,
-          pct: Math.round(row.overlap_pct * 1000) / 1000,
+          pct: Math.round(pct * 1000) / 1000,
         });
         overlapMap.set(self, existing);
       }
@@ -221,7 +235,7 @@ export function auditTopics(
 
   let items: AuditTopicItem[] = allTopics.map((topic) => {
     const domain = topic.split('.')[0];
-    const vol = volumeMap.get(topic) ?? { volume_3m: 0, trend: 'flat' as const };
+    const vol = volumeMap.get(topic) ?? { volume_3m: 0, vol_recent: 0, vol_mid: 0, vol_old: 0, trend: 'flat' as const };
     const overlap = overlapMap.get(topic) ?? [];
     const weight = weightMap.get(topic) ?? null;
     const crossChains = crossDomainCount.get(topic) ?? 0;
@@ -229,11 +243,15 @@ export function auditTopics(
 
     const flags: string[] = [];
 
-    if (vol.volume_3m < MINIMUM_VOLUME_3M) {
+    if (vol.vol_recent < MINIMUM_VOLUME_PER_MONTH
+      && vol.vol_mid < MINIMUM_VOLUME_PER_MONTH
+      && vol.vol_old < MINIMUM_VOLUME_PER_MONTH) {
       flags.push('below_minimum_volume');
     }
     for (const o of overlap) {
-      flags.push(`high_overlap:${o.topic}`);
+      if (o.pct > HIGH_OVERLAP_FLAG_THRESHOLD) {
+        flags.push(`high_overlap:${o.topic}`);
+      }
     }
     if (weight !== null && weight < LOW_WEIGHT_THRESHOLD) {
       flags.push('low_learning_weight');
@@ -253,6 +271,9 @@ export function auditTopics(
       topic,
       domain,
       volume_3m: vol.volume_3m,
+      vol_recent: vol.vol_recent,
+      vol_mid: vol.vol_mid,
+      vol_old: vol.vol_old,
       trend: vol.trend,
       overlap,
       learning_weight: weight,
@@ -308,13 +329,17 @@ export function auditTopics(
     .map(([domain, s]) => ({
       domain,
       topic_count: s.count,
-      pct: totalTopics > 0 ? Math.round((s.count / totalTopics) * 1000) / 1000 : 0,
+      pct: totalTopics > 0 ? Math.round((s.count / totalTopics) * 100 * 10) / 10 : 0,
       volume_3m: s.volume,
-      flagged_count: s.flagged,
+      flagged_topics: s.flagged,
     }))
     .sort((a, b) => b.topic_count - a.topic_count);
 
+  const windowEnd = new Date().toISOString();
+  const windowStart90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
   const data: AuditData = {
+    window: { start: windowStart90, end: windowEnd },
     topics: items,
     domains,
     total_topics: totalTopics,
