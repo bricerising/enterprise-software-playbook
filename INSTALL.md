@@ -79,3 +79,32 @@ git submodule add https://github.com/bricerising/enterprise-software-playbook.gi
 ```
 
 Then reference files like `tools/enterprise-software-playbook/skills/typescript/SKILL.md` in your assistant's project instructions.
+
+## Bundled Tools (Optional)
+
+Some skills (`archobs`, `intel`, `forecast`) depend on bundled tools. Install them if you plan to use those skills.
+
+### archobs (architecture observability)
+
+Requires [Codanna](https://codanna.sh) for dependency extraction:
+
+```sh
+# macOS
+brew install codanna
+# Linux / other
+curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+```
+
+Then install archobs itself:
+
+```sh
+pip install -e 'tools/archobs[full]'
+```
+
+### intelligence (intel + forecast external engine)
+
+```sh
+cd tools/intelligence && npm install && npm run build && npm link
+```
+
+After linking, the `intel` CLI is available on PATH. See `skills/intel/SKILL.md` and `skills/forecast/SKILL.md` for configuration details.

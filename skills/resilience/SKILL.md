@@ -24,7 +24,7 @@ Enterprise systems fail partially (timeouts, 5xx, queue lag). Resilience pattern
    3. **Retries with backoff + jitter** (bounded)
    4. **Circuit breaker** (when a dependency is unhealthy)
    5. **Bulkheads / concurrency limits** (to protect your own resources)
-4. Add observability (retry counts, breaker state, queue lag, error codes).
+4. Add observability (retry counts, breaker state, queue lag, error codes). Each metric should have a named decision it supports and an owner — see [`observability`](../observability/SKILL.md).
 5. Add consumer-visible tests for semantics; add a local smoke test for failure modes.
 
 ## Chooser (What To Use Where)

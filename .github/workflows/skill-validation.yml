@@ -11,6 +11,7 @@ on:
       - 'PROMPTS.md'
       - 'CONTRIBUTING.md'
       - 'AGENTS.md'
+      - 'INSTALL.md'
   pull_request:
     paths:
       - 'skills/**'
@@ -21,6 +22,7 @@ on:
       - 'PROMPTS.md'
       - 'CONTRIBUTING.md'
       - 'AGENTS.md'
+      - 'INSTALL.md'
 
 jobs:
   validate:

@@ -103,3 +103,38 @@ Keep tasks small, orderable, and testable. Prefer “acceptance” that is obser
   - `specs/skills-manifest.json` exists and maps stage/tag/path for every skill.
   - Repo consistency checks fail on manifest/frontmatter drift.
   - Concrete copy-first templates exist for CI quality gates and service spec bundles.
+
+## T014: Add intelligence, forecast, and archobs tools and skills
+
+- **Status**: Done (2026-03-16)
+- **Acceptance**:
+  - `tools/intelligence/` and `tools/archobs/` are vendored and functional.
+  - Skills exist: `intel`, `forecast`, `archobs` (with internal + external engines for forecast).
+  - Specs 006–007, 009–012 document tool and skill design.
+  - Manifest includes all new skills with correct stage/tag/related mappings.
+
+## T015: Add classifier training data workflow and team/fitness analysis
+
+- **Status**: Done (2026-03-26)
+- **Acceptance**:
+  - Specs 013–019 document topic strategy, confidence gates, collection quality, decision journal, team analysis, fitness check, and classifier training.
+  - `archobs show team`, `archobs check`, and classifier training CLI commands are implemented.
+  - `forecast` skill includes confidence gates and temporal artifact guardrails.
+
+## T016: Consolidate trajectory into forecast and brief into intel
+
+- **Status**: Done (2026-03-16)
+- **Acceptance**:
+  - `trajectory` skill merged into `forecast` (internal engine).
+  - `brief` skill merged into `intel` (audience-aware output).
+  - Spec 012 documents the consolidation rationale and cross-domain integration.
+  - Cross-references in architecture, plan, design, and spec skills updated.
+
+## T017: Add SHOULD-level contract sections to remaining skills
+
+- **Status**: Pending
+- **Acceptance**:
+  - Missing Chooser sections added to `workflow`, `plan`, `typescript`.
+  - Missing Clarifying Questions added to `workflow`, `plan`, `typescript`, `patterns-creational`, `patterns-structural`, `patterns-behavioral`.
+  - Missing Guardrails added to `typescript`, `patterns-creational`, `patterns-structural`, `patterns-behavioral`.
+  - Monolith boundary edge case (design vs architecture) documented.
