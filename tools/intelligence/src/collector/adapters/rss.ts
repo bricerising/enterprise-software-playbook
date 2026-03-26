@@ -52,7 +52,10 @@ export class RssAdapter implements SourceAdapter {
   }
 
   async *fetch(checkpoint: Checkpoint | null): AsyncGenerator<RawEvent> {
-    const headers: Record<string, string> = { ...this.requestHeaders };
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (compatible; intel-collector/0.1.0; +https://github.com/enterprise-playbook)',
+      ...this.requestHeaders, // per-feed overrides take precedence
+    };
 
     // Conditional GET support
     if (this.httpEtag) {
@@ -64,8 +67,12 @@ export class RssAdapter implements SourceAdapter {
 
     const parser: RSSParser = new RSSParser({
       timeout: 15_000,
-      headers,
-      requestOptions: {},
+      headers: {
+        ...headers,
+        // Override rss-parser's default "Accept: application/rss+xml" which
+        // some feeds (e.g. InfoQ) reject with 406.
+        Accept: 'application/rss+xml, application/xml, text/xml, */*',
+      },
     });
 
     let feed: RSSParser.Output<Record<string, unknown>>;

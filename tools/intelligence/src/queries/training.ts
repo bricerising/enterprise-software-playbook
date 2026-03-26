@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ok, error } from '../util/envelope.js';
-import { loadTopics, classify, mulberry32 } from '../collector/topic-classifier.js';
+import { loadTopics, classify, mulberry32, loadStatModel, hasStatModel } from '../collector/topic-classifier.js';
 import type { IntelResponse } from '../types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,7 +25,7 @@ export const MAX_NEXT_LIMIT = 50;
 export const MIN_TOPIC_SAMPLES = 30;
 export const TRAINING_APP_ID = 0x54524E47; // "TRNG"
 export const SAMPLING_ALGORITHM = 'reservoir_sampling_algorithm_r';
-export const CNB_MIN_TRAINING_EVENTS = 500;
+export const MIN_TRAINING_EVENTS = 500;
 
 // --- Types (§E) ---
 
@@ -105,6 +105,8 @@ export interface UnreviewedEvent {
 export interface EvaluationOpts {
   minSamples: number;
   labeler?: string;
+  /** When true, re-run classify() on title/content instead of reading stored machine_topics. */
+  reclassify?: boolean;
 }
 
 export interface EvaluationResult {
@@ -871,8 +873,12 @@ export function evaluateTrainingSet(
   opts: EvaluationOpts = { minSamples: MIN_TOPIC_SAMPLES },
 ): IntelResponse<EvaluationResult> {
   // Get all reviewed events
-  let query = `SELECT machine_topics, human_topics, labeler
-               FROM training_events WHERE reviewed_at IS NOT NULL`;
+  const needsContent = opts.reclassify ?? false;
+  let query = needsContent
+    ? `SELECT title, content, machine_topics, human_topics, labeler
+       FROM training_events WHERE reviewed_at IS NOT NULL`
+    : `SELECT machine_topics, human_topics, labeler
+       FROM training_events WHERE reviewed_at IS NOT NULL`;
   const params: string[] = [];
   if (opts.labeler) {
     query += ' AND labeler = ?';
@@ -880,6 +886,8 @@ export function evaluateTrainingSet(
   }
 
   const rows = db.prepare(query).all(...params) as Array<{
+    title?: string | null;
+    content?: string | null;
     machine_topics: string;
     human_topics: string;
     labeler: string;
@@ -914,7 +922,13 @@ export function evaluateTrainingSet(
   let totalSymmetricDiff = 0;
 
   for (const row of rows) {
-    const machineSet = new Set<string>(parseJsonArray(row.machine_topics));
+    let machineSet: Set<string>;
+    if (needsContent) {
+      const classified = classify(row.title ?? null, row.content ?? null);
+      machineSet = new Set(classified.map((t) => t.id));
+    } else {
+      machineSet = new Set<string>(parseJsonArray(row.machine_topics));
+    }
     const humanSet = new Set<string>(parseJsonArray(row.human_topics));
 
     // Over-classification
@@ -1041,20 +1055,23 @@ export function evaluateTrainingSet(
 
 export interface ReclassifyTrainingResult {
   events_processed: number;
-  labels_cleared: number;
   classifier_config_sha256: string;
   topics_yaml_sha256: string;
+  labels_cleared?: number;
 }
 
 /**
- * Re-run the topic classifier on all training events and reset human labels.
+ * Re-run the topic classifier on all training events.
  * Scraps existing machine_topics/confidences/scores, re-classifies from
- * title+content using the current classifier, and clears all human labels
- * so labeling can start fresh.
+ * title+content using the current classifier.
+ *
+ * When clearLabels is true, also NULLs out human_topics/labeler/notes/reviewed_at
+ * and DELETEs all rows from training_labels so labeling can start fresh.
  */
 export function reclassifyTrainingSet(
   db: Database.Database,
   batchSize = 500,
+  clearLabels = false,
 ): IntelResponse<ReclassifyTrainingResult> {
   // Load current classifier
   const topics = loadTopics();
@@ -1065,6 +1082,15 @@ export function reclassifyTrainingSet(
       retryable: false,
       suggested_action: 'Check that config/topics.yaml exists and is valid.',
     }) as unknown as IntelResponse<ReclassifyTrainingResult>;
+  }
+
+  // Load statistical model for ensemble scoring if not already loaded (e.g. by CLI --model)
+  if (!hasStatModel()) {
+    const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');
+    const modelPath = join(defaultDir, 'classifier-model.json');
+    if (!loadStatModel(modelPath)) {
+      console.warn(`[intel] No classifier model found at ${modelPath}; reclassification will use BM25-only scoring.`);
+    }
   }
 
   // Compute new metadata hashes
@@ -1082,8 +1108,7 @@ export function reclassifyTrainingSet(
   );
   const updateStmt = db.prepare(`
     UPDATE training_events
-    SET machine_topics = ?, machine_confidences = ?, machine_scores = ?,
-        human_topics = NULL, labeler = 'unspecified', notes = NULL, reviewed_at = NULL
+    SET machine_topics = ?, machine_confidences = ?, machine_scores = ?
     WHERE event_id = ?
   `);
 
@@ -1113,11 +1138,16 @@ export function reclassifyTrainingSet(
     if (rows.length < batchSize) break;
   }
 
-  // Clear label history
-  const labelCount = (
-    db.prepare('SELECT COUNT(*) AS cnt FROM training_labels').get() as { cnt: number }
-  ).cnt;
-  db.exec('DELETE FROM training_labels');
+  // Clear human labels if requested
+  let labelsCleared: number | undefined;
+  if (clearLabels) {
+    db.prepare(
+      `UPDATE training_events
+       SET human_topics = NULL, labeler = NULL, notes = NULL, reviewed_at = NULL`,
+    ).run();
+    const deleted = db.prepare('DELETE FROM training_labels').run();
+    labelsCleared = deleted.changes;
+  }
 
   // Update metadata
   const upsertMeta = db.prepare(
@@ -1129,9 +1159,9 @@ export function reclassifyTrainingSet(
 
   return ok({
     events_processed: eventsProcessed,
-    labels_cleared: labelCount,
     classifier_config_sha256: classifierSha256,
     topics_yaml_sha256: topicsYamlSha256,
+    ...(labelsCleared !== undefined && { labels_cleared: labelsCleared }),
   });
 }
 

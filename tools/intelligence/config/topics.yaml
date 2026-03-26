@@ -103,6 +103,8 @@ topics:
       - local inference
       - edge inference
     priority: 55
+    context_required: true
+    context_terms: [model, llm, ml, ai, neural, gpu, latency, serving, deployment, transformer]
 
   - id: ai.training
     label: ML Training & Fine-Tuning
@@ -121,7 +123,7 @@ topics:
       - hyperparameter
     priority: 55
     context_required: true
-    context_terms: [training, fine-tuning, fine tuning, rlhf, dpo, pretrain, sagemaker, train, epoch]
+    context_terms: [fine-tuning, fine tuning, rlhf, dpo, pretrain, sagemaker, epoch, model, llm, neural, ml, ai, gpu, dataset, loss]
 
   - id: ai.safety
     label: AI Safety & Alignment
@@ -133,6 +135,8 @@ topics:
       - guardrails
       - responsible ai
     priority: 60
+    context_required: true
+    context_terms: [ai, llm, model, machine learning, language model, neural, chatbot, gpt, claude, artificial intelligence]
 
   - id: ai.multimodal
     label: Multimodal AI
@@ -152,7 +156,7 @@ topics:
       - video understanding
     priority: 55
     context_required: true
-    context_terms: [multimodal, image, video, vision, diffusion, generation, speech]
+    context_terms: [neural, model, ai, ml, machine learning, deep learning, transformer, generation]
 
   - id: ai.protocols
     label: AI Protocols & Interop
@@ -291,14 +295,9 @@ topics:
       - google cloud
       - aws update
       - aws release
-      - service update
-      - cloud update
-      - new feature
-      - general availability
-      - preview
     priority: 35
     context_required: true
-    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp, service, release, update, launch]
+    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp]
 
   - id: compute.networking
     label: Cloud Networking
@@ -529,6 +528,17 @@ topics:
       - argo cd
       - flux
       - deployment pipeline
+      - xcode
+      - xcode release
+      - apple developer tools
+      - ios sdk
+      - macos sdk
+      - build pipeline
+      - build system
+      - circleci
+      - travis ci
+      - buildkite
+      - tekton
     priority: 35
 
   - id: devex.observability
@@ -643,6 +653,8 @@ topics:
       - pep
       - uv
     priority: 35
+    context_required: true
+    context_terms: [python, pip, pypi, cpython, pep, package, programming, language, import, module]
 
   - id: lang.go
     label: Go
@@ -659,6 +671,8 @@ topics:
       - go concurrency
       - gopher
     priority: 35
+    context_required: true
+    context_terms: [golang, goroutine, gopher, go module, go generics, go concurrency]
 
   - id: lang.java
     label: Java & JVM
@@ -747,16 +761,7 @@ topics:
       - svelte
       - vue
       - frontend architecture
-      - ios
-      - iphone
-      - ipad
-      - macos
       - swiftui
-      - swift
-      - xcode
-      - app store
-      - apple developer
-      - wwdc
       - webkit
     priority: 40
 
@@ -1126,7 +1131,6 @@ topics:
     label: AI Research
     keywords:
       - arxiv
-      - paper
       - pre-print
       - preprint
       - research paper
@@ -1139,6 +1143,8 @@ topics:
       - autonomous
       - robot
     priority: 50
+    context_required: true
+    context_terms: [ai, ml, machine learning, deep learning, neural, model, algorithm, training, inference, benchmark, dataset]
 
   # =========================================================================
   # New DevEx topic

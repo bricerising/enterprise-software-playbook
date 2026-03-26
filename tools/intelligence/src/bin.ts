@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { existsSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { join as joinPath, resolve as resolvePath } from 'node:path';
 import { Command } from 'commander';
 import { loadConfig, getDbPath, type IntelConfig } from './config.js';
 import { openReader, withReader, openWriter, sqliteBusyRetry, checkSqliteVersion, getMigrations } from './db.js';
@@ -16,7 +18,7 @@ import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
 import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
 import { startMcpServer } from './mcp/server.js';
-import { loadTopics } from './collector/topic-classifier.js';
+import { loadTopics, loadStatModel } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
 import {
   generateTrainingSet,
@@ -30,7 +32,7 @@ import {
   openTrainingDb,
   TRAINING_APP_ID,
 } from './queries/training.js';
-import { trainClassifier } from './collector/naive-bayes.js';
+import { trainClassifier } from './collector/classifier.js';
 import {
   checkpoint as dbCheckpoint,
   prune as dbPrune,
@@ -1019,14 +1021,28 @@ trainingSet
   .description('Evaluate classifier accuracy against human labels')
   .option('--min-samples <n>', 'Minimum samples per topic for metrics', '30')
   .option('--labeler <id>', 'Filter to events labeled by this labeler')
+  .option('--model <path>', 'Load a stat model for ensemble evaluation (re-classifies on the fly)')
   .action((trainingDbPath, opts) => {
     try {
       const fmt = program.opts().format ?? 'json';
+      if (opts.model) {
+        loadTopics();
+        if (!loadStatModel(opts.model)) {
+          output(error({
+            code: 'INVALID_QUERY',
+            message: `Failed to load model: ${opts.model}`,
+            retryable: false,
+            suggested_action: 'Check that the model file exists and is version ≥3.',
+          }), fmt);
+          return;
+        }
+      }
       const db = openTrainingDb(trainingDbPath, true);
       try {
         const result = evaluateTrainingSet(db, {
           minSamples: parseInt(opts.minSamples, 10),
           labeler: opts.labeler,
+          reclassify: !!opts.model,
         });
         output(result, fmt);
       } finally {
@@ -1039,13 +1055,27 @@ trainingSet
 
 trainingSet
   .command('reclassify <training-db>')
-  .description('Re-run topic classifier on all events and clear human labels')
-  .action((trainingDbPath) => {
+  .description('Re-run topic classifier on all events (preserves human labels unless --clear-labels)')
+  .option('--model <path>', 'Load a stat model for ensemble classification')
+  .option('--clear-labels', 'Also clear all human labels so labeling can start fresh')
+  .action((trainingDbPath, opts) => {
     try {
       const fmt = program.opts().format ?? 'json';
+      if (opts.model) {
+        loadTopics();
+        if (!loadStatModel(opts.model)) {
+          output(error({
+            code: 'INVALID_QUERY',
+            message: `Failed to load model: ${opts.model}`,
+            retryable: false,
+            suggested_action: 'Check that the model file exists and is version ≥3.',
+          }), fmt);
+          return;
+        }
+      }
       const db = openTrainingDb(trainingDbPath, false);
       try {
-        const result = reclassifyTrainingSet(db);
+        const result = reclassifyTrainingSet(db, 500, opts.clearLabels ?? false);
         output(result, fmt);
       } finally {
         db.close();
@@ -1060,7 +1090,7 @@ const classifier = program.command('classifier').description('Classifier trainin
 
 classifier
   .command('train <training-db>')
-  .description('Train a CNB classifier from labeled training data')
+  .description('Train a logistic regression classifier from labeled training data')
   .option('--output <path>', 'Output model JSON path')
   .option('--min-examples <n>', 'Minimum positive examples per topic', '20')
   .option('--validation-split <ratio>', 'Fraction of data held out for validation', '0.2')
@@ -1078,6 +1108,70 @@ classifier
       } finally {
         db.close();
       }
+    } catch (err) {
+      handleError(err, 'maintenance');
+    }
+  });
+
+classifier
+  .command('deploy <model-path>')
+  .description('Copy a trained model to the default path for the collector to use')
+  .action((modelPath) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+      const resolved = resolvePath(modelPath);
+
+      if (!existsSync(resolved)) {
+        output(error({
+          code: 'INVALID_QUERY',
+          message: `Model file not found: ${resolved}`,
+          retryable: false,
+          suggested_action: 'Check the path to your trained model.',
+        }), fmt);
+        process.exitCode = 1;
+        return;
+      }
+
+      // Validate it's a valid model
+      try {
+        const raw = JSON.parse(readFileSync(resolved, 'utf-8'));
+        if (!raw.version || raw.version < 3) {
+          output(error({
+            code: 'INVALID_QUERY',
+            message: `Model version ${raw.version ?? 'unknown'} is not supported (need ≥3).`,
+            retryable: false,
+            suggested_action: 'Re-train with logistic regression.',
+          }), fmt);
+          process.exitCode = 1;
+          return;
+        }
+      } catch (parseErr) {
+        output(error({
+          code: 'INVALID_QUERY',
+          message: `Invalid model file: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+          retryable: false,
+          suggested_action: 'Ensure the file is valid JSON.',
+        }), fmt);
+        process.exitCode = 1;
+        return;
+      }
+
+      const defaultDir = joinPath(
+        process.env.HOME ?? process.env.USERPROFILE ?? '.',
+        '.local', 'share', 'intel',
+      );
+      const targetPath = joinPath(defaultDir, 'classifier-model.json');
+
+      if (!existsSync(defaultDir)) {
+        mkdirSync(defaultDir, { recursive: true });
+      }
+
+      copyFileSync(resolved, targetPath);
+      output(ok({
+        source: resolved,
+        deployed_to: targetPath,
+        status: 'deployed',
+      }), fmt);
     } catch (err) {
       handleError(err, 'maintenance');
     }

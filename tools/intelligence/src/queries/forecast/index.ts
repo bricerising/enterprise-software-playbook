@@ -164,7 +164,7 @@ export function computeForecast(
   const withContext = opts.with_context ?? false;
   let context: import('./types.js').TopicContext[] | undefined;
   if (withContext) {
-    context = buildTopicContext(db, changePointsSummary, ranked_chains, windowStart, limits?.ranked_chains ?? 5);
+    context = buildTopicContext(db, changePointsSummary, ranked_chains, windowStart, limits?.ranked_chains ?? 5, now);
   }
 
   // --topics: post-filter all sections to only include data relating to specified topics.

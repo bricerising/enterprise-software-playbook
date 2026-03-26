@@ -183,6 +183,12 @@ export interface ChangePointSummary {
 export interface TopicContext {
   topic: string;
   titles: string[];
+  /** Event titles from around the break date (±2 days) for change-point topics
+   *  where the break is old enough (days_ago > 3) that regular `titles` may not
+   *  capture the mechanism that caused the structural shift. */
+  break_titles?: string[];
+  /** How many days ago the most recent structural break occurred for this topic. */
+  break_days_ago?: number;
 }
 
 export interface ForecastData {

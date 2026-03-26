@@ -3,6 +3,52 @@ import type { RawEvent, Checkpoint, SourceAdapter } from './types.js';
 
 const EDGAR_RSS_BASE = 'https://www.sec.gov/cgi-bin/browse-edgar';
 
+/** Ticker → CIK mapping. Shared with earnings adapter roster. */
+const TICKER_TO_CIK = new Map<string, string>([
+  ['AAPL', '0000320193'],
+  ['MSFT', '0000789019'],
+  ['GOOG', '0001652044'],
+  ['AMZN', '0001018724'],
+  ['META', '0001326801'],
+  ['NVDA', '0001045810'],
+  ['TSLA', '0001318605'],
+  ['NFLX', '0001065280'],
+  ['AMD', '0000002488'],
+  ['INTC', '0000050863'],
+  ['CRM', '0001108524'],
+  ['ADBE', '0000796343'],
+  ['AVGO', '0001649338'],
+  ['SNOW', '0001640147'],
+  ['DDOG', '0001561550'],
+  ['CRWD', '0001535527'],
+  ['NET', '0001477333'],
+  ['PLTR', '0001321655'],
+  ['MDB', '0001441816'],
+  ['NOW', '0001373715'],
+  // Semiconductors
+  ['MRVL', '0001058057'],
+  ['QCOM', '0000804328'],
+  // Payments / FinTech
+  ['SQ', '0001512673'],
+  ['FI', '0000798354'],
+  ['GPN', '0001123360'],
+  ['TOST', '0001650164'],
+  ['PYPL', '0001633917'],
+  ['SHOP', '0001594805'],
+  ['FIS', '0001136893'],
+  ['VYX', '0001131554'],
+  ['MQ', '0001522540'],
+  ['WEX', '0001309108'],
+  ['ACIW', '0000935036'],
+  // SaaS
+  ['WDAY', '0001327811'],
+]);
+
+/** Returns true if the string looks like a 10-digit zero-padded CIK */
+function isCik(value: string): boolean {
+  return /^\d{10}$/.test(value);
+}
+
 interface EdgarAdapterOptions {
   name: string;
   /** Email to include in User-Agent per SEC EDGAR fair access policy */
@@ -11,7 +57,7 @@ interface EdgarAdapterOptions {
   form_types?: string[];
   /** Max requests per second (default 2, max 10) */
   edgar_max_rps?: number;
-  /** CIK numbers to filter by */
+  /** Ticker symbols or CIK numbers to filter by */
   entities?: string[];
 }
 
@@ -84,13 +130,34 @@ export class EdgarAdapter implements SourceAdapter {
     const maxRps = Math.min(opts.edgar_max_rps ?? 2, 10);
     this.requestDelayMs = Math.ceil(1000 / maxRps);
 
-    this.entities = opts.entities ? new Set(opts.entities) : null;
+    // Resolve entities: accept both ticker symbols and raw CIK numbers.
+    // Ticker symbols are looked up in the built-in roster.
+    if (opts.entities && opts.entities.length > 0) {
+      const resolved = new Set<string>();
+      for (const entity of opts.entities) {
+        if (isCik(entity)) {
+          resolved.add(entity);
+        } else {
+          const cik = TICKER_TO_CIK.get(entity.toUpperCase());
+          if (cik) {
+            resolved.add(cik);
+          } else {
+            console.error(
+              `[intel] edgar: ticker ${entity.toUpperCase()} not in built-in roster, skipping — use 10-digit CIK or add mapping`,
+            );
+          }
+        }
+      }
+      this.entities = resolved.size > 0 ? resolved : null;
+    } else {
+      this.entities = null;
+    }
   }
 
-  private buildFeedUrl(cik?: string): string {
+  private buildFeedUrl(formType: string, cik?: string): string {
     const params = new URLSearchParams({
       action: 'getcompany',
-      type: [...this.formTypes].join(','),
+      type: formType,
       dateb: '',
       owner: 'include',
       count: '40',
@@ -113,12 +180,14 @@ export class EdgarAdapter implements SourceAdapter {
     const checkpointAccession = checkpoint?.cursor ?? null;
     const seenAccessions = new Set<string>();
 
-    // If specific entities are configured, fetch each CIK individually.
-    // Otherwise, fetch the general feed.
+    // SEC EDGAR does not support comma-separated form types in a single
+    // request, so iterate over each (formType, CIK) pair individually.
     const ciks = this.entities ? [...this.entities] : [undefined];
+    const formTypes = [...this.formTypes];
 
+    for (const formType of formTypes) {
     for (const cik of ciks) {
-      const feedUrl = this.buildFeedUrl(cik);
+      const feedUrl = this.buildFeedUrl(formType, cik);
 
       let responseText: string;
       try {
@@ -193,6 +262,7 @@ export class EdgarAdapter implements SourceAdapter {
 
         yield rawEvent;
       }
+    }
     }
   }
 
