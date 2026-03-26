@@ -12,6 +12,8 @@ Pick the smallest system/architecture pattern that addresses the pressure (relia
 
 Use code patterns for in-process structure; use system patterns when the problem is cross-process or cross-team.
 
+**Monolith edge case**: If you're restructuring *within* a monolith without decomposing it into services (e.g., extracting modules, introducing internal boundaries, applying GoF patterns), use `design` instead. Use `architecture` when the monolith is being decomposed into separate deployable units, or when decisions span process/deployment/team boundaries.
+
 ## Workflow
 
 0. **Gather empirical data** (required — wait for completion):

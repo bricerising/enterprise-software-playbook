@@ -667,24 +667,24 @@ intel journal list --tag review      # entries with a specific tag
 
 ### `intel training-set`
 
-Manage labeled training data for the topic classifier. Stub — full specification TBD.
+Manage labeled training data for the topic classifier. Fully specified in [spec 019](019-classifier-training-data.md).
 
 ```
 intel training-set list              # show training set summary
-intel training-set add <event-id>    # add event to training set with current labels
+intel training-set add <event-id>    # Deferred (2026-03-26): superseded by reservoir sampling (spec 019)
 intel training-set export            # export labeled data for classifier training
 intel training-set progress          # show labeling progress per topic
 ```
 
 ### `intel classifier`
 
-Classifier management and evaluation commands. Stub — full specification TBD.
+Classifier management and evaluation commands. Core commands (`evaluate`, `train`) fully specified in [spec 019](019-classifier-training-data.md).
 
 ```
 intel classifier evaluate            # run classifier against labeled training set
 intel classifier train               # retrain classifier from current training set
-intel classifier test <text>         # classify a text snippet for debugging
-intel classifier status              # show classifier model info and last training date
+intel classifier test <text>         # Deferred (2026-03-26): low priority until LR model matures
+intel classifier status              # Deferred (2026-03-26): low priority until LR model matures
 ```
 
 ## Collector Design

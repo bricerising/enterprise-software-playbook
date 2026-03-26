@@ -132,9 +132,18 @@ Keep tasks small, orderable, and testable. Prefer “acceptance” that is obser
 
 ## T017: Add SHOULD-level contract sections to remaining skills
 
-- **Status**: Pending
+- **Status**: Done (2026-03-26)
 - **Acceptance**:
   - Missing Chooser sections added to `workflow`, `plan`, `typescript`.
   - Missing Clarifying Questions added to `workflow`, `plan`, `typescript`, `patterns-creational`, `patterns-structural`, `patterns-behavioral`.
   - Missing Guardrails added to `typescript`, `patterns-creational`, `patterns-structural`, `patterns-behavioral`.
   - Monolith boundary edge case (design vs architecture) documented.
+
+## T018: Implement deferred classifier CLI commands
+
+- **Status**: Pending
+- **Acceptance**:
+  - `intel classifier test <text>` classifies a text snippet and prints topic scores for debugging.
+  - `intel classifier status` shows model version, training date, topic count, and scoring engine (BM25 vs LR).
+  - Spec 006 stub annotations updated to reference implementation.
+- **Notes**: Deferred from spec 006 stubs. Low priority until LR model is mature and field-tested.

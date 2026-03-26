@@ -37,6 +37,14 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 - **Flyweight**: many similar objects; split intrinsic state (shared) vs extrinsic (supplied).
 - **Proxy**: control access (lazy init, cache, auth, throttling, remote boundary, logging).
 
+## Clarifying Questions
+
+- Are you wrapping an external dependency, or restructuring internal code?
+- Is the goal interface translation (Adapter), behavior stacking (Decorator), simplification (Facade), or access control (Proxy)?
+- Does the wrapped subject have a lifetime (close/dispose) that needs forwarding?
+- How many layers of wrapping are expected — one, or a composable stack?
+- Is the real implementation available now, or will it be swapped later (Bridge)?
+
 ## Implementation Checklist
 
 - Prefer composition; wrappers should delegate almost everything and add one focused concern.
@@ -46,6 +54,14 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 - For proxies: define caching/invalidation, concurrency semantics, and cancellation/timeouts (`AbortSignal`) where applicable.
 - If the real subject has a lifetime (`close`/`dispose`), expose and forward it; keep ownership/shutdown explicit.
 - For flyweights: prove the memory win and define ownership/lifetime of shared state.
+
+## Guardrails
+
+- Don't wrap what you can change directly: if you own both sides, change the interface instead of adding an Adapter.
+- Don't stack Decorators beyond 2-3 layers without a clear composition model: deep stacks become hard to debug and order-dependent.
+- Don't use Facade to hide necessary complexity: if callers need fine-grained control, a Facade that papers over it creates workarounds.
+- Don't forget lifetime forwarding: if the real subject has `close`/`dispose`, the Proxy/Decorator must forward it.
+- Don't use Composite when leaf and branch behaviors diverge significantly: Composite works best when operations are genuinely uniform across the tree.
 
 ## Snippets (optional)
 

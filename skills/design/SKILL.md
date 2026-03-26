@@ -16,6 +16,8 @@ If the main pressure is *system-level* (multiple services/processes, partial fai
 
 If you’re standardizing cross-cutting boundary behavior across multiple services, consider extracting the primitive into a shared package (see `platform`) so the pattern becomes a consistent “golden path” instead of copy/paste.
 
+**Monolith edge case**: In a monolith, use `design` to isolate modules *within* the process (Facade for subsystem boundaries, Adapter for third-party libs, Strategy for swappable implementations). If the goal is *decomposing* the monolith into separate deployable units or defining service boundaries, start with `architecture` — then return here for the in-process patterns each new service needs.
+
 ## Workflow
 
 0. **Load archobs data** (required): Run `archobs show risks --format json` and `archobs show clusters --format json` to get risk scores and coupling signals for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.

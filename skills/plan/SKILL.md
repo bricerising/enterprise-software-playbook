@@ -10,6 +10,12 @@ metadata: {"stage":"Define","tags":["implementation-plan","task-breakdown","risk
 
 Create a short plan that a developer (or agent) can execute end-to-end: ordered tasks, acceptance checks, and a concrete verification strategy.
 
+## Chooser
+
+- Use **plan** when: starting non-trivial work that needs task ordering, risk flags, or cross-cutting coordination — especially when scope is ambiguous or multiple approaches exist.
+- Do NOT use plan when: the change is tiny (rename, typo fix, single-file edit) — just do it.
+- Do NOT use plan for: writing spec artifacts or contracts (use `spec`); auto-routing across multiple skills (use `workflow`).
+
 ## Workflow
 
 1. Write the objective function:
@@ -57,6 +63,14 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - measurement ladder: decision, 3 leading indicators, 3 lagging outcomes, instrumentation source, review ritual (owner + cadence + trigger)
    - exact commands (tests/lint/typecheck/build) if known
    - if unknown, list what you will run and ask once for preferred commands
+
+## Clarifying Questions
+
+- What is the goal in one sentence? What are we explicitly not optimizing?
+- What components, services, or boundaries are affected?
+- Are there time, budget, or compliance constraints?
+- Is there existing archobs data or a recent report available?
+- What verification commands are available (tests, lint, typecheck, build)?
 
 ## Guardrails
 
