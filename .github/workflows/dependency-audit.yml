@@ -1,0 +1,61 @@
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  pull_request:
+    paths:
+      - 'tools/intelligence/package.json'
+      - 'tools/intelligence/package-lock.json'
+      - 'tools/archobs/pyproject.toml'
+  workflow_dispatch:
+
+jobs:
+  npm-audit:
+    name: npm audit (intelligence)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: tools/intelligence/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix tools/intelligence
+
+      - name: Audit dependencies
+        run: npm audit --prefix tools/intelligence --audit-level=moderate
+
+  pip-audit:
+    name: pip-audit (archobs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install archobs
+        run: pip install 'tools/archobs'
+
+      - name: Audit dependencies
+        run: |
+          set -euo pipefail
+          pip install pip-audit==2.10.0
+          pip-audit
