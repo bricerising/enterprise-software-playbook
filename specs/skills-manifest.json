@@ -14,7 +14,7 @@
       "stage": "Define",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
-      "related": ["architecture", "design", "plan", "forecast", "review", "finish"],
+      "related": ["architecture", "design", "plan", "forecast", "review", "finish", "intel", "workflow"],
       "overhead": "moderate"
     },
     "architecture": {
@@ -38,7 +38,7 @@
       "stage": "Define",
       "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process"],
       "trigger": "Need to choose an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
-      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs"],
+      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs", "forecast"],
       "overhead": "minimal"
     },
     "finish": {
@@ -134,7 +134,7 @@
       "stage": "Verify",
       "tags": ["test-coverage", "consumer-tests", "characterization", "regression-prevention", "unit-test", "integration-test", "mocking", "vitest"],
       "trigger": "Adding tests, raising coverage, writing regression tests, or pinning consumer-visible behavior.",
-      "related": ["spec", "review", "finish"],
+      "related": ["spec", "review", "finish", "security"],
       "overhead": "moderate"
     },
     "typescript": {

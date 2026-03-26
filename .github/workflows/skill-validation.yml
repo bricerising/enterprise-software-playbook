@@ -4,19 +4,23 @@ on:
   push:
     paths:
       - 'skills/**'
-      - 'specs/skills-manifest.json'
+      - 'specs/**'
       - '.system/skill-creator/**'
       - '.system/docs/**'
       - 'README.md'
       - 'PROMPTS.md'
+      - 'CONTRIBUTING.md'
+      - 'AGENTS.md'
   pull_request:
     paths:
       - 'skills/**'
-      - 'specs/skills-manifest.json'
+      - 'specs/**'
       - '.system/skill-creator/**'
       - '.system/docs/**'
       - 'README.md'
       - 'PROMPTS.md'
+      - 'CONTRIBUTING.md'
+      - 'AGENTS.md'
 
 jobs:
   validate:

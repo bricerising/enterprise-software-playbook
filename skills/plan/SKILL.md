@@ -35,25 +35,25 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    **Cross-reference matrix**: See [Lifecycle Decision Mapping — Plan: Risk Amplification](../references/lifecycle-decision-mapping.md#plan-risk-amplification) for archobs signal x forecast signal → priority adjustment table.
 
 5. Identify the primary risk(s) (pick 1–3): correctness, migration, partial failure, security/privacy, performance, operability.
-5. Add a compact decision table (2–3 options including a no-change baseline):
+6. Add a compact decision table (2–3 options including a no-change baseline):
    - what each option optimizes
    - what each option knowingly worsens
    - kill criteria / reversal trigger
-6. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
+7. Stress-test the decision (if 2+ viable approaches exist; skip for single viable approach):
    - **Assumptions**: What are facts vs assumptions? Which assumption is least certain — how will we validate it? Cross-reference with risk amplification from step 4b (if applicable). *(attach to decision table)*
    - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? Cross-reference with risk amplification from step 4b (if applicable). *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
-7. Choose the minimum up-front artifacts:
+8. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
    - if in-process structure pressure exists → use `design`
    - if repeated boundary logic is likely → use `platform`
-8. Produce an ordered task list:
+9. Produce an ordered task list:
    - tasks should be small, reversible, and verifiable
-   - include “stop points” where you can re-check assumptions and kill criteria
-   - include one quick blast-radius check (“if X degrades, what breaks next/silently?”)
-9. Define measurement + verification:
+   - include "stop points" where you can re-check assumptions and kill criteria
+   - include one quick blast-radius check ("if X degrades, what breaks next/silently?")
+10. Define measurement + verification:
    - measurement ladder: decision, 3 leading indicators, 3 lagging outcomes, instrumentation source, review ritual (owner + cadence + trigger)
    - exact commands (tests/lint/typecheck/build) if known
    - if unknown, list what you will run and ask once for preferred commands

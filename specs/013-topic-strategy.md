@@ -2,7 +2,7 @@
 
 ## Problem
 
-The intelligence tool classifies collected events into topics, which serve as the semantic spine for trends, search filtering, forecasting, and chain detection. The current `topics.yaml` contains ~71 topics organized by **technology vendor** (16 AWS service topics, 4 individual AI vendor topics, etc.), but the tool's purpose is to inform **SDLC decisions** — what to build with, how to build it, when to change course.
+The intelligence tool classifies collected events into topics, which serve as the semantic spine for trends, search filtering, forecasting, and chain detection. The current `topics.yaml` contains 66 topics organized by **technology vendor** (16 AWS service topics, 4 individual AI vendor topics, etc.), but the tool's purpose is to inform **SDLC decisions** — what to build with, how to build it, when to change course.
 
 Three structural problems follow from vendor-organized topics:
 
@@ -102,7 +102,7 @@ When vendor identity matters for a decision (e.g., "should we move from AWS to A
 
 ### P6. Domain Balance
 
-No single domain should consume >30% of total topics. Disproportionate density in one domain signals vendor/familiarity bias, not decision-relevance. The current taxonomy violates this: AWS alone is 22% of topics (16/71).
+No single domain should consume >30% of total topics. Disproportionate density in one domain signals vendor/familiarity bias, not decision-relevance. The current taxonomy violates this: AWS alone is 24% of topics (16/66).
 
 ---
 
@@ -124,7 +124,7 @@ Ten domains organized by the SDLC decisions they primarily inform:
 | `regulation` | Compliance & regulation | 4 | 6.6% |
 | `market` | Market position, build vs buy | 7 | 11.5% |
 | `macro` | Macro environment, supply chain risk, cost planning | 3 | 4.9% |
-| **Total** | | **61** | |
+| **Total** | | **66** | |
 
 Maximum domain density: 14.8% (ai). All domains under 30%.
 

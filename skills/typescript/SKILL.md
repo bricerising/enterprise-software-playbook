@@ -25,7 +25,7 @@ Definitions:
 - **Scriptic**: short‑lived scripts/one‑offs; optimize for speed and simplicity; `throw` is usually fine.
 - **Systemic**: long‑lived apps/services/libraries; optimize for explicit boundaries, typed failures, and explicit lifetimes.
 
-## Workflow (default)
+## Workflow
 
 1. Decide “scriptic vs systemic” and set policies (error strategy, boundary validation, ownership/lifetimes).
 2. Separate pure logic from side effects (I/O, time, randomness, global state).
@@ -78,7 +78,7 @@ Use this list when reviewing/refactoring TypeScript:
 - Long-running loops are explicit agents with shutdown/await paths.
 - Tests cover pure logic and boundary adapters (decoders, repositories, clients).
 
-## Output template
+## Output Template
 
 When asked to apply this guide, respond with:
 

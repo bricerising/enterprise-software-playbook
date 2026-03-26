@@ -159,6 +159,7 @@ intel forecast evaluate                      # evaluate pending outcomes and upd
 | `summary` | boolean | false | When true, return minimal output (top-3 scenarios, top-5 chains, change points). Implies compact. Zero-limited sections are omitted entirely from the response (not included as empty arrays). **Adaptive**: when scenario yield < 3, auto-upgrades ranked_chains (→10), dynamics (→5/type), and lifecycles (→15) to compact limits. |
 | `topics` | string[] | — | Filter output to specific topic IDs. Full pipeline runs but output is post-filtered. Eliminates the need to run the full forecast twice to extract lifecycle/entropy for specific topics. |
 | `sections` | string[] | — | Include only named sections in the response. Valid values: lifecycles, chains, ranked_chains, scenarios, multiscale, transitive_chains, entropy, dynamics, change_points_summary, context. |
+| `with_context` | boolean | false | When true, include recent event titles as context alongside change points and scenarios. Useful for understanding what's driving signals. |
 
 ---
 
@@ -415,7 +416,7 @@ log_posterior = log(base_rate) + Σ log(max(effective_signal_i, 1.01))
 **Step 3: Aggregate by target topic with temperature-scaled softmax**
 
 Multiple chains may predict the same target. Aggregate:
-- `probability` = temperature-scaled softmax: `exp((logPost - max) / T) / Σ exp((logPost_i - max) / T)` where T = 0.5
+- `score` = temperature-scaled softmax: `exp((logPost - max) / T) / Σ exp((logPost_i - max) / T)` where T = 0.5
 - `triggerTopics` = sorted by per-target contribution strength (strongest first)
 - `chainCount` = number of supporting chains (capped at MAX_CHAINS_PER_TARGET = 5)
 - `timeframe` = entropy-widened window (see Step 4)
@@ -443,14 +444,14 @@ For each target topic, fetch up to 3 recent high-scoring event titles (sanitized
 
 **Step 6: Sort and cap**
 
-Sort by probability descending, return top N (default 10).
+Sort by score descending, return top N (default 10).
 
 ### Output
 
 ```typescript
 interface ScenarioItem {
   target_topic: string;
-  probability: number;              // 0.0 - 1.0 (relative Bayesian posterior)
+  score: number;                     // 0.0 - 1.0 (relative ranking score, NOT a calibrated probability)
   timeframe_days: [number, number]; // [min_days, max_days] — entropy-widened window
   trigger_topics: string[];
   supporting_chains: number;
@@ -458,6 +459,7 @@ interface ScenarioItem {
   evidence_relevance: Array<'high' | 'medium' | 'low'>; // parallel to evidence_titles; based on topic_count heuristic
   target_entropy: number;           // target topic's normalized entropy (0-1); >0.8 = bursty
   target_base_rate: number;         // fraction of window days target spikes (0-1); >0.8 = omnipresent
+  min_chain_tier: number;           // lowest tier among supporting chains (1=strong, 2=moderate, 3=weak); indicates overall evidence quality
 }
 ```
 
@@ -864,7 +866,7 @@ Two fixture sets seed synthetic data for deterministic testing:
 - Chain support counts >= min_support, avg_lag_days > 0, source_diversity in [0, 1]
 - Chain fields include `lift`, `confidence`, `directionality`, `lag_stddev`
 - Active chains when trigger topic is spiking
-- Scenarios: probability in [0, 1], timeframe[0] <= timeframe[1], trigger_topics non-empty
+- Scenarios: score in [0, 1], timeframe[0] <= timeframe[1], trigger_topics non-empty
 - Lifecycle phases valid, phase_confidence in [0, 1]
 - Multiscale alignments valid
 - min_support threshold respected
@@ -990,7 +992,7 @@ intel forecast --min-support 2 | jq '.data.change_points_summary'
 intel forecast --min-support 2 | jq '.data.chains[:3] | .[] | {from_topic, to_topic, lift, trigger_base_rate}'
 
 # 11. Verify scenario probabilities are differentiated (not all identical)
-intel forecast --min-support 2 | jq '[.data.scenarios[].probability] | unique | length'
+intel forecast --min-support 2 | jq '[.data.scenarios[].score] | unique | length'
 
 # 12. Verify summary mode omits empty sections entirely
 intel forecast --summary | jq 'keys' | grep -v lifecycles

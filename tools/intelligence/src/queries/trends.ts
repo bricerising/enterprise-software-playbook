@@ -3,6 +3,7 @@ import type { IntelResponse } from '../types.js';
 import { ok } from '../util/envelope.js';
 import { sanitizeSnippet } from '../util/text.js';
 import { parseDuration, sinceISO } from '../util/time.js';
+import { checkTopicReviewWarning } from './review-warning.js';
 
 const DEFAULT_WINDOW = '60m';
 const DEFAULT_TOP = 10;
@@ -188,5 +189,9 @@ export function computeTrends(
     };
   });
 
-  return ok(trends);
+  const warnings: string[] = [];
+  const reviewWarning = checkTopicReviewWarning(db);
+  if (reviewWarning) warnings.push(reviewWarning);
+
+  return ok(trends, { warnings });
 }

@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { IntelResponse } from '../../types.js';
 import { ok } from '../../util/envelope.js';
+import { checkTopicReviewWarning } from '../review-warning.js';
 import type {
   ForecastData, ComputeForecastOpts,
   ChangePointSummary, DynamicItem,
@@ -71,6 +72,8 @@ export function computeForecast(
     });
   }
   const warnings: string[] = [];
+  const reviewWarning = checkTopicReviewWarning(db);
+  if (reviewWarning) warnings.push(reviewWarning);
 
   const now = Date.now();
   const { t: oldestEvent } = db.prepare('SELECT MIN(fetched_at) AS t FROM events').get() as { t: string | null };

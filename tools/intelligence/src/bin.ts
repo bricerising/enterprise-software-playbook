@@ -14,6 +14,7 @@ import { listEvents, getEvent } from './queries/events.js';
 import { addEntry, listEntries, searchJournal } from './queries/journal.js';
 import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
+import { auditTopics, markTopicReviewCompleted } from './queries/audit.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
 import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
@@ -279,9 +280,9 @@ program
   });
 
 // --- topics ---
-program
+const topics = program
   .command('topics')
-  .description('List configured topics')
+  .description('List and audit configured topics')
   .option('--active', 'Only topics with events in last 7d')
   .option('--match <keyword>', 'Filter by keyword')
   .action((opts) => {
@@ -300,6 +301,47 @@ program
             configuredTopics,
             active: opts.active,
             match: opts.match,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+topics
+  .command('audit')
+  .description('Quarterly topic health audit: volume, overlap, lifecycle, chains')
+  .option('--domain <domain>', 'Filter to a specific domain (e.g., ai, compute)')
+  .option('--flagged', 'Only show topics with flags')
+  .option('--below-minimum', 'Only show topics below minimum volume')
+  .option('--overlap <topic>', 'Only show topics overlapping with the given topic')
+  .option('--mark-reviewed', 'Record that a topic review was completed today')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      if (opts.markReviewed) {
+        const writer = openWriter(dbPath);
+        try {
+          const result = markTopicReviewCompleted(writer);
+          output(ok(result), fmt);
+        } finally {
+          writer.close();
+        }
+        return;
+      }
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          auditTopics(db, {
+            domain: opts.domain,
+            flagged: opts.flagged,
+            belowMinimum: opts.belowMinimum,
+            overlap: opts.overlap,
           }),
         ),
       );

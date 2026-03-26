@@ -196,6 +196,29 @@ def _check_manifest(repo_root: Path, skill_names: list[str], errors: list[str]) 
         if not isinstance(tags, list) or not tags:
             errors.append(f"Skill manifest tags for '{skill_name}' must be a non-empty array")
 
+        trigger = entry.get("trigger")
+        if not isinstance(trigger, str) or not trigger.strip():
+            errors.append(
+                f"Skill manifest 'trigger' for '{skill_name}' must be a non-empty string"
+            )
+
+        overhead = entry.get("overhead")
+        allowed_overhead = {"minimal", "moderate", "significant"}
+        if overhead not in allowed_overhead:
+            errors.append(
+                f"Skill manifest 'overhead' for '{skill_name}' must be one of "
+                f"{sorted(allowed_overhead)}, got '{overhead}'"
+            )
+
+        related = entry.get("related")
+        if isinstance(related, list):
+            for rel in related:
+                if not isinstance(rel, str) or rel not in skills:
+                    errors.append(
+                        f"Skill manifest 'related' entry '{rel}' for '{skill_name}' "
+                        f"is not a valid skill name in the manifest"
+                    )
+
         skill_md_path = repo_root / expected_path
         try:
             frontmatter = _load_skill_frontmatter(skill_md_path)

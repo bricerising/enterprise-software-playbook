@@ -12,6 +12,7 @@ MAX_SKILL_NAME_LENGTH = 64
 ALLOWED_STAGES = {"Define", "Standardize", "Harden", "Verify", "Mechanics"}
 TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 REQUIRED_SECTION_PATTERNS = {
+    "overview": re.compile(r"^##\s+.*overview\b", re.IGNORECASE | re.MULTILINE),
     "workflow": re.compile(r"^##\s+.*workflow\b", re.IGNORECASE | re.MULTILINE),
     "output template": re.compile(r"^##\s+.*output template\b", re.IGNORECASE | re.MULTILINE),
 }

@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { IntelResponse } from '../types.js';
 import { ok } from '../util/envelope.js';
+import { checkTopicReviewWarning } from './review-warning.js';
 
 export interface TopicItem {
   topic: string;
@@ -88,5 +89,9 @@ export function queryTopics(
     return a.topic.localeCompare(b.topic);
   });
 
-  return ok(items);
+  const warnings: string[] = [];
+  const reviewWarning = checkTopicReviewWarning(db);
+  if (reviewWarning) warnings.push(reviewWarning);
+
+  return ok(items, { warnings });
 }

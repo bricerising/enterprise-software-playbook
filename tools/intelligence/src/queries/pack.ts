@@ -3,6 +3,7 @@ import type { IntelResponse, SourceType } from '../types.js';
 import { ok } from '../util/envelope.js';
 import { sanitizeSnippet } from '../util/text.js';
 import { parseDuration, sinceISO, formatISO } from '../util/time.js';
+import { checkTopicReviewWarning } from './review-warning.js';
 
 const DEFAULT_SINCE = '6h';
 const DEFAULT_TOP = 10;
@@ -244,5 +245,9 @@ export function buildPack(
     source_health: sourceHealth,
   };
 
-  return ok(packData);
+  const warnings: string[] = [];
+  const reviewWarning = checkTopicReviewWarning(db);
+  if (reviewWarning) warnings.push(reviewWarning);
+
+  return ok(packData, { warnings });
 }

@@ -147,7 +147,7 @@ sequenceDiagram
 CREATE TABLE events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id    TEXT    UNIQUE NOT NULL,           -- stable per-source ID
-    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','lobsters','edgar','earnings')),
+    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','edgar','earnings')),
     feed        TEXT,                              -- feed name/identifier
     url           TEXT,
     canonical_url TEXT,                            -- normalized URL for cross-source dedup
@@ -287,7 +287,7 @@ All JSON outputs use a consistent envelope so agents can parse responses predict
 ```json
 {
   "tool": "intel",
-  "schema_version": "v1",
+  "schema_version": "v2",
   "status": "ok",
   "data": { },
   "warnings": [],
@@ -326,7 +326,7 @@ Every paginated response includes explicit pagination metadata so agents can dec
 ```json
 {
   "tool": "intel",
-  "schema_version": "v1",
+  "schema_version": "v2",
   "status": "error",
   "error": {
     "code": "SQLITE_BUSY",
@@ -638,8 +638,7 @@ interface SourceAdapter {
 
 1. **RSS/Atom** — generic feed polling with `rss-parser`. Handles most sources. Supports conditional GET via `ETag` and `If-Modified-Since` headers: the adapter stores the server's `ETag` and `Last-Modified` response headers per feed in `collector_health` and sends them on subsequent requests. When the server returns `304 Not Modified`, the adapter skips parsing entirely. This reduces bandwidth, avoids re-downloading unchanged feeds, and keeps request volumes polite.
 2. **Hacker News** — HN API with new/top/best modes. 100ms inter-request delay.
-3. **Lobsters** — RSS-based but with tag extraction from Lobsters categories.
-4. **EDGAR** — SEC filing RSS with form-type extraction and CIK parsing. Must comply with SEC EDGAR access requirements:
+3. **EDGAR** — SEC filing RSS with form-type extraction and CIK parsing. Must comply with SEC EDGAR access requirements:
    - **User-Agent**: every request must include a descriptive header: `intel-collector/0.1.0 (<operator-email>)`. The operator email is configured in `config.yaml` under `collector.edgar_contact`.
    - **Rate limit**: hard cap at 10 requests/second (SEC-monitored maximum). The adapter should self-limit well below this — 2 req/s default with configurable ceiling. Config validation must enforce `edgar_max_rps <= 10`; values above 10 are rejected at startup.
    - **Startup validation**: if any feed has `source: edgar`, the collector must validate that `collector.edgar_contact` is set and non-empty, and that `collector.edgar_max_rps` does not exceed 10. Fail fast with a clear error if either check fails — running EDGAR requests without a declared User-Agent risks IP blocks, and exceeding 10 rps risks rate limiting or blocking by the SEC.
@@ -885,6 +884,8 @@ intel mcp                        # start MCP server (stdio transport)
 | `intel_stats` | `intel stats` | Database statistics and health overview |
 | `intel_pack` | `intel pack` | Bounded evidence bundle for agent synthesis |
 | `intel_forecast` | `intel forecast` | Forward-looking predictions from topic co-movement and lifecycle analysis (see spec 007) |
+| `intel_forecast_snapshot` | `intel forecast --summary` | Compact forecast snapshot for agent consumption (top scenarios, chains, change points) |
+| `intel_forecast_evaluate` | `intel forecast evaluate` | Evaluate forecast accuracy against actual outcomes |
 
 The MCP server reads the same SQLite file as the CLI. No separate process needed beyond the collector daemon.
 

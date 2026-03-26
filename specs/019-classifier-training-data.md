@@ -4,6 +4,8 @@
 
 > **Taxonomy note**: The topic set has grown from spec 013's original 61 topics to 66 (additions: `macro.monetary-policy`, `market.payments`, `market.crypto`, `ai.research`, `devex.methodology`).
 
+> **Amendment (2026-03)**: Phase 2 now uses **L2-regularized Logistic Regression** instead of Complement Naive Bayes (CNB). CNB suffered from class imbalance: Platt scaling B values were too high, making calibrated probability thresholds unreachable for rare topics. Logistic regression with per-topic `score_threshold` (found via F1 maximization) replaces the Platt scaling pipeline. Model version >= 3 is required; the `bm25_val_includes_title` field distinguishes v3+ models.
+
 ## Problem
 
 The intelligence tool's topic classifier (spec 006, §Topic Classification) uses keyword/regex matching with learned confidence weights. Spec 015's Q1 2026 audit surfaced two classifier health warnings: **~31% of events are unclassified** (`unclassified_pct: 0.310`) and **5.9% are assigned to 4+ topics** (`multi_topic_pct: 0.059`), the over-classification threshold. Spec 013 identifies classifier precision as a key improvement area, and the topic lifecycle process (spec 013, §Topic Lifecycle) requires manual audit data to validate thresholds.
@@ -808,9 +810,8 @@ tools/intelligence/src/
 ├── collector/
 │   ├── bm25.ts              — NEW (Phase 1): BM25 scoring engine + tokenizer
 │   ├── tfidf.ts             — NEW (Phase 2): TF-IDF vectorizer
-│   ├── naive-bayes.ts       — NEW (Phase 2): Complement NB (66 binary classifiers)
-│   ├── platt.ts             — NEW (Phase 2): Platt scaling (sigmoid calibration)
-│   └── topic-classifier.ts  — MODIFY (Phase 1): rewrite matchesTopic() and classify() to use BM25; (Phase 2): add CNB model loading via classifier_model config key
+│   ├── classifier.ts        — NEW (Phase 2): L2-regularized logistic regression (66 binary classifiers, per-topic thresholds)
+│   └── topic-classifier.ts  — MODIFY (Phase 1): rewrite matchesTopic() and classify() to use BM25; (Phase 2): add classifier model loading via classifier_model config key
 └── bin.ts                   — MODIFY: add training-set + classifier command groups
 
 config/
@@ -841,11 +842,9 @@ tools/intelligence/tests/
 | `matchesTopicBM25(event, topicDef, idf, opts)` | `collector/bm25.ts` | Full BM25 pipeline for one event × one topic: tokenize title/content, score with title boost, apply negative keyword suppression, check threshold gate, compute sigmoid confidence. Returns `BM25Result`. |
 | `buildVocabulary(documents, maxSize)` | `collector/tfidf.ts` | Build vocabulary from tokenized documents, capped at `maxSize` terms by document frequency. Returns `Map<string, number>` (term → index). |
 | `vectorize(tokens, vocabulary, idf)` | `collector/tfidf.ts` | Convert token array to sparse TF-IDF vector (sub-linear TF, L2 normalized). Returns `Map<number, number>` (index → weight). |
-| `trainCNB(vectors, labels, topicId)` | `collector/naive-bayes.ts` | Train a single Complement Naive Bayes binary classifier for one topic. Returns sparse log-theta vector and log prior. |
-| `predictCNB(vector, classifier)` | `collector/naive-bayes.ts` | Predict raw CNB score for a document vector against a trained classifier. Returns uncalibrated log-odds. |
-| `trainClassifier(trainingDb, opts)` | `collector/naive-bayes.ts` | Full training pipeline: load data → build vocabulary → train 66 CNB classifiers → fit Platt calibration → serialize model. Returns `ClassifierTrainResult`. |
-| `fitPlatt(scores, labels)` | `collector/platt.ts` | Fit Platt scaling sigmoid parameters (A, B) from raw CNB scores and binary labels using Newton's method. Returns `SigmoidParams`. |
-| `calibrate(score, params)` | `collector/platt.ts` | Apply Platt sigmoid calibration: `1 / (1 + exp(A*score + B))`. Returns calibrated probability in (0, 1). |
+| `trainLogistic(vectors, labels, topicId)` | `collector/classifier.ts` | Train an L2-regularized logistic regression binary classifier for one topic. Returns weight vector and bias. |
+| `findOptimalThreshold(scores, labels)` | `collector/classifier.ts` | Find optimal classification threshold via F1 maximization on validation set. Returns threshold and metrics. |
+| `trainClassifier(trainingDb, opts)` | `collector/classifier.ts` | Full training pipeline: load data → build vocabulary → train 66 logistic classifiers → find per-topic thresholds → serialize model. Returns `ClassifierTrainResult`. |
 
 ### Types
 
@@ -1177,15 +1176,15 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 | `SAMPLING_ALGORITHM` | `"reservoir_sampling_algorithm_r"` | Algorithm identifier stored in `training_meta` and `generate` output |
 | `BM25_K1` | `1.2` | TF saturation parameter — diminishing returns for repeated terms. Standard BM25 default. |
 | `BM25_B` | `0.75` | Document length normalization — penalizes long boilerplate-heavy content. Standard BM25 default. |
-| `BM25_TITLE_BOOST` | `3.0` | Title keyword multiplier — keywords in the title carry 3× the weight of content keywords |
-| `BM25_THRESHOLDS` | `[4.0, 5.5, 7.0, 8.5, 10.0]` | Escalating minimum BM25 score for 1st through 5th topic assignment. Directly targets over-classification. |
-| `BM25_SIGMOID_MIDPOINT` | `6.0` | Sigmoid midpoint for BM25→confidence calibration: `1 / (1 + exp(-(score - midpoint) / temperature))` |
-| `BM25_SIGMOID_TEMPERATURE` | `2.0` | Sigmoid temperature for BM25→confidence calibration. Lower values produce a sharper transition. |
-| `CNB_MIN_EXAMPLES` | `20` | Minimum positive training examples per topic to train a CNB classifier. Topics below this fall back to BM25. |
-| `CNB_MIN_TRAINING_EVENTS` | `500` | Minimum total labeled events required to run `intel classifier train`. Guards against training on insufficient data. |
-| `CNB_MAX_VOCABULARY` | `20000` | Maximum vocabulary size for TF-IDF vectorization. Terms beyond this cap are dropped by document frequency. |
-| `CNB_VALIDATION_SPLIT` | `0.2` | Fraction of labeled data held out for validation during `intel classifier train`. Range (0.0, 0.5]. |
-| `CNB_PROBABILITY_THRESHOLD` | `0.3` | Minimum Platt-calibrated probability for a CNB topic assignment. Lower than 0.5 because CNB with Platt scaling produces conservative probabilities for rare topics. |
+| `BM25_TITLE_BOOST` | `2.0` | Title keyword multiplier — keywords in the title carry 2× the weight of content keywords |
+| `BM25_THRESHOLDS` | `[10.0, 14.0, 18.0, 22.0, 26.0]` | Escalating minimum BM25 score for 1st through 5th topic assignment. Directly targets over-classification. |
+| `BM25_SIGMOID_MIDPOINT` | `14.0` | Sigmoid midpoint for BM25→confidence calibration: `1 / (1 + exp(-(score - midpoint) / temperature))` |
+| `BM25_SIGMOID_TEMPERATURE` | `4.0` | Sigmoid temperature for BM25→confidence calibration. Lower values produce a sharper transition. |
+| `CLASSIFIER_MIN_EXAMPLES` | `20` | Minimum positive training examples per topic to train a logistic classifier. Topics below this fall back to BM25. |
+| `CLASSIFIER_MIN_TRAINING_EVENTS` | `500` | Minimum total labeled events required to run `intel classifier train`. Guards against training on insufficient data. |
+| `CLASSIFIER_MAX_VOCABULARY` | `20000` | Maximum vocabulary size for TF-IDF vectorization. Terms beyond this cap are dropped by document frequency. |
+| `CLASSIFIER_VALIDATION_SPLIT` | `0.2` | Fraction of labeled data held out for validation during `intel classifier train`. Range (0.0, 0.5]. |
+| `CLASSIFIER_MIN_MODEL_VERSION` | `3` | Minimum model version required. Models below this version are rejected at load time. Version 3+ includes `bm25_val_includes_title` and per-topic `score_threshold`. |
 | `MODEL_STALENESS_DAYS` | `90` | Warn if the classifier model file is older than this many days. Aligns with quarterly retraining cadence. |
 
 ---
