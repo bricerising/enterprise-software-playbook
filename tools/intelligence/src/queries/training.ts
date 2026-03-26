@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ok, error } from '../util/envelope.js';
-import { loadTopics, classify, mulberry32, loadStatModel } from '../collector/topic-classifier.js';
+import { loadTopics, classify, mulberry32, loadStatModel, hasStatModel } from '../collector/topic-classifier.js';
 import type { IntelResponse } from '../types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1084,9 +1084,14 @@ export function reclassifyTrainingSet(
     }) as unknown as IntelResponse<ReclassifyTrainingResult>;
   }
 
-  // Load statistical model for ensemble scoring (same default path as collector)
-  const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');
-  loadStatModel(join(defaultDir, 'classifier-model.json'));
+  // Load statistical model for ensemble scoring if not already loaded (e.g. by CLI --model)
+  if (!hasStatModel()) {
+    const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');
+    const modelPath = join(defaultDir, 'classifier-model.json');
+    if (!loadStatModel(modelPath)) {
+      console.warn(`[intel] No classifier model found at ${modelPath}; reclassification will use BM25-only scoring.`);
+    }
+  }
 
   // Compute new metadata hashes
   const topicsYamlPath = join(__dirname, '..', '..', 'config', 'topics.yaml');

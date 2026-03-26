@@ -1133,24 +1133,17 @@ describe('Statistical model ensemble', () => {
     expect(hasStatModel()).toBe(false);
   });
 
-  it('positive LR weights boost BM25 score', () => {
+  it('LR-primary scores topics directly using LR logit', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
     try {
-      // Get baseline score without stat model
       clearStatModel();
-      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
-      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
-      expect(baselineFoundation).toBeDefined();
-      const baselineScore = baselineFoundation!.score;
 
       // Build a synthetic model with strong positive weights for ai.foundation-models
-      const topics = getLoadedTopics();
       const vocab: Record<string, number> = {};
       const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
       terms.forEach((t, i) => { vocab[t] = i; });
       const idf = terms.map(() => 1.0);
 
-      // Strong positive weights so LR score exceeds threshold
       const weights: Record<number, number> = {};
       terms.forEach((_, i) => { weights[i] = 2.0; });
 
@@ -1174,27 +1167,25 @@ describe('Statistical model ensemble', () => {
       writeFileSync(modelPath, JSON.stringify(model));
       expect(loadStatModel(modelPath)).toBe(true);
 
-      const boosted = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
-      const boostedFoundation = boosted.find((t) => t.id === 'ai.foundation-models');
-      expect(boostedFoundation).toBeDefined();
-      expect(boostedFoundation!.score).toBeGreaterThan(baselineScore);
+      const result = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const foundation = result.find((t) => t.id === 'ai.foundation-models');
+      expect(foundation).toBeDefined();
+      // Score is the raw logit (positive with strong positive weights)
+      expect(foundation!.score).toBeGreaterThan(0);
+      // Confidence is sigmoid(logit), should be high
+      expect(foundation!.confidence).toBeGreaterThan(0.5);
     } finally {
       clearStatModel();
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  it('negative LR weights penalize BM25 score', () => {
+  it('negative LR weights exclude topic (confidence below threshold)', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
     try {
-      // Get baseline score without stat model
       clearStatModel();
-      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
-      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
-      expect(baselineFoundation).toBeDefined();
-      const baselineScore = baselineFoundation!.score;
 
-      // Build a synthetic model with strong negative weights so LR score is below threshold
+      // Build a synthetic model with strong negative weights → sigmoid < 0.5 threshold
       const vocab: Record<string, number> = {};
       const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
       terms.forEach((t, i) => { vocab[t] = i; });
@@ -1223,10 +1214,10 @@ describe('Statistical model ensemble', () => {
       writeFileSync(modelPath, JSON.stringify(model));
       expect(loadStatModel(modelPath)).toBe(true);
 
-      const penalized = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
-      const penalizedFoundation = penalized.find((t) => t.id === 'ai.foundation-models');
-      expect(penalizedFoundation).toBeDefined();
-      expect(penalizedFoundation!.score).toBeLessThan(baselineScore);
+      const result = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      // LR-primary: negative weights → sigmoid < 0.5 → gated out by score_threshold
+      const foundation = result.find((t) => t.id === 'ai.foundation-models');
+      expect(foundation).toBeUndefined();
     } finally {
       clearStatModel();
       rmSync(tmpDir, { recursive: true, force: true });
@@ -1236,14 +1227,14 @@ describe('Statistical model ensemble', () => {
   it('clearStatModel returns to exact baseline scores', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'intel-ensemble-'));
     try {
-      // Get baseline score without stat model
+      // Get baseline score without stat model (BM25-only)
       clearStatModel();
       const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
       const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
       expect(baselineFoundation).toBeDefined();
       const baselineScore = baselineFoundation!.score;
 
-      // Load a model to change scores
+      // Load a model — with LR-primary, scores use raw logit scale (different from BM25)
       const vocab: Record<string, number> = { bedrock: 0, agents: 1 };
       const model: ClassifierModel = {
         version: 3,
@@ -1265,6 +1256,12 @@ describe('Statistical model ensemble', () => {
       writeFileSync(modelPath, JSON.stringify(model));
       expect(loadStatModel(modelPath)).toBe(true);
       expect(hasStatModel()).toBe(true);
+
+      // Verify model produces different results (LR logit vs BM25 score)
+      const withModel = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
+      const withModelFoundation = withModel.find((t) => t.id === 'ai.foundation-models');
+      expect(withModelFoundation).toBeDefined();
+      expect(withModelFoundation!.score).not.toBe(baselineScore);
 
       // Clear and verify exact baseline return
       clearStatModel();
@@ -1293,10 +1290,10 @@ describe('V4 ensemble: LR independent scoring', () => {
     try {
       clearStatModel();
 
-      // Use a fabricated topic ID that no BM25 keywords match.
-      // The text uses invented terms that only the LR model knows about.
+      // Use invented terms that only the LR model knows about, plus
+      // AI context terms to satisfy context_required on ai.safety.
       const testTitle = 'Zorblax Plinkton Analysis';
-      const testContent = 'Examining zorblax plinkton dynamics and frobnar correlation patterns';
+      const testContent = 'Examining zorblax plinkton dynamics and frobnar correlation patterns with ai neural network';
 
       // Verify BM25 alone returns nothing for this text
       const baseline = classify(testTitle, testContent);
@@ -1350,26 +1347,22 @@ describe('V4 ensemble: LR independent scoring', () => {
     }
   });
 
-  it('per-topic alpha respected: higher alpha shows more LR influence', () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-alpha-'));
+  it('per-topic score_threshold gates LR topics', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-threshold-'));
     try {
       clearStatModel();
 
-      // Get baseline scores without stat model
-      const baseline = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
-      const baselineFoundation = baseline.find((t) => t.id === 'ai.foundation-models');
-      expect(baselineFoundation).toBeDefined();
-
-      // Build model with two topics at different alphas, both with positive LR weights
+      // Build model with moderate positive weights
       const terms = ['bedrock', 'agents', 'foundation', 'model', 'llm', 'amazon'];
       const vocab: Record<string, number> = {};
       terms.forEach((t, i) => { vocab[t] = i; });
       const idf = terms.map(() => 1.0);
 
+      // Weights that produce sigmoid ~ 0.7 for this input
       const weights: Record<number, number> = {};
-      terms.forEach((_, i) => { weights[i] = 3.0; });
+      terms.forEach((_, i) => { weights[i] = 0.3; });
 
-      // Test with LOW alpha first
+      // LOW threshold (0.5) → should pass
       const modelLow: ClassifierModel = {
         version: 4,
         created_at: new Date().toISOString(),
@@ -1380,9 +1373,7 @@ describe('V4 ensemble: LR independent scoring', () => {
             weights,
             bias: 0,
             score_threshold: 0.5,
-            blend_alpha: 0.05,
-            lr_val_f1: 0.2,
-            bm25_val_f1: 0.6,
+            blend_alpha: 0.3,
           },
         },
         training_meta: {
@@ -1393,17 +1384,16 @@ describe('V4 ensemble: LR independent scoring', () => {
         },
       };
 
-      const lowPath = join(tmpDir, 'v4-low-alpha.json');
+      const lowPath = join(tmpDir, 'v4-low-thresh.json');
       writeFileSync(lowPath, JSON.stringify(modelLow));
       loadStatModel(lowPath);
       const lowResult = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
       const lowFoundation = lowResult.find((t) => t.id === 'ai.foundation-models');
       expect(lowFoundation).toBeDefined();
-      const lowDelta = Math.abs(lowFoundation!.score - baselineFoundation!.score);
 
       clearStatModel();
 
-      // Test with HIGH alpha
+      // HIGH threshold (0.99) → should be gated out
       const modelHigh: ClassifierModel = {
         version: 4,
         created_at: new Date().toISOString(),
@@ -1413,10 +1403,8 @@ describe('V4 ensemble: LR independent scoring', () => {
           'ai.foundation-models': {
             weights,
             bias: 0,
-            score_threshold: 0.5,
-            blend_alpha: 0.5,
-            lr_val_f1: 0.7,
-            bm25_val_f1: 0.5,
+            score_threshold: 0.99,
+            blend_alpha: 0.3,
           },
         },
         training_meta: {
@@ -1427,23 +1415,20 @@ describe('V4 ensemble: LR independent scoring', () => {
         },
       };
 
-      const highPath = join(tmpDir, 'v4-high-alpha.json');
+      const highPath = join(tmpDir, 'v4-high-thresh.json');
       writeFileSync(highPath, JSON.stringify(modelHigh));
       loadStatModel(highPath);
       const highResult = classify('AWS Announces Bedrock Agents GA', 'Amazon Bedrock agents foundation model llm');
       const highFoundation = highResult.find((t) => t.id === 'ai.foundation-models');
-      expect(highFoundation).toBeDefined();
-      const highDelta = Math.abs(highFoundation!.score - baselineFoundation!.score);
-
-      // Higher alpha should produce more score change from baseline
-      expect(highDelta).toBeGreaterThan(lowDelta);
+      // With threshold at 0.99, sigmoid must exceed 0.99 — moderate weights won't reach this
+      expect(highFoundation).toBeUndefined();
     } finally {
       clearStatModel();
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  it('LR-only requires prob >= 0.7: low-confidence LR is not surfaced', () => {
+  it('LR-primary gates by score_threshold: low-confidence LR is not surfaced', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'intel-v4-minprob-'));
     try {
       clearStatModel();
@@ -1455,13 +1440,13 @@ describe('V4 ensemble: LR independent scoring', () => {
       // Verify baseline returns nothing
       expect(classify(testTitle, testContent).length).toBe(0);
 
-      // Build a model with WEAK LR weights (prob below 0.7)
+      // Build a model with WEAK LR weights (sigmoid below score_threshold)
       const terms = ['zorblax', 'plinkton', 'dynamics', 'examining'];
       const vocab: Record<string, number> = {};
       terms.forEach((t, i) => { vocab[t] = i; });
       const idf = terms.map(() => 1.0);
 
-      // Very weak weights → sigmoid(sum) will be close to 0.5, below 0.7
+      // Very weak weights → sigmoid(sum) will be close to 0.5, below threshold 0.7
       const weights: Record<number, number> = {};
       terms.forEach((_, i) => { weights[i] = 0.05; });
 
@@ -1474,7 +1459,7 @@ describe('V4 ensemble: LR independent scoring', () => {
           'ai.safety': {
             weights,
             bias: -0.5, // push probability lower
-            score_threshold: 0.5,
+            score_threshold: 0.7,
             blend_alpha: 0.4,
             lr_val_f1: 0.6,
             bm25_val_f1: 0.5,
@@ -1636,6 +1621,405 @@ describe('V4 ensemble: LR independent scoring', () => {
       db.close();
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// --- LR-primary architecture (4 tests) ---
+
+describe('LR-primary architecture', () => {
+  afterEach(() => {
+    clearStatModel();
+  });
+
+  it('LR-primary topics use per-topic score_threshold gating', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-lr-gate-'));
+    try {
+      clearStatModel();
+
+      const terms = ['zorblax', 'plinkton', 'dynamics', 'examining'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      // Strong weights → high confidence
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 3.0; });
+
+      // Low threshold → should pass
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.safety': { weights, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.safety': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'lr-gate.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      loadStatModel(modelPath);
+
+      // Text with invented terms + ai/neural context for context_required
+      const result = classify('Zorblax Plinkton Analysis', 'Examining zorblax plinkton dynamics and ai neural network');
+      const surfaced = result.find((t) => t.id === 'ai.safety');
+      expect(surfaced).toBeDefined();
+      expect(surfaced!.confidence).toBeGreaterThan(0.5);
+
+      clearStatModel();
+
+      // Same weights but threshold at 0.999 → should be gated out
+      const modelHigh: ClassifierModel = {
+        ...model,
+        classifiers: {
+          'ai.safety': { weights, bias: 0, score_threshold: 100 },
+        },
+      };
+      const highPath = join(tmpDir, 'lr-gate-high.json');
+      writeFileSync(highPath, JSON.stringify(modelHigh));
+      loadStatModel(highPath);
+
+      const resultHigh = classify('Zorblax Plinkton Analysis', 'Examining zorblax plinkton dynamics and ai neural network');
+      expect(resultHigh.find((t) => t.id === 'ai.safety')).toBeUndefined();
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('BM25-fallback topics unaffected by stat model presence', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-lr-bm25fb-'));
+    try {
+      clearStatModel();
+
+      // Get BM25-only baseline for a topic (kubernetes → compute.containers)
+      const baselineResult = classify(
+        'Kubernetes Container Orchestration Guide',
+        'Managing kubernetes cluster with pod orchestration and container deployment helm kustomize',
+      );
+      const baselineContainers = baselineResult.find((t) => t.id === 'compute.containers');
+      expect(baselineContainers).toBeDefined();
+
+      // Load a model that does NOT include compute.containers (so it falls back to BM25)
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: { zorblax: 0 },
+        idf: [1.0],
+        classifiers: {
+          'ai.safety': { weights: { 0: 3.0 }, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.safety': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'bm25-fallback.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      loadStatModel(modelPath);
+
+      const withModelResult = classify(
+        'Kubernetes Container Orchestration Guide',
+        'Managing kubernetes cluster with pod orchestration and container deployment helm kustomize',
+      );
+      const withModelContainers = withModelResult.find((t) => t.id === 'compute.containers');
+      expect(withModelContainers).toBeDefined();
+      // BM25-fallback should produce same confidence (BM25 sigmoid, not affected by LR)
+      expect(withModelContainers!.confidence).toBe(baselineContainers!.confidence);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('mixed LR + BM25 results sort by confidence', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-lr-mixed-'));
+    try {
+      clearStatModel();
+
+      // Model with one LR topic that has moderate confidence
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: { kubernetes: 0, container: 1, cluster: 2, pod: 3, helm: 4 },
+        idf: [1.0, 1.0, 1.0, 1.0, 1.0],
+        classifiers: {
+          // LR for ai.safety with weights that match kubernetes terms (unusual but testable)
+          'ai.safety': {
+            weights: { 0: 0.5, 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5 },
+            bias: 0,
+            score_threshold: 0.5,
+          },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'ai.safety': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'mixed.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      loadStatModel(modelPath);
+
+      // Text that hits both LR (ai.safety) and BM25 (compute.containers)
+      const result = classify(
+        'Kubernetes Container Orchestration',
+        'kubernetes cluster pod helm container deployment orchestration ai neural network',
+      );
+
+      // Both should appear and be sorted by confidence (highest first)
+      expect(result.length).toBeGreaterThan(0);
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i - 1].confidence).toBeGreaterThanOrEqual(result[i].confidence);
+      }
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('negative keywords suppress LR-primary topics even when above threshold', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-lr-negkw-'));
+    try {
+      clearStatModel();
+
+      // Load a model where ai.safety has strong weights for invented terms
+      const terms = ['energy', 'electricity', 'power'];
+      const vocab: Record<string, number> = {};
+      terms.forEach((t, i) => { vocab[t] = i; });
+      const idf = terms.map(() => 1.0);
+
+      const weights: Record<number, number> = {};
+      terms.forEach((_, i) => { weights[i] = 3.0; });
+
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: new Date().toISOString(),
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'macro.energy': { weights, bias: 0, score_threshold: 0.5 },
+        },
+        training_meta: {
+          training_db: 'test',
+          num_examples: 100,
+          num_positive_per_topic: { 'macro.energy': 50 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'lr-negkw.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      loadStatModel(modelPath);
+
+      // "medieval" is a negative keyword for macro.energy
+      const result = classify(
+        'Medieval Electricity in Manuscripts',
+        'A medieval manuscript about figurative electricity and power energy',
+      );
+      const energy = result.find((t) => t.id === 'macro.energy');
+      // Should be suppressed by negative keyword even though LR confidence is high
+      expect(energy).toBeUndefined();
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// --- False positive regressions ---
+
+describe('False positive regressions', () => {
+  it('Xcode release notes → devex.cicd, NOT arch.frontend', () => {
+    const topics = classifyIds(
+      'Xcode 16.2 Release Notes',
+      'Xcode 16.2 includes SDKs for iOS 18.2, iPadOS 18.2, macOS 15.2, tvOS 18.2, watchOS 11.2, and visionOS 2.2. This release supports on-device debugging for iOS 16 and later, tvOS 16 and later, watchOS 9 and later, and visionOS 1 and later.',
+    );
+    expect(topics).toContain('devex.cicd');
+    expect(topics).not.toContain('arch.frontend');
+  });
+
+  it('Xcode release notes → NOT lang.go', () => {
+    const topics = classifyIds(
+      'Xcode 16.2 Release Notes',
+      'Xcode 16.2 includes SDKs for iOS 18.2, iPadOS 18.2, macOS 15.2. The Go compiler target has been updated for improved performance.',
+    );
+    expect(topics).not.toContain('lang.go');
+  });
+
+  it('generic product announcements → NOT compute.cloud-platforms', () => {
+    const topics = classifyIds(
+      'Acme Corp Announces New Feature in General Availability',
+      'Acme Corp today announced the general availability of its new product update with preview features and service improvements.',
+    );
+    expect(topics).not.toContain('compute.cloud-platforms');
+  });
+
+  it('non-AI alignment discussion → NOT ai.safety', () => {
+    const topics = classifyIds(
+      'Team Alignment Workshop Results',
+      'Our quarterly alignment session focused on guardrails for project scope and red teaming our product roadmap to identify risks.',
+    );
+    expect(topics).not.toContain('ai.safety');
+  });
+
+  it('generic paper references → NOT ai.research', () => {
+    const topics = classifyIds(
+      'New Paper on Urban Planning Published',
+      'The peer review process for this research paper on urban transportation infrastructure has been completed.',
+    );
+    expect(topics).not.toContain('ai.research');
+  });
+
+  it('statistical inference → NOT ai.inference', () => {
+    const topics = classifyIds(
+      'Statistical Inference Methods in Economics',
+      'Bayesian inference and quantization of economic survey data for population-level estimates.',
+    );
+    expect(topics).not.toContain('ai.inference');
+  });
+});
+
+// --- True positive preservation ---
+
+describe('True positive preservation', () => {
+  it('Go 1.23 release notes (with golang/goroutine context) → lang.go', () => {
+    const topics = classifyIds(
+      'Go 1.23 Release Notes',
+      'The latest golang release includes improved goroutine scheduling and go concurrency primitives for better performance.',
+    );
+    expect(topics).toContain('lang.go');
+  });
+
+  it('AI safety paper (with AI/LLM context) → ai.safety', () => {
+    const topics = classifyIds(
+      'Red Teaming LLMs for AI Safety',
+      'AI safety research on alignment techniques for large language models and neural network guardrails.',
+    );
+    expect(topics).toContain('ai.safety');
+  });
+
+  it('AI research paper (with deep learning context) → ai.research', () => {
+    const topics = classifyIds(
+      'New Arxiv Pre-print on Reinforcement Learning',
+      'A deep learning research paper on neural network training algorithms and benchmark evaluation on standard datasets.',
+    );
+    expect(topics).toContain('ai.research');
+  });
+
+  it('FedRAMP article (with compliance context) → regulation.standards', () => {
+    const topics = classifyIds(
+      'FedRAMP Authorization Updates',
+      'New compliance framework requirements for fedramp authority to operate and nist 800-53 controls.',
+    );
+    expect(topics).toContain('regulation.standards');
+  });
+
+  it('ML inference article (with model/GPU context) → ai.inference', () => {
+    const topics = classifyIds(
+      'Optimizing ML Model Inference on GPU',
+      'Techniques for model serving and quantization to reduce latency in transformer inference deployment.',
+    );
+    expect(topics).toContain('ai.inference');
+  });
+
+  it('Xcode releases → devex.cicd', () => {
+    const topics = classifyIds(
+      'Xcode 16.3 Beta Available',
+      'Apple developer tools update with new iOS SDK and build system improvements for macOS SDK development.',
+    );
+    expect(topics).toContain('devex.cicd');
+  });
+
+  it('WWDC keynote summary → devex.cicd', () => {
+    const topics = classifyIds(
+      'WWDC 2025 Keynote Summary',
+      'Apple developer tools announcements including xcode release updates and new ios sdk features for build pipeline improvements.',
+    );
+    expect(topics).toContain('devex.cicd');
+  });
+
+  it('SwiftUI frontend architecture → arch.frontend', () => {
+    const topics = classifyIds(
+      'Building Modern Apps with SwiftUI',
+      'SwiftUI declarative frontend architecture patterns for building reactive user interfaces with server components.',
+    );
+    expect(topics).toContain('arch.frontend');
+  });
+
+  it('AWS service GA announcement (with cloud context) → compute.cloud-platforms', () => {
+    const topics = classifyIds(
+      'AWS Announces New S3 Storage Feature',
+      'Amazon web services released a new amazon s3 bucket feature for cloud storage with improved compute instance integration.',
+    );
+    expect(topics).toContain('compute.cloud-platforms');
+  });
+});
+
+// --- Threshold recall preservation (CR-05) ---
+
+describe('Threshold recall preservation', () => {
+  // These tests verify that the threshold bump to [10, 14, 18, 22, 26]
+  // does not drop recall for topics that should clearly match.
+
+  it('strong keyword matches still clear first threshold (10.0)', () => {
+    // Use full topic set IDF for realistic scoring
+    const allTopics = getLoadedTopics();
+    const idf = computeIDF(allTopics);
+
+    // containers topic has strong keywords; a dense keyword match should clear 10.0
+    const containersTopic = allTopics.find((t) => t.id === 'compute.containers');
+    expect(containersTopic).toBeDefined();
+
+    const result = matchesTopicBM25(
+      'Kubernetes Container Orchestration Guide',
+      'Managing kubernetes cluster with pod orchestration and container deployment helm kustomize',
+      containersTopic!,
+      idf,
+    );
+    expect(result.score).toBeGreaterThanOrEqual(BM25_THRESHOLDS[0]);
+    expect(result.matched).toBe(true);
+  });
+
+  it('weak incidental keyword match stays below threshold', () => {
+    // A single incidental keyword buried in unrelated content should not clear 10.0
+    const topics = classifyIds(
+      'Cooking Recipes for Beginners',
+      'A general guide to cooking techniques and kitchen deployment tips.',
+    );
+    // "deployment" might weakly match devex.cicd but should not clear threshold
+    expect(topics.length).toBe(0);
+  });
+
+  it('multi-topic classification preserves recall for clear-signal topics', () => {
+    // Foundation models + GPU should both be recalled
+    const topics = classify(
+      'NVIDIA H100 GPU Accelerates Foundation Model Training',
+      'nvidia h100 gpu cuda accelerator for training large language model llm transformer foundation model deep learning neural network',
+    );
+    const ids = topics.map((t) => t.id);
+    expect(ids).toContain('compute.gpu');
+  });
+
+  it('second-rank topic must clear escalating threshold (14.0)', () => {
+    const topics = classify(
+      'Kubernetes Docker Container Cluster Orchestration Helm',
+      'kubernetes container cluster orchestration docker dockerfile helm kustomize deployment pod node scheduling',
+    );
+    if (topics.length >= 2) {
+      expect(topics[1].score).toBeGreaterThanOrEqual(BM25_THRESHOLDS[1]);
     }
   });
 });

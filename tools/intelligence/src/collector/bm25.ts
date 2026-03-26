@@ -12,7 +12,7 @@
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 export const BM25_TITLE_BOOST = 2.0;
-export const BM25_THRESHOLDS: number[] = [8.0, 12.0, 16.0, 20.0, 24.0];
+export const BM25_THRESHOLDS: number[] = [10.0, 14.0, 18.0, 22.0, 26.0];
 export const BM25_SIGMOID_MIDPOINT = 14.0;
 export const BM25_SIGMOID_TEMPERATURE = 4.0;
 
@@ -53,6 +53,10 @@ export interface TopicDefExtended {
   context_required?: boolean;
   context_terms?: string[];
   priority: number;
+  /** Pre-tokenized negative keywords (built at load time for classify perf). */
+  _negTokens?: Set<string>;
+  /** Pre-tokenized context terms (built at load time for classify perf). */
+  _ctxTokens?: Set<string>;
 }
 
 // --- Tokenizer ---

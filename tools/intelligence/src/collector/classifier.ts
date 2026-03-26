@@ -60,6 +60,7 @@ export interface ClassifierModel {
     num_examples: number;
     num_positive_per_topic: Record<string, number>;
     training_date: string;
+    bm25_val_includes_title?: boolean;
   };
 }
 
@@ -107,6 +108,11 @@ export function trainLogistic(
   const N = vectors.length;
   const nPos = labels.filter((l) => l).length;
   const nNeg = N - nPos;
+
+  // Degenerate cases: all-positive or all-negative labels cannot train a decision boundary
+  if (nPos === 0 || nNeg === 0) {
+    return { weights: new Map(), bias: 0 };
+  }
 
   // Class-balanced sample weights (sklearn "balanced" formula: N / (2 * n_class))
   const posWeight = N / (2 * nPos);
@@ -229,6 +235,7 @@ function findOptimalThreshold(
  */
 function computeBM25ValF1(
   valDocs: string[][],
+  valTitles: (string | null)[],
   valTopics: string[][],
   topicId: string,
   topicDefs: TopicDefExtended[],
@@ -240,9 +247,11 @@ function computeBM25ValF1(
   let tp = 0, fp = 0, fn = 0;
   for (let i = 0; i < valDocs.length; i++) {
     const tokens = valDocs[i];
-    const result = matchesTopicBM25(null, tokens.join(' '), topicDef, idf, {
+    const title = valTitles[i];
+    const titleTokens = tokenize((title ?? '').slice(0, 200));
+    const result = matchesTopicBM25(title, tokens.join(' '), topicDef, idf, {
       tokens,
-      titleTokens: [],
+      titleTokens,
       avgDocLen: 150,
     });
     const predicted = result.matched && !result.suppressed && result.score >= BM25_THRESHOLDS[0];
@@ -292,12 +301,14 @@ export function trainClassifier(
     );
   }
 
-  // Tokenize all documents
+  // Tokenize all documents, preserving titles for BM25 validation
   const documents: string[][] = [];
+  const titles: (string | null)[] = [];
   const eventTopics: string[][] = [];
   for (const row of rows) {
     const text = ((row.title ?? '') + ' ' + (row.content ?? '')).slice(0, 3000);
     documents.push(tokenize(text));
+    titles.push(row.title);
     eventTopics.push(JSON.parse(row.human_topics));
   }
 
@@ -362,6 +373,7 @@ export function trainClassifier(
   const trainDocs = trainIndices.map((i) => documents[i]);
   const trainTopics = trainIndices.map((i) => eventTopics[i]);
   const valDocs = valIndicesArr.map((i) => documents[i]);
+  const valTitles = valIndicesArr.map((i) => titles[i]);
   const valTopics = valIndicesArr.map((i) => eventTopics[i]);
 
   // Build chi-squared vocabulary from train docs only
@@ -445,8 +457,8 @@ export function trainClassifier(
     valPrecisions.push(valPrec);
     valRecalls.push(valRec);
 
-    // Compute BM25 validation F1 for this topic
-    const bm25Val = computeBM25ValF1(valDocs, valTopics, topicId, allTopics, bm25Idf);
+    // Compute BM25 validation F1 for this topic (with title boost)
+    const bm25Val = computeBM25ValF1(valDocs, valTitles, valTopics, topicId, allTopics, bm25Idf);
 
     // Compute per-topic blend_alpha: LR influence proportional to its relative strength
     const blendAlpha = Math.min(0.5, Math.max(0.05, valF1 / (bm25Val.f1 + valF1 + 0.01)));
@@ -512,6 +524,7 @@ export function trainClassifier(
       num_examples: rows.length,
       num_positive_per_topic: numPositivePerTopic,
       training_date: new Date().toISOString(),
+      bm25_val_includes_title: true,
     },
   };
 
