@@ -2,7 +2,21 @@ name: Skill Validation
 
 on:
   push:
+    paths:
+      - 'skills/**'
+      - 'specs/skills-manifest.json'
+      - '.system/skill-creator/**'
+      - '.system/docs/**'
+      - 'README.md'
+      - 'PROMPTS.md'
   pull_request:
+    paths:
+      - 'skills/**'
+      - 'specs/skills-manifest.json'
+      - '.system/skill-creator/**'
+      - '.system/docs/**'
+      - 'README.md'
+      - 'PROMPTS.md'
 
 jobs:
   validate:
