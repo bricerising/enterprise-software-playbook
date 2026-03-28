@@ -58,4 +58,4 @@ jobs:
         run: |
           set -euo pipefail
           pip install pip-audit==2.10.0
-          pip-audit
+          pip-audit --ignore-vuln CVE-2026-4539  # pygments 2.19.2 — no fix available yet
