@@ -31,6 +31,7 @@ When modifying a tool subproject:
 - Validate repo-level docs/workflow consistency: `python3 .system/skill-creator/scripts/check_repo_consistency.py`
 - Keep `README.md` and `PROMPTS.md` aligned with the workflow-stage grouping (Define/Standardize/Harden/Verify).
 - Keep `specs/skills-manifest.json` aligned with each skill's frontmatter metadata (stage, tags) and maintain manifest-only fields (trigger, related, overhead).
+- Build docs locally: `python3 .system/docs/generate_mkdocs_nav.py > mkdocs.yml && pip install mkdocs-material && mkdocs build --strict` (see `specs/quickstart.md`).
 
 ## Feedback (what helps most)
 

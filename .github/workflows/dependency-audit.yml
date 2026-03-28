@@ -59,3 +59,17 @@ jobs:
           set -euo pipefail
           pip install pip-audit==2.10.0
           pip-audit --ignore-vuln CVE-2026-4539  # pygments 2.19.2 — no fix available yet
+
+      - name: Check if CVE exception is stale
+        run: |
+          set -euo pipefail
+          # If pygments has released past the version with CVE-2026-4539,
+          # the --ignore-vuln above should be removed.
+          LATEST=$(pip index versions pygments 2>/dev/null | head -1 | sed 's/.*(\(.*\))/\1/')
+          if [ -z "$LATEST" ]; then
+            echo "Could not fetch latest pygments version, skipping staleness check."
+            exit 0
+          fi
+          if python3 -c "from packaging.version import Version; exit(0 if Version('$LATEST') > Version('2.19.2') else 1)"; then
+            echo "::warning::pygments $LATEST is available (> 2.19.2). Review and remove the CVE-2026-4539 exception in dependency-audit.yml."
+          fi
