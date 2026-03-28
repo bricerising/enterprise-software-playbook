@@ -24,7 +24,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.0",
     "@types/better-sqlite3": "^7.6.0",
     "@types/jsdom": "^21.0.0"
