@@ -1,20 +1,14 @@
----
-name: patterns-behavioral
-description: "Implement behavioral design patterns (Strategy, Observer, State, Command, Chain of Responsibility, Mediator, Template Method, Iterator, Memento, Visitor). Use when you need pluggable algorithms, event/listener systems, state machines, middleware pipelines, undo/redo, or request chains. NOT for object creation (use patterns-creational); NOT for wrapping/composing objects (use patterns-structural)."
-metadata: {"stage":"Mechanics","tags":["behavioral-patterns","strategy","state-machine","eventing","pipelines","middleware","pub-sub","observer","command","undo-redo"],"aliases":["strategy","observer","state-machine","command","middleware","pub-sub","event-system","pipeline","undo-redo"]}
----
-
-# Patterns (Behavioral)
+# Behavioral Patterns (Implementation Guide)
 
 ## Overview
 
 Manage algorithms and collaboration without turning your code into nested conditionals and tight coupling. Behavioral patterns help you route requests, encapsulate actions, and swap behavior safely.
 
-A note on scope: these guidelines assume **systemic** TypeScript (long‑lived apps/services). For short‑lived scripts, you can often simplify (fewer abstractions, more `throw`) as long as the blast radius stays small.
+A note on scope: these guidelines assume **systemic** TypeScript (long-lived apps/services). For short-lived scripts, you can often simplify (fewer abstractions, more `throw`) as long as the blast radius stays small.
 
 ## Workflow
 
-1. Decide “scriptic vs systemic” and set policies (error semantics, boundary validation, ownership/lifetimes).
+1. Decide "scriptic vs systemic" and set policies (error semantics, boundary validation, ownership/lifetimes).
 2. Identify the interaction pressure: pipelines, events, undo, state machines, or algorithm selection.
 3. Draw a quick responsibility map: who triggers actions, who owns state, who receives outcomes?
 4. Pick a pattern that makes responsibilities explicit (interfaces + concrete behaviors).
@@ -43,7 +37,7 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 
 ## Implementation Checklist
 
-- Make ordering explicit for pipelines and observers; define error semantics (what’s expected vs unknown).
+- Make ordering explicit for pipelines and observers; define error semantics (what's expected vs unknown).
 - For expected failures, prefer typed unions/`Result`; reserve `throw` for unknown/unrecoverable and catch/convert at boundaries.
 - Treat boundary inputs as `unknown` (events/requests) and validate/decode once near the edge.
 - For async observers/pipelines, make ownership explicit: unsubscribe/shutdown, backpressure/queueing, and cancellation (`AbortSignal`).
@@ -61,23 +55,23 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 
 ## Snippets (optional)
 
-- TypeScript: [`references/snippets/typescript.md`](references/snippets/typescript.md)
-- React: [`references/snippets/react.md`](references/snippets/react.md)
+- TypeScript: [`snippets/typescript.md`](snippets/typescript.md) (Behavioral Patterns section)
+- React: [`snippets/react.md`](snippets/react.md) (Behavioral Patterns section)
 
 ## References
 
 Read the relevant reference file before implementing or refactoring toward the pattern:
 
-- [`references/chain-of-responsibility.md`](references/chain-of-responsibility.md)
-- [`references/command.md`](references/command.md)
-- [`references/iterator.md`](references/iterator.md)
-- [`references/mediator.md`](references/mediator.md)
-- [`references/memento.md`](references/memento.md)
-- [`references/observer.md`](references/observer.md)
-- [`references/state.md`](references/state.md)
-- [`references/strategy.md`](references/strategy.md)
-- [`references/template-method.md`](references/template-method.md)
-- [`references/visitor.md`](references/visitor.md)
+- [`behavioral/chain-of-responsibility.md`](behavioral/chain-of-responsibility.md)
+- [`behavioral/command.md`](behavioral/command.md)
+- [`behavioral/iterator.md`](behavioral/iterator.md)
+- [`behavioral/mediator.md`](behavioral/mediator.md)
+- [`behavioral/memento.md`](behavioral/memento.md)
+- [`behavioral/observer.md`](behavioral/observer.md)
+- [`behavioral/state.md`](behavioral/state.md)
+- [`behavioral/strategy.md`](behavioral/strategy.md)
+- [`behavioral/template-method.md`](behavioral/template-method.md)
+- [`behavioral/visitor.md`](behavioral/visitor.md)
 
 Each reference includes: selection cues, minimal structure, pitfalls, and test ideas.
 
@@ -85,6 +79,6 @@ Each reference includes: selection cues, minimal structure, pitfalls, and test i
 
 When applying a behavioral pattern, return:
 
-- The pressure you’re addressing (pipeline/eventing/undo/state/algorithm selection) and why this pattern fits.
+- The pressure you're addressing (pipeline/eventing/undo/state/algorithm selection) and why this pattern fits.
 - The proposed seam (interfaces/contracts) and who owns state and lifetimes (subscribe/unsubscribe, start/stop).
 - Verification steps (tests for ordering, expected failures, and shutdown/cancellation).

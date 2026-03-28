@@ -174,9 +174,6 @@ def discover_references(skill_dir: Path) -> list[dict]:
 
 def _skill_display_name(skill_name: str) -> str:
     """Pretty-print a skill name for the nav."""
-    if skill_name.startswith("patterns-"):
-        kind = skill_name.split("-", 1)[1]
-        return f"Patterns: {_titlecase_words(kind)}"
     return _titlecase_words(skill_name)
 
 

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 MAX_SKILL_NAME_LENGTH = 64
-ALLOWED_STAGES = {"Define", "Standardize", "Harden", "Verify", "Mechanics"}
+ALLOWED_STAGES = {"Define", "Standardize", "Harden", "Verify"}
 TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 REQUIRED_SECTION_PATTERNS = {
     "overview": re.compile(r"^##\s+.*overview\b", re.IGNORECASE | re.MULTILINE),

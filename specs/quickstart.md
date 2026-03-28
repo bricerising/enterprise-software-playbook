@@ -55,5 +55,5 @@ rg -n "\\bGoF\\b|architecture pattern|design pattern" -S .
 Confirm the workflow-stage grouping is consistent:
 
 ```sh
-rg -n "Define \\(what are we building\\?\\)|Standardize \\(make it consistent\\)|Harden \\(make it survive reality\\)|Verify \\(prove behavior\\)|Mechanics \\(in-process building blocks\\)" -S README.md PROMPTS.md
+rg -n "Define \\(what are we building\\?\\)|Standardize \\(make it consistent\\)|Harden \\(make it survive reality\\)|Verify \\(prove behavior\\)" -S README.md PROMPTS.md
 ```

@@ -10,7 +10,7 @@ metadata: {"stage":"Define","tags":["workflow","auto-routing","skill-orchestrati
 
 This skill is a workflow orchestrator: it routes work across the other skills in this repo so you can deliver cohesive enterprise web app changes without the user needing to micromanage “which skill to use”.
 
-Default loop: **Define → Standardize → Harden → Verify → Mechanics**.
+Default loop: **Define → Standardize → Harden → Verify**.
 
 ## Chooser
 
@@ -89,13 +89,6 @@ If the change touches I/O boundaries (HTTP/gRPC/DB/cache/queues/events/WS), appl
   - consumer-visible tests for new behavior and failure semantics
   - avoid asserting implementation details
 
-### 5) Mechanics (in-process building blocks)
-
-Only when implementation needs it:
-
-- Apply a specific in-process pattern via `patterns-creational`, `patterns-structural`, or `patterns-behavioral`.
-- Prefer wrappers/facades at boundaries; keep pattern seams small.
-
 ## Common Compositions (Recipes)
 
 These are typical skill sequences for common work types. Adapt based on scope.
@@ -107,7 +100,7 @@ These are typical skill sequences for common work types. Adapt based on scope.
 `debug` → *(fix)* → `testing` → `finish`
 
 **Refactor (in-process)**:
-`archobs` → `design` → `patterns-*` → `testing` → `review` → `finish`
+`archobs` → `design` → `testing` → `review` → `finish`
 
 **New service**:
 `spec` → `architecture` → `platform` → `typescript` → `resilience` → `security` → `observability` → `testing` → `finish`
@@ -128,7 +121,7 @@ Start with ecosystem signals, then check internal readiness. Use when the questi
 **Conditional composition**: When archobs reveals high coupling to external dependencies (files with high `xnbr` bridging to third-party code, or clusters labeled with external technology names), invoke `forecast` in combined mode (not just internal). Topics for the external engine are derived from archobs cluster labels and high-xnbr file paths.
 
 **Architecture health pass**:
-`archobs` → `plan` (from suggestions) → `design` → `patterns-*` → `testing` → `finish`
+`archobs` → `plan` (from suggestions) → `design` → `testing` → `finish`
 
 **Security hardening pass**:
 `security` → `testing` → `review` (type: security) → `finish`

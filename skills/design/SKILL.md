@@ -1,7 +1,7 @@
 ---
 name: design
-description: "Pick the right in-process code pattern for a refactoring or extensibility need (GoF creational/structural/behavioral). Use as a decision workflow when unsure which pattern family fits — routes to patterns-creational, patterns-structural, or patterns-behavioral for implementation. NOT for multi-service/distributed architecture (use architecture); NOT for applying a known specific pattern (use patterns-creational, patterns-structural, or patterns-behavioral directly)."
-metadata: {"stage":"Define","tags":["code-patterns","refactoring","extensibility","decoupling","testability","gof","in-process"],"aliases":["design-patterns","GoF","refactor","pattern-chooser","code-structure"]}
+description: "Pick the right in-process code pattern for a refactoring or extensibility need (GoF creational/structural/behavioral), and access implementation guides for specific patterns. Use as a decision workflow when unsure which pattern family fits, or go directly to pattern references when you already know. NOT for multi-service/distributed architecture (use architecture)."
+metadata: {"stage":"Define","tags":["code-patterns","refactoring","extensibility","decoupling","testability","gof","in-process","creational-patterns","structural-patterns","behavioral-patterns","factory","builder","adapter","facade","strategy","observer","state-machine","decorator","proxy","singleton"],"aliases":["design-patterns","GoF","refactor","pattern-chooser","code-structure","patterns-creational","patterns-structural","patterns-behavioral","factory","builder","singleton","prototype","abstract-factory","object-creation","DI","dependency-injection","adapter","decorator","facade","proxy","wrapper","composite","bridge","flyweight","strategy","observer","state-machine","command","middleware","pub-sub","event-system","pipeline","undo-redo"]}
 ---
 
 # Design (Choose Code Pattern)
@@ -111,10 +111,28 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 - Empirical coupling data to inform pattern choice: [`archobs`](../archobs/SKILL.md)
 - If the pressure is cross-service/system-level: [`architecture`](../architecture/SKILL.md)
-- If you need a concrete implementation guide: [`patterns-creational`](../patterns-creational/SKILL.md), [`patterns-structural`](../patterns-structural/SKILL.md), [`patterns-behavioral`](../patterns-behavioral/SKILL.md)
 - If the seam should be shared across services: [`platform`](../platform/SKILL.md)
 - If you're in TypeScript and hitting systemic constraints (boundaries/lifetimes/errors): [`typescript`](../typescript/SKILL.md)
 - Structured-thinking probes + templates: [`../references/`](../references/) (checklists for inline probes, templates for escalation)
+
+### Pattern Implementation Guides
+
+When you need implementation details for a specific pattern:
+
+- Creational patterns (Factory Method, Abstract Factory, Builder, Prototype, Singleton): [`references/patterns-creational.md`](references/patterns-creational.md)
+- Structural patterns (Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy): [`references/patterns-structural.md`](references/patterns-structural.md)
+- Behavioral patterns (Chain of Responsibility, Command, Iterator, Mediator, Memento, Observer, State, Strategy, Template Method, Visitor): [`references/patterns-behavioral.md`](references/patterns-behavioral.md)
+
+### Individual Pattern References
+
+- Creational: [`references/creational/`](references/creational/) (factory-method, abstract-factory, builder, prototype, singleton)
+- Structural: [`references/structural/`](references/structural/) (adapter, bridge, composite, decorator, facade, flyweight, proxy)
+- Behavioral: [`references/behavioral/`](references/behavioral/) (chain-of-responsibility, command, iterator, mediator, memento, observer, state, strategy, template-method, visitor)
+
+### Snippets
+
+- TypeScript: [`references/snippets/typescript.md`](references/snippets/typescript.md)
+- React: [`references/snippets/react.md`](references/snippets/react.md)
 
 ## Output Template
 

@@ -93,7 +93,7 @@ Related skills:
 - [`resilience`](../resilience/SKILL.md) (timeouts/retries/idempotency)
 - [`security`](../security/SKILL.md) (authn/authz, input validation, secrets)
 - [`typescript`](../typescript/SKILL.md) (typed boundaries/errors/lifetimes)
-- [`patterns-structural`](../patterns-structural/SKILL.md) / [`patterns-behavioral`](../patterns-behavioral/SKILL.md) (wrappers/pipelines)
+- [`design`](../design/SKILL.md) (structural and behavioral pattern references for wrappers/pipelines)
 
 ## Output Template
 

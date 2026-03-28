@@ -13,7 +13,7 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 
 - [`specs/001-skill-library.md`](001-skill-library.md): Charter for what this repo is for (goals, non-goals, constitution, acceptance).
 - [`specs/002-skill-contract.md`](002-skill-contract.md): What a “skill” is in this repo (folder format, metadata, compatibility, validation/packaging).
-- [`specs/003-taxonomy-and-workflow.md`](003-taxonomy-and-workflow.md): The workflow-stage taxonomy (Define/Standardize/Harden/Verify/Mechanics) and how it maps to skills.
+- [`specs/003-taxonomy-and-workflow.md`](003-taxonomy-and-workflow.md): The workflow-stage taxonomy (Define/Standardize/Harden/Verify) and how it maps to skills.
 - [`specs/004-change-process.md`](004-change-process.md): How to evolve this repo without breaking prompting compatibility or bloating context.
 - [`specs/005-application-integration.md`](005-application-integration.md): How to integrate this library into a target app repo so agents auto-apply the workflow.
 - [`specs/006-intelligence-tool.md`](006-intelligence-tool.md): Spec for the intelligence tool (`tools/intelligence/`) — lightweight SQLite-backed collector and query engine for tech/AI/AWS signals.
@@ -33,6 +33,7 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/017-archobs-team-analysis.md`](017-archobs-team-analysis.md): Author/team analysis for archobs — git author extraction, per-cluster author distribution, bus factor, knowledge concentration (HHI), and `show team` CLI.
 - [`specs/018-archobs-fitness-check.md`](018-archobs-fitness-check.md): Architecture fitness check for archobs — CI-gatable `archobs check` command evaluating file risk, cluster leakage/cohesion/risk_mean, and bus factor against configurable thresholds.
 - [`specs/019-classifier-training-data.md`](019-classifier-training-data.md): Classifier training data (amends specs 006, 013) — reservoir sampling, standalone training SQLite databases, CLI commands (generate/label/progress/next), and agent skill workflow for subagent-driven topic classification.
+- [`specs/020-mechanics-consolidation.md`](020-mechanics-consolidation.md): Collapse Mechanics stage into Design — move pattern skills to design/references, eliminate Mechanics from taxonomy, add role field to Define-stage manifest entries.
 - [`specs/decisions/`](decisions/): ADR-style decision records (see [`specs/decisions/000-template.md`](decisions/000-template.md)):
   - [`001`](decisions/001-workflow-stage-taxonomy.md): Workflow-stage taxonomy
   - [`002`](decisions/002-code-vs-system-pattern-terms.md): Code vs system pattern terms
@@ -48,4 +49,5 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
   - [`013`](decisions/013-metadata-index-and-scaffolding.md): Metadata index and scaffolding
   - [`014`](decisions/014-structured-thinking-probes-for-core-skills.md): Structured-thinking probes for core skills
   - [`015`](decisions/015-vendor-archobs-tool.md): Vendor archobs tool
+  - [`016`](decisions/016-collapse-mechanics-into-design.md): Collapse Mechanics stage into Design
 - [`specs/templates/`](templates/README.md): Copy/paste templates for app-repo integration, CI quality gates, and service spec bundles.

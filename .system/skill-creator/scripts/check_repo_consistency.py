@@ -19,15 +19,9 @@ REQUIRED_WORKFLOW_HEADINGS = (
     "Standardize (make it consistent)",
     "Harden (make it survive reality)",
     "Verify (prove behavior)",
-    "Mechanics (in-process building blocks)",
 )
 
-PATTERN_SKILLS = {
-    "patterns-creational",
-    "patterns-structural",
-    "patterns-behavioral",
-}
-STAGE_NAMES = ("Define", "Standardize", "Harden", "Verify", "Mechanics")
+STAGE_NAMES = ("Define", "Standardize", "Harden", "Verify")
 NON_SKILL_SUBDIRS = {"references"}
 
 
@@ -88,18 +82,6 @@ def _check_readme_skills(skill_names: list[str], readme_text: str, errors: list[
 
 def _check_prompt_skills(skill_names: list[str], prompts_text: str, errors: list[str]) -> None:
     for skill_name in skill_names:
-        if skill_name in PATTERN_SKILLS:
-            if (
-                "Use patterns-<creational|structural|behavioral>" in prompts_text
-                or re.search(rf"\bUse\s+{re.escape(skill_name)}\b", prompts_text)
-            ):
-                continue
-            errors.append(
-                "PROMPTS.md missing pattern prompt coverage for "
-                f"{skill_name} (expected combined or direct pattern prompt)"
-            )
-            continue
-
         if not re.search(rf"\bUse\s+{re.escape(skill_name)}\b", prompts_text):
             errors.append(f"PROMPTS.md missing copy/paste usage prompt for skill: {skill_name}")
 

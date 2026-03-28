@@ -54,7 +54,7 @@ Not every skill needs every probe. Prioritize by fit:
 | #4 Opportunity Cost | `plan`, `spec`, `architecture`, `design` | `review` |
 | #5 Learning Loop | `finish`, `debug` | — |
 
-Skills not listed above (`testing`, `security`, `resilience`, `observability`, `typescript`, `platform`, `patterns-*`) consume probe output from the Define-stage skill that produced it. They do not run their own probes.
+Skills not listed above (`testing`, `security`, `resilience`, `observability`, `typescript`, `platform`) consume probe output from the Define-stage skill that produced it. They do not run their own probes.
 
 **Skill-specific tailoring notes:**
 - `design` omits "load" and "toil" from Second-Order Effects because in-process pattern decisions don't create operational load or toil — coupling and failure modes are the relevant concerns.

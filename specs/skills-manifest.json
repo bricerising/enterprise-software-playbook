@@ -1,17 +1,17 @@
 {
-  "version": 4,
-  "updated": "2026-03-26",
+  "version": 5,
+  "updated": "2026-03-28",
   "stages": {
     "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "forecast"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
-    "Verify": ["testing", "review", "finish"],
-    "Mechanics": ["patterns-creational", "patterns-structural", "patterns-behavioral"]
+    "Verify": ["testing", "review", "finish"]
   },
   "skills": {
     "archobs": {
       "path": "skills/archobs/SKILL.md",
       "stage": "Define",
+      "role": "data-source",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
       "related": ["architecture", "design", "plan", "forecast", "review", "finish", "intel", "workflow"],
@@ -20,6 +20,7 @@
     "architecture": {
       "path": "skills/architecture/SKILL.md",
       "stage": "Define",
+      "role": "decision",
       "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga"],
       "trigger": "Work spans multiple services/processes or needs eventual consistency or clearer integration seams.",
       "related": ["design", "resilience", "platform", "spec", "archobs", "forecast"],
@@ -36,9 +37,10 @@
     "design": {
       "path": "skills/design/SKILL.md",
       "stage": "Define",
-      "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process"],
-      "trigger": "Need to choose an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
-      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs", "forecast"],
+      "role": "decision",
+      "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process", "creational-patterns", "structural-patterns", "behavioral-patterns", "factory", "builder", "adapter", "facade", "strategy", "observer", "state-machine", "decorator", "proxy", "singleton"],
+      "trigger": "Need to choose or implement an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
+      "related": ["architecture", "typescript", "archobs", "forecast"],
       "overhead": "minimal"
     },
     "finish": {
@@ -57,33 +59,10 @@
       "related": ["debug", "resilience", "security", "typescript"],
       "overhead": "moderate"
     },
-    "patterns-behavioral": {
-      "path": "skills/patterns-behavioral/SKILL.md",
-      "stage": "Mechanics",
-      "tags": ["behavioral-patterns", "strategy", "state-machine", "eventing", "pipelines", "middleware", "pub-sub", "observer", "command", "undo-redo"],
-      "trigger": "Need pluggable algorithms, event/listener systems, state machines, middleware pipelines, undo/redo, or request chains.",
-      "related": ["design", "patterns-creational", "patterns-structural"],
-      "overhead": "moderate"
-    },
-    "patterns-creational": {
-      "path": "skills/patterns-creational/SKILL.md",
-      "stage": "Mechanics",
-      "tags": ["creational-patterns", "factory", "builder", "object-creation", "dependency-injection", "abstract-factory", "prototype", "singleton"],
-      "trigger": "Object construction is complex, varies by type/environment, needs decoupling, or introducing DI for testability.",
-      "related": ["design", "patterns-structural", "patterns-behavioral"],
-      "overhead": "moderate"
-    },
-    "patterns-structural": {
-      "path": "skills/patterns-structural/SKILL.md",
-      "stage": "Mechanics",
-      "tags": ["structural-patterns", "adapter", "facade", "decorator", "proxy", "composite", "bridge", "flyweight", "wrapper"],
-      "trigger": "Wrapping/composing objects, translating interfaces, simplifying a subsystem, or adding caching/auth/lazy-loading via indirection.",
-      "related": ["design", "patterns-creational", "patterns-behavioral"],
-      "overhead": "moderate"
-    },
     "plan": {
       "path": "skills/plan/SKILL.md",
       "stage": "Define",
+      "role": "decision",
       "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table"],
       "trigger": "Non-trivial, cross-cutting, or ambiguous work that needs a scoped task breakdown before starting.",
       "related": ["spec", "workflow", "architecture", "archobs", "forecast"],
@@ -124,6 +103,7 @@
     "spec": {
       "path": "skills/spec/SKILL.md",
       "stage": "Define",
+      "role": "decision",
       "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr"],
       "trigger": "Creating or updating specs, API contracts, ADRs, or task lists — especially before major behavior changes.",
       "related": ["plan", "architecture", "testing", "archobs", "forecast"],
@@ -148,6 +128,7 @@
     "workflow": {
       "path": "skills/workflow/SKILL.md",
       "stage": "Define",
+      "role": "decision",
       "tags": ["workflow", "auto-routing", "skill-orchestration", "delivery-loop", "taxonomy", "orchestrator", "router"],
       "trigger": "General request without a named skill — auto-select and sequence the right skills for the work.",
       "related": ["plan", "spec", "finish", "archobs"],
@@ -156,6 +137,7 @@
     "intel": {
       "path": "skills/intel/SKILL.md",
       "stage": "Define",
+      "role": "data-source",
       "tags": ["intelligence", "trends", "signals", "research", "briefing", "news", "feeds", "evidence", "audience", "executive", "engineering", "decision", "digest", "synthesis", "presentation", "stakeholder"],
       "trigger": "Need current signal on a technology, vendor, or industry trend — or need to present signals to a specific audience.",
       "related": ["forecast", "plan", "spec", "architecture", "archobs"],
@@ -164,6 +146,7 @@
     "forecast": {
       "path": "skills/forecast/SKILL.md",
       "stage": "Define",
+      "role": "data-source",
       "tags": ["forecast", "prediction", "scenarios", "chains", "lifecycle", "convergence", "trends", "intelligence", "bayesian", "entropy", "cusum", "hmm", "decay", "trajectory", "momentum", "velocity", "feature-prediction", "git-history", "development-patterns", "change-analysis", "adjacency"],
       "trigger": "Need forward-looking intelligence — predict likely next developments from internal development patterns (git + archobs) or external signals (intel feeds).",
       "related": ["intel", "archobs", "plan", "spec", "architecture", "design"],

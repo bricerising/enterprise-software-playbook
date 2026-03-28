@@ -103,7 +103,7 @@ export function backoffDelayMs(
 - Related patterns: [`Circuit Breaker`](../architecture/references/circuit-breaker.md), [`Idempotent Consumer`](../architecture/references/idempotent-consumer.md), [`Transactional outbox`](../architecture/references/transactional-outbox.md)
 - Instrumentation guidance: [`observability`](../observability/SKILL.md)
 - Typed error semantics and explicit lifetimes: [`typescript`](../typescript/SKILL.md)
-- Wrapping clients: [`patterns-structural`](../patterns-structural/SKILL.md) (Proxy/Decorator)
+- Wrapping clients: [`design`](../design/SKILL.md) (Proxy/Decorator — see structural pattern references)
 
 ## Output Template
 

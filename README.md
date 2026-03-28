@@ -26,7 +26,7 @@ Please review this codebase for maintainability and resilience gaps.
 
 ## What's in here
 
-Skills follow a default workflow: **Define > Standardize > Harden > Verify > Mechanics**.
+Skills follow a default workflow: **Define > Standardize > Harden > Verify**.
 
 ### Define (what are we building?)
 
@@ -64,14 +64,6 @@ Skills follow a default workflow: **Define > Standardize > Harden > Verify > Mec
 | [`testing`](skills/testing/SKILL.md) | Consumer-focused tests that raise coverage without asserting implementation details |
 | [`review`](skills/review/SKILL.md) | Adversarial code review debate (critique > defense > rebuttal > verdict) |
 | [`finish`](skills/finish/SKILL.md) | Definition-of-done pass (verification + boundary spot-check + crisp summary) |
-
-### Mechanics (in-process building blocks)
-
-| Skill | Purpose |
-|-------|---------|
-| [`patterns-creational`](skills/patterns-creational/SKILL.md) | Factory Method, Abstract Factory, Builder, Prototype, Singleton |
-| [`patterns-structural`](skills/patterns-structural/SKILL.md) | Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy |
-| [`patterns-behavioral`](skills/patterns-behavioral/SKILL.md) | Chain of Responsibility, Command, Iterator, Mediator, Memento, Observer, State, Strategy, Template Method, Visitor |
 
 Cross-cutting reference material shared across skills lives in [`skills/references/`](skills/references/).
 
@@ -148,7 +140,7 @@ These skills bias toward practices that make codebases easier for humans to oper
 - **System patterns**: cross-process patterns (architecture/distributed-systems/ops) dealing with failure, consistency, and integration seams.
 - **Operational patterns**: repeatable workflows and cross-cutting policies for predictable delivery and operations (spec bundles, shared platform primitives, tests, observability, resilience).
 
-The skill list above is grouped by **workflow stage** (Define/Standardize/Harden/Verify/Mechanics), not by scope.
+The skill list above is grouped by **workflow stage** (Define/Standardize/Harden/Verify), not by scope.
 
 ## Contributing
 
