@@ -31,8 +31,7 @@ The agent should (roughly) follow:
 4. **Verify**
    - Add consumer-visible tests that pin the contract and failure semantics (`testing`).
    - Run a definition-of-done pass and report verification (`finish`).
-5. **Mechanics (only if needed)**
-   - Use a code pattern only when it buys a clearer seam (e.g., a `Proxy` wrapper for a client with retries/metrics).
+   - If a code pattern is needed for a clearer seam (e.g., a Proxy wrapper), see the `design` skill's pattern references.
 
 ## 3) Sample output (abbreviated)
 

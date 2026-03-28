@@ -145,10 +145,10 @@ Use code patterns for in-process structure; use system patterns when the problem
 - Shared primitives across services: [`platform`](../platform/SKILL.md).
 - Observability (logs/metrics/traces correlation): [`observability`](../observability/SKILL.md).
 - Timeouts / retries / idempotency / circuit breaker / bulkheads: [`resilience`](../resilience/SKILL.md) (often implemented via `Proxy`/`Decorator`).
-- Circuit breaker / caching / rate limiting (in-process structure): often a `Proxy` or `Decorator` ([`patterns-structural`](../patterns-structural/SKILL.md)).
-- Saga orchestration: often a `State` machine + `Command` objects ([`patterns-behavioral`](../patterns-behavioral/SKILL.md)).
-- Pub/sub + domain events: `Observer` ([`patterns-behavioral`](../patterns-behavioral/SKILL.md)).
-- Hexagonal architecture: ports are interfaces; adapters are often `Adapter` or `Facade` ([`patterns-structural`](../patterns-structural/SKILL.md)).
+- Circuit breaker / caching / rate limiting (in-process structure): often a `Proxy` or `Decorator` ([`design`](../design/SKILL.md), see structural pattern references).
+- Saga orchestration: often a `State` machine + `Command` objects ([`design`](../design/SKILL.md), see behavioral pattern references).
+- Pub/sub + domain events: `Observer` ([`design`](../design/SKILL.md), see behavioral pattern references).
+- Hexagonal architecture: ports are interfaces; adapters are often `Adapter` or `Facade` ([`design`](../design/SKILL.md), see structural pattern references).
 - Option/Result: aligns with typed error boundaries ([`typescript`](../typescript/SKILL.md)).
 
 ## References

@@ -5,7 +5,7 @@
 This spec describes how to integrate **enterprise-software-playbook** into a target application repository so coding agents:
 
 - apply the library **automatically** (even when users are conversational), and
-- follow the default loop: **Define → Standardize → Harden → Verify → Mechanics**.
+- follow the default loop: **Define → Standardize → Harden → Verify**.
 
 ## Goals
 

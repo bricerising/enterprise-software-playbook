@@ -2,6 +2,7 @@
 
 **Date**: 2026-01-31
 **Status**: Accepted
+**Amended by**: [ADR 016](016-collapse-mechanics-into-design.md) (Mechanics stage removed, 2026-03-28)
 
 ## Context
 

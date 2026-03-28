@@ -26,7 +26,7 @@ This repo is itself an opinionated system for writing agent skills. To prevent d
 
 - Validate changed skills: `python3 .system/skill-creator/scripts/quick_validate.py skills/<skill-folder>`
 - Validate repo-level docs/workflow consistency: `python3 .system/skill-creator/scripts/check_repo_consistency.py`
-- Keep `README.md` and `PROMPTS.md` aligned with the workflow-stage grouping (Define/Standardize/Harden/Verify/Mechanics).
+- Keep `README.md` and `PROMPTS.md` aligned with the workflow-stage grouping (Define/Standardize/Harden/Verify).
 
 ## Packaging (Optional)
 

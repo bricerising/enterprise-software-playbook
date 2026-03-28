@@ -29,7 +29,7 @@ When modifying a tool subproject:
 
 - Validate changed skills: `python3 .system/skill-creator/scripts/quick_validate.py skills/<skill-folder>`
 - Validate repo-level docs/workflow consistency: `python3 .system/skill-creator/scripts/check_repo_consistency.py`
-- Keep `README.md` and `PROMPTS.md` aligned with the workflow-stage grouping (Define/Standardize/Harden/Verify/Mechanics).
+- Keep `README.md` and `PROMPTS.md` aligned with the workflow-stage grouping (Define/Standardize/Harden/Verify).
 - Keep `specs/skills-manifest.json` aligned with each skill's frontmatter metadata (stage, tags) and maintain manifest-only fields (trigger, related, overhead).
 
 ## Feedback (what helps most)

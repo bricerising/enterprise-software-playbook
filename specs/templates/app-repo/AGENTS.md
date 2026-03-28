@@ -28,7 +28,7 @@ The manifest contains per-skill `trigger` hints, `related` skill cross-reference
 
 Follow this loop for all non-trivial work:
 
-**Define → Standardize → Harden → Verify → Mechanics**
+**Define → Standardize → Harden → Verify**
 
 If your agent supports skills, you can treat `workflow` as the router that selects the rest.
 

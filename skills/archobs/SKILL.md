@@ -211,8 +211,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    Bus factor check is optional — skipped if `bus_factor.parquet` doesn't exist (team analysis not run).
 
 8. **Route findings to the right skill**:
-   - High leakage between clusters: `architecture` (boundary redesign) or `patterns-structural` (Facade)
-   - High-risk file with mixed concerns: `design` (pattern selection) then `patterns-*` (implementation)
+   - High leakage between clusters: `architecture` (boundary redesign) or `design` (Facade — see structural pattern references)
+   - High-risk file with mixed concerns: `design` (pattern selection and implementation guides)
    - Multiple high-risk areas needing sequencing: `plan` (prioritize refactoring order)
    - Development momentum and feature prediction: `forecast` internal engine (which clusters are active, what features are likely next). When running forecast in the same session, archobs artifacts are already available — the forecast skill can read directly from `.archobs/` without re-extraction. `added_paths` are included by default in JSON output, surfacing exactly which new files are being built in each cluster.
      **Quick trajectory in the same session** (no skill switch needed): run `archobs show velocity --window 30 --compare --format json` (added_paths included by default), check `git branch -r --sort=-committerdate | head -20`, and apply feature adjacency heuristics from the forecast skill. For full trajectory analysis with commit message themes and detailed interpretation, invoke the `forecast` skill (internal mode).
@@ -260,8 +260,8 @@ For the combined archobs + trajectory workflow, see the [forecast skill](../fore
 - Development trajectory and feature prediction from cluster activity: [`forecast`](../forecast/SKILL.md) (internal engine)
 - Architecture health regression gate: [`finish`](../finish/SKILL.md)
 - Architecture-type adversarial review: [`review`](../review/SKILL.md)
-- Facade/Adapter for porous boundaries: [`patterns-structural`](../patterns-structural/SKILL.md)
-- Mediator for high-hubness coordination files: [`patterns-behavioral`](../patterns-behavioral/SKILL.md)
+- Facade/Adapter for porous boundaries: [`design`](../design/SKILL.md) (structural pattern references)
+- Mediator for high-hubness coordination files: [`design`](../design/SKILL.md) (behavioral pattern references)
 
 ## References
 

@@ -27,7 +27,7 @@ Skill folders SHOULD NOT include extra docs like `README.md`, changelogs, or lon
 - `name`: MUST match the folder name.
 - `description`: MUST be specific about when to use the skill (trigger precision matters). SHOULD include "NOT for X (use Y)" clauses for confusable skill pairs.
 - `metadata`: MUST be a JSON object string with:
-  - `stage`: one of `Define`, `Standardize`, `Harden`, `Verify`, `Mechanics`
+  - `stage`: one of `Define`, `Standardize`, `Harden`, `Verify`
   - `tags`: non-empty list of lower-kebab-case retrieval keywords (include common query terms users actually type)
   - `aliases`: list of alternate query terms for synonym-based routing
   - Example: `metadata: {"stage":"Harden","tags":["security","authz","csrf"],"aliases":["auth","hardening"]}`
@@ -64,6 +64,7 @@ For fast retrieval/routing, this repo includes:
     - `trigger`: 1-line routing hint (when to use this skill)
     - `related`: list of related skill names for cross-reference routing
     - `overhead`: `"minimal"` | `"moderate"` | `"significant"` (helps proportionality decisions)
+    - `role` (optional, Define-stage only): `"data-source"` | `"decision"` — routing hint distinguishing skills that gather data from skills that make decisions. Manifest-only field (not in frontmatter metadata).
 - The manifest MUST stay aligned with each `skills/<name>/SKILL.md` frontmatter metadata.
 
 ## Compatibility Rules (Skill Names Are API)

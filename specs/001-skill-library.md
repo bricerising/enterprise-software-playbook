@@ -33,11 +33,10 @@ Skills are not essays: they are playbooks that turn intent into repeatable actio
 ### Functional
 
 - **R-001**: The repo MUST provide skills that cover the full delivery loop:
-  - Define (specs + pattern selection)
+  - Define (specs + pattern selection + implementation guides)
   - Standardize (shared platform + style)
   - Harden (resilience + security + observability)
   - Verify (consumer tests)
-  - Mechanics (in-process pattern application)
 - **R-002**: Each skill MUST include an explicit workflow and a “done when” style output template.
 - **R-003**: Skills MUST cross-link rather than duplicate (e.g., resilience references observability; system patterns map to code patterns).
 - **R-004**: The repo MUST include prompt recipes (`PROMPTS.md`) that demonstrate a reliable default sequence for enterprise web apps.

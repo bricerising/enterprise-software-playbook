@@ -45,14 +45,6 @@ Pin behavior at the boundary:
 - Adversarial code review debate for provable findings (`review`)
 - Definition-of-done pass (verification + crisp summary) (`finish`)
 
-### Mechanics (in-process building blocks)
-
-Apply classic in-process patterns when implementation needs structure:
-
-- Creation (`patterns-creational`)
-- Wrapping/indirection (`patterns-structural`)
-- Pipelines/eventing/state machines (`patterns-behavioral`)
-
 ## Canonical Stage Values (Metadata + Index)
 
 Use these exact stage values in skill metadata and `specs/skills-manifest.json`:
@@ -61,7 +53,6 @@ Use these exact stage values in skill metadata and `specs/skills-manifest.json`:
 - `Standardize`
 - `Harden`
 - `Verify`
-- `Mechanics`
 
 ## Terminology (Scope Words, Not Navigation)
 
@@ -89,7 +80,7 @@ Unless you have a strong reason to deviate:
 12. `review` (when non-trivial changes warrant adversarial review)
 13. `finish`
 
-`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. `review` feeds into `finish` — confirmed findings should be resolved before the definition-of-done pass. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
+`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. `review` feeds into `finish` — confirmed findings should be resolved before the definition-of-done pass. In-process pattern references are available through the `design` skill and are used as needed during implementation.
 
 The sequence is a guideline, not rigid — `workflow` applies proportionality-based skipping (e.g., skip `architecture` unless cross-service, skip `platform` unless 2+ services duplicate boundary logic).
 
@@ -97,7 +88,7 @@ The sequence is a guideline, not rigid — `workflow` applies proportionality-ba
 
 This taxonomy is applied when:
 
-- `README.md` and `PROMPTS.md` list skills under Define/Standardize/Harden/Verify/Mechanics.
+- `README.md` and `PROMPTS.md` list skills under Define/Standardize/Harden/Verify.
 - Prompt recipes use the default sequence for enterprise web apps.
 - New skills are assigned a workflow stage and documented accordingly.
 - `specs/skills-manifest.json` stage mapping and each skill’s frontmatter `metadata.stage` stay aligned.
