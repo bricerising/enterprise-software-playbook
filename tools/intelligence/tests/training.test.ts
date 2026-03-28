@@ -984,9 +984,7 @@ describe('reservoir sampling determinism', () => {
 // --- reservoir sampling uniformity (1 test, describe.skip) ---
 
 describe.skip('reservoir sampling uniformity', () => {
-  it(
-    'chi-squared test for uniform distribution',
-    () => {
+  it('chi-squared test for uniform distribution', { timeout: 60_000 }, () => {
       const N = 100;
       const k = 10;
       const trials = 1000;
@@ -1023,7 +1021,5 @@ describe.skip('reservoir sampling uniformity', () => {
 
       // Critical value for 99 df at α = 0.001 ≈ 148.23
       expect(chiSquared).toBeLessThan(148.23);
-    },
-    { timeout: 60_000 },
-  );
+    });
 });
