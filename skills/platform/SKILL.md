@@ -12,6 +12,11 @@ Create a small, disciplined “shared kernel” that drives cohesion across serv
 
 The goal is not reuse-for-reuse’s-sake; it’s consistent behavior and lower cognitive load across a system.
 
+## Inputs / Outputs
+
+**Inputs**: Repeated boundary patterns identified across 2+ services; existing shared packages (if any).
+**Outputs**: Shared package with stable API surface, adoption maturity tracks (V0/V1/V2), migration guidance. Consumed by `spec` (contract documentation), `testing` (seam tests), `finish` (adoption verification).
+
 ## Workflow
 
 1. Define the objective function:
@@ -32,6 +37,17 @@ The goal is not reuse-for-reuse’s-sake; it’s consistent behavior and lower c
 7. Implement minimal primitives + one “golden path” usage in at least two services.
 8. Add tests at the seam (unit tests for primitives + characterization tests for adopters if needed).
 9. Document usage, deprecation/migration guidance, and reversal triggers.
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Verify 2+ consumers** (step 3) — don't extract until two services actually need it.
+2. **Define API surface** (step 5) — explicit inputs/outputs, error semantics, cancellation support.
+3. **Implement + test in 2 services** (steps 7-8) — golden path usage in at least two adopters.
+4. **Document reversal triggers** (step 9) — what would make you undo the extraction.
+
+Steps that can be cut under pressure: adoption maturity tracks (step 6), detailed dependency direction analysis (step 4).
 
 ## Clarifying Questions
 
@@ -70,6 +86,13 @@ Prefer **boundary primitives** over “random helpers”:
 - Keep dependencies minimal; avoid pulling in large frameworks into every service accidentally.
 - If you introduce retries, you must introduce idempotency guidance.
 - Don’t make V2 requirements mandatory for V0/V1 adopters.
+
+## Common failure modes
+
+- Extracts shared code too early — before 2+ services actually use it. The "two consumers" rule exists because premature extraction creates maintenance burden without proven value.
+- Creates a "utils junk drawer" package — dumps unrelated helpers into one shared module instead of extracting focused, cohesive boundary primitives.
+- Breaks encapsulation — exposes internal implementation details through the shared API, coupling consumers to things that should be free to change.
+- Makes V2 requirements mandatory for V0 adopters — forces all consumers to handle advanced configuration/options even when the simple golden path would suffice.
 
 ## Pattern Catalogue (Common Shared Primitives)
 

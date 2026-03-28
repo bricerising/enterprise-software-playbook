@@ -12,6 +12,11 @@ Make observability consistent and actionable: every boundary emits traces, metri
 
 This is intentionally opinionated: you should be able to answer “what happened?” with **log → trace → metrics** within a minute.
 
+## Inputs / Outputs
+
+**Inputs**: Boundary code to instrument; service name; existing instrumentation (if any); correlation IDs in use.
+**Outputs**: Instrumented code (traces, metrics, structured logs); field contract (stable keys); verification commands. Consumed by `debug` (for triage) and `finish` (for spot-check).
+
 ## Workflow
 
 1. Name the **decision** this telemetry will inform (for example: keep current architecture, tune a timeout, roll out a migration).
@@ -31,6 +36,17 @@ This is intentionally opinionated: you should be able to answer “what happened
    - where metrics/logs/traces are reviewed
    - who decides and who executes follow-up
    - what threshold triggers rollback/escalation
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Name the decision** (step 1) — every metric needs a named decision it informs.
+2. **Instrument RED at boundaries** (step 4) — request count, error count, duration histogram per boundary.
+3. **Add trace ID correlation to logs** (step 4-5) — structured logs must include `traceId` for log → trace linkage.
+4. **Verify correlation in a failure case** (step 7) — error log includes traceId, trace shows downstream spans, metrics reflect the error.
+
+Steps that can be cut under pressure: measurement ladder (step 3), domain-specific metrics, operating ritual (step 8).
 
 ## Clarifying Questions
 
@@ -87,6 +103,13 @@ Include these keys where applicable:
 - **Sample intentionally**: if you sample traces, keep error traces at higher priority.
 - **Always end spans**: long-running work should have explicit shutdown and cancellation semantics.
 - **Decision linkage**: no metric without a named decision and action threshold.
+
+## Common failure modes
+
+- Adds high-cardinality labels to metrics (user IDs, request bodies, unbounded strings) — causes metric explosion and storage/query issues.
+- Instruments everything instead of focusing on RED metrics at boundaries — creates noise that makes real signals harder to find.
+- Missing trace ID correlation — logs, traces, and metrics exist independently with no way to connect them for a single request.
+- Defines metrics without a named decision, owner, or action threshold — the metric exists but nobody knows what to do when it changes.
 
 ## Minimal TypeScript Snippet (Trace IDs in Logs)
 

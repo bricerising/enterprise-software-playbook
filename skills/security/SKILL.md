@@ -12,6 +12,11 @@ Security is boundary discipline: authenticate, authorize, validate inputs, avoid
 
 This is not a full security audit. If the change is high-risk (auth overhaul, multi-tenant isolation, crypto, payments, regulated data), escalate to a security review.
 
+## Inputs / Outputs
+
+**Inputs**: Attack surface inventory (inbound/outbound/state/operational boundaries); data sensitivity classification (credentials, PII, multi-tenant identifiers).
+**Outputs**: Hardened code with baseline controls applied (authn, authz, validation, injection safety, secrets safety); verification tests. Consumed by `testing` and `finish`.
+
 ## Workflow
 
 1. Identify what changed (the *attack surface*):
@@ -29,6 +34,8 @@ This is not a full security audit. If the change is high-risk (auth overhaul, mu
    3. **Input validation**: treat external inputs as `unknown`; decode/validate at the edge.
    4. **Injection safety**: parameterize queries; avoid string-built interpreters (SQL, shell, template injection).
    5. **Secrets safety**: keep secrets out of logs, error messages, and client responses.
+> **GATE**: All 5 baseline controls (authn, authz, input validation, injection safety, secrets safety) must be addressed before proceeding. For each control, either apply it or document why it does not apply to this change.
+
 4. Harden outbound calls:
    - SSRF controls (allowlist hosts; block link-local/metadata IPs; disable redirect-follow where unsafe)
    - TLS verification and timeouts/cancellation (see `resilience`)
@@ -36,6 +43,17 @@ This is not a full security audit. If the change is high-risk (auth overhaul, mu
    - add/extend consumer-visible tests for authz and validation (`testing`)
    - run any available dependency scanning / linters in the target repo
    - sanity-check logs/metrics do not include sensitive fields (`observability`)
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Identify attack surface** (step 1) — what boundaries changed.
+2. **Classify data sensitivity** (step 2) — credentials, PII, multi-tenant identifiers.
+3. **Apply 5 baseline controls in order** (step 3) — authn → authz → validation → injection safety → secrets safety.
+4. **Verify** (step 5) — consumer-visible tests for authz and validation.
+
+Steps that can be cut under pressure: outbound SSRF hardening (step 4) if no outbound calls changed, dependency scanning.
 
 ## Chooser (What To Apply Where)
 
@@ -71,6 +89,13 @@ This is not a full security audit. If the change is high-risk (auth overhaul, mu
 - Don’t weaken authz “temporarily”; if you must, add explicit expiry and a follow-up task.
 - Don’t log raw request bodies/headers by default; explicitly whitelist safe fields.
 - Don’t accept user-provided URLs for server-side fetch without SSRF controls.
+
+## Common failure modes
+
+- Pattern-matches OWASP checklists without reading the actual code — produces generic findings that don't apply to the specific change.
+- Adds input validation at internal boundaries between trusted components — validation belongs at system boundaries (user input, external APIs), not between your own modules.
+- Focuses heavily on authentication while missing authorization — verifying identity is not the same as checking permissions per action and per resource.
+- Misses SSRF in outbound calls — any endpoint that fetches a user-provided URL needs allowlist/blocklist controls.
 
 ## References
 

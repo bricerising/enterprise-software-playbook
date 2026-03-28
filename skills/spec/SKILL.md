@@ -41,6 +41,11 @@ Use one (or both) of these:
 - **Task breakdown for implementation**: update `tasks.md` in the spec bundle (or `specs/tasks.md` for repo-level backlog).
 - **Minor behavior tweak within existing contracts**: update acceptance scenarios in the existing spec; no new artifacts needed.
 
+## Inputs / Outputs
+
+**Inputs**: Plan output — objective function, scope (optional); archobs JSON — cluster boundaries, risk scores; forecast lifecycle data (if pinning external dependency contract).
+**Outputs**: Spec artifacts (service spec, API contracts, ADRs, task lists). Consumed by `testing` (acceptance scenarios as test sources), `plan` (task breakdown), `finish` (intent artifact check).
+
 ## Clarifying Questions
 
 - Is this change scoped to one service or does it cross service boundaries?
@@ -113,6 +118,17 @@ Use one (or both) of these:
    - if implementation forces a change in behavior, update specs first
    - keep quickstarts and contracts current
 
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Decide scope** (step 1) — one service vs cross-service.
+2. **Write acceptance scenarios** (step 4) — Given/When/Then with edge cases and invariants.
+3. **Lock down contracts** (step 5) — HTTP/gRPC schemas, error codes, versioning rules.
+4. **Break into tasks with acceptance** (step 10) — each task must be verifiable.
+
+Steps that can be cut under pressure: system sketch (step 3), NFRs (step 6), decision table (step 7), measurement ladder (step 9).
+
 ## Guardrails
 
 - “No spec, no change”: don’t implement major behavior without updating the spec surface.
@@ -122,6 +138,13 @@ Use one (or both) of these:
 - For non-trivial decisions, record opportunity cost explicitly to avoid accidental scope drift.
 - No metric without a named decision and review ritual.
 - If a design cannot be measured cheaply enough to guide weekly decisions, treat that as a constraint and simplify.
+
+## Common failure modes
+
+- Writes the spec after implementation — the spec becomes documentation of what was built, not a source of truth that guides what to build.
+- Over-specifies implementation details instead of boundary contracts — specs should define *what must be true* (response shapes, error codes, invariants), not *how to code it*.
+- Doesn't version contracts when making breaking changes — consumers break silently because the contract didn't signal the incompatibility.
+- Spec doesn't match actual code — spec drift accumulates when implementation changes aren't reflected back to specs.
 
 ## References
 

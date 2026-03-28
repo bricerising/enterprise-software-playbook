@@ -17,6 +17,11 @@ Goal: turn “something is broken/slow” into:
 - a **mitigation** (rollback/flag/scale) when needed,
 - a short list of **fix + follow-up** tasks.
 
+## Inputs / Outputs
+
+**Inputs**: Symptom description (what's failing/slow); access to logs, traces, and metrics; environment and time window.
+**Outputs**: Root cause diagnosis with evidence, mitigation action, fix plan, learning capture. Feeds follow-ups to `observability`, `resilience`, `platform`, or `architecture`.
+
 ## Workflow
 
 ### 0) Establish ground truth (2–5 minutes)
@@ -71,6 +76,8 @@ Start with RED for the boundary (HTTP route / gRPC method / consumer group).
 - What is likely failing silently (data drift, dropped work, partial writes, stale reads)?
 - What is the organizational cascade (handoff queue, approvals, unclear ownership)?
 
+> **GATE**: Failure propagation (step 4) must be mapped before deciding mitigate vs investigate. If you don't know what breaks next, you can't assess the urgency of mitigation.
+
 ### 5) Decide: mitigate vs investigate
 
 If impact is high and evidence points to a recent change:
@@ -90,12 +97,30 @@ If you found a systemic gap, capture it:
 - repeated boundary logic across services → [`platform`](../platform/SKILL.md)
 - cross-service pattern confusion → [`architecture`](../architecture/SKILL.md)
 
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Establish ground truth** (step 0) — environment, symptom, one exemplar.
+2. **Follow log → trace → metrics** (steps 1-3) — this sequence, in this order.
+3. **Map failure propagation** (step 4) — what breaks next, what breaks silently.
+4. **Capture learning** (step 6) — don't lose the fix; route to the right skill.
+
+Steps that can be cut under pressure: detailed metric blast-radius analysis (step 3 depth), organizational cascade mapping (step 4 breadth).
+
 ## Guardrails
 
 - Don’t log secrets/PII while triaging (even “temporarily”).
 - Don’t use unbounded IDs as metric labels; use logs/traces for per-entity investigation.
 - Don’t add retries as a debugging “fix” without idempotency/dedupe.
 - Prefer a small number of exemplars (2–3) over “grep everything forever”.
+
+## Common failure modes
+
+- Jumps straight to reading code instead of following log → trace → metrics — this skips the evidence and leads to hypothesis-driven debugging without data.
+- Skips blast radius assessment (step 3-4) — fixes the symptom without knowing what else is affected or failing silently.
+- Fixes the immediate symptom without capturing learning (step 6) — the same failure recurs because the systemic gap is never routed to the right skill.
+- Checks only one exemplar and generalizes — different exemplars often reveal different failure modes.
 
 ## References
 

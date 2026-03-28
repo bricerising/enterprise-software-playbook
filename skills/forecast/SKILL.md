@@ -33,6 +33,11 @@ Success looks like: forward-looking intelligence with ranked scenarios, developm
 
 **Default to Combined mode** unless the user explicitly scopes to internal-only or external-only. Cross-referencing internal development velocity against external ecosystem signals produces compound insights that neither engine generates alone.
 
+## Inputs / Outputs
+
+**Inputs**: Archobs data — cluster velocity, drift, file risks (internal engine); intel data — collected feeds, CUSUM breaks, chain patterns (external engine); mode selection (internal/external/combined).
+**Outputs**: Trajectory predictions (internal), ranked scenarios with confidence levels (external), cross-domain synthesis (combined). Consumed by `plan` (roadmap), `architecture` (boundary decisions), `spec` (versioning guidance).
+
 ## Prerequisites
 
 ### Internal engine
@@ -99,6 +104,17 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 
 ---
 
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Check data freshness** — `intel stats` must show recent data; stale data produces stale forecasts.
+2. **Run forecast** — `intel forecast --summary --with-context` for external; `archobs show velocity --window 30 --compare --format json` for internal.
+3. **Ground every structural break** — for each CUSUM change point, search for the specific mechanism with alternative-mechanism queries (Batch B in the external engine). This step is non-negotiable.
+4. **Synthesize** through the output template — no raw JSON.
+
+Steps that can be cut under pressure: detailed deepening on high-scoring scenarios, accumulation signal analysis, multi-scale alignment review.
+
 ## Guardrails
 
 | Rule | When it matters | What to do |
@@ -131,6 +147,13 @@ When the user asks "what's going to happen next?" or wants the full picture, run
 | **No raw JSON** | Output | Always synthesize through the output template |
 
 ---
+
+## Common failure modes
+
+- **Default-association trap**: anchors on the "obvious" narrative from event titles (e.g., Iran → oil for a commodities break) and skips the alternative-mechanism search. Event titles are dominated by *consequences*, not *causes*.
+- Skips the alternative-mechanism search (external engine step 5b) — reads Batch A event titles first, anchors on the consequence narrative, and never runs Batch B queries for upstream mechanisms.
+- Presents scenario scores as calibrated probabilities — scores are relative rankings, not percentages. Must present as "high/medium/low confidence."
+- Doesn't check data freshness before running forecast — produces stale predictions from stale data without flagging the staleness.
 
 ## Output Template
 

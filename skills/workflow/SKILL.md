@@ -18,6 +18,11 @@ Default loop: **Define → Standardize → Harden → Verify**.
 - Do NOT use workflow when: the user names a specific skill ("run plan", "write a spec", "do a review") — invoke that skill directly.
 - Do NOT use workflow for: one-shot questions about code, explanations, or small edits that don't need multi-skill orchestration.
 
+## Inputs / Outputs
+
+**Inputs**: User request (unstructured), codebase.
+**Outputs**: Completed work via orchestrated skill chain; final output from the last skill (typically `finish` for non-trivial changes).
+
 ## Workflow
 
 ### 0) Calibrate scope (keep overhead proportional)
@@ -39,6 +44,18 @@ Rule: only create/expand specs and platform primitives when they reduce future d
 | **Tiny** | `plan`, `spec`, `architecture`, `design`, `platform`, `review`, `finish` | `typescript` (if TS) | `testing` (if behavior changed) |
 | **Normal** | `architecture` (unless cross-service), `platform` (unless 2+ services) | `plan`, `archobs`, `testing`, `finish` | `spec` (if contracts change), `resilience`/`security`/`observability` (if I/O touched) |
 | **Big** | nothing | `plan`, `archobs`, `spec`, `testing`, `finish` | all Harden + Standardize skills |
+
+**Boundary cases** (scope is about impact, not diff size):
+
+| Example change | Scope | Why |
+| --- | --- | --- |
+| Changing a default timeout from 5s to 30s | **Normal** | Behavior change — affects consumer-visible latency and failure semantics |
+| Adding a new field to a response payload | **Normal** | Contract change — consumers must handle the new shape |
+| Renaming a variable across 30 files | **Tiny** | No behavior change — diff is large but purely cosmetic |
+| Adding rate limiting to a public endpoint | **Normal** | Consumers may start seeing 429s — behavior and error semantics change |
+| Extracting shared auth middleware to `packages/shared` | **Big** | Cross-service change — affects deployment and ownership boundaries |
+
+> **GATE**: After classifying scope, verify the classification against these boundary cases. If the change touches consumer-visible behavior or contract semantics, it is at least **Normal** regardless of diff size.
 
 ### 0.5) Externalize the system model (for non-trivial changes)
 
@@ -88,6 +105,17 @@ If the change touches I/O boundaries (HTTP/gRPC/DB/cache/queues/events/WS), appl
   - characterization tests before refactors
   - consumer-visible tests for new behavior and failure semantics
   - avoid asserting implementation details
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Classify scope** (step 0) — everything else depends on this.
+2. **Select skill sequence** from proportionality guide — skip skills the table says to skip.
+3. **Execute skills in order** — respect sequential dependencies (e.g., spec before testing for contract changes).
+4. **Run `finish`** for non-trivial changes — verification + summary.
+
+Steps that can be cut under pressure: system model externalization (0.5), structured-thinking probes, recipe lookup.
 
 ## Common Compositions (Recipes)
 
@@ -143,6 +171,14 @@ Start with ecosystem signals, then check internal readiness. Use when the questi
 - Don’t add telemetry labels with unbounded/high-cardinality values.
 - Don’t define metrics without a named decision, owner, and review ritual.
 - Don’t “helpfully” change response shapes or error semantics unless the spec says so.
+
+## Common failure modes
+
+- Applies big-scope overhead to tiny changes ("spec theater") — a typo fix does not need a decision table.
+- Skips archobs for non-trivial changes because the change "seems simple" — archobs data is required for normal/big scope.
+- Runs skills with sequential dependencies in parallel (e.g., running `testing` before `spec` is updated for a contract change).
+- Does not re-check scope classification after discovering the change is bigger than initially expected.
+- Defaults to the longest recipe instead of the proportionality guide.
 
 ## Output Template
 

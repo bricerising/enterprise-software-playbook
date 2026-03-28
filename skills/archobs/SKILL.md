@@ -21,6 +21,11 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 - **Suggestion loop**: Run analysis, apply one suggestion, re-analyze, repeat until convergence. Use for automated refactoring passes.
 - **Regression check**: Compare current metrics against a previous run. Use in `finish` to verify architecture health did not degrade.
 
+## Inputs / Outputs
+
+**Inputs**: Git repository path with history.
+**Outputs**: JSON artifacts — file risk scores (xnbr, hubness, volatility), cluster health (leakage, cohesion, conductance), drift data (ARI, modularity), velocity metrics, team analysis, suggestions. Consumed by `architecture`, `design`, `plan`, `review`, `finish`, `forecast`.
+
 ## Workflow
 
 1. **Check prerequisites**:
@@ -48,6 +53,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
    Use `--suggestions-provider rules` (the default) when running inside a skill — the rule-based engine is fast, deterministic, and produces structured suggestions that the current session can interpret directly.
 
    **Do not proceed to step 4 until the report command has finished.** Steps 4–6 depend on the artifacts produced by this command. If the command is run in the background, wait for it to complete before continuing.
+
+> **GATE**: Do not proceed to step 4 until the `archobs report` command has finished. Steps 4-9 depend on the artifacts it produces. If the command was run in background, wait for completion — do not read stale or missing artifacts.
 
 4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed).
 
@@ -231,6 +238,17 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
    Each suggestion includes: priority, title, why (evidence), change (action), scope (affected files).
 
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Run report** (step 3) — must complete before anything else. Wait for it.
+2. **Read summary + risks** (step 4) — `archobs show summary --format json` and `archobs show risks --top 10 --format json`.
+3. **Interpret key metrics** (step 5) — file risk thresholds, cluster leakage, drift trend.
+4. **Route findings** (step 8) — which downstream skill gets the findings.
+
+Steps that can be cut under pressure: team analysis (step 6), fitness check (step 7), suggestion loop, detailed edge inspection.
+
 ## Combined Archobs + Trajectory Workflow
 
 For the combined archobs + trajectory workflow, see the [forecast skill](../forecast/SKILL.md) (internal engine — combined archobs + trajectory workflow). That version includes `archobs show suggestions --format json` in the parallel batch and is the canonical reference.
@@ -251,6 +269,13 @@ For the combined archobs + trajectory workflow, see the [forecast skill](../fore
 - Do not use the suggestion loop without human review of each applied change.
 - Do not commit archobs artifacts to the repository — `.archobs/`, `.codanna/`, `.codannaignore`, `.fastembed_cache`, and `lib/` must all be in `.gitignore`.
 - If `leidenalg` is not installed, the tool falls back to greedy modularity (lower-quality clustering) — note this in output.
+
+## Common failure modes
+
+- Doesn't wait for the report command to complete before reading results — reads stale or missing Parquet artifacts and produces incorrect metrics.
+- Only looks at risk scores, ignores drift data — misses that the architecture is actively reshuffling (low ARI) which makes broad refactoring moves dangerous.
+- Treats cluster labels as authoritative ground truth — labels are statistical groupings, not verified architectural boundaries. Always cross-reference with actual code.
+- Runs on a repo without recent git history — stale commit data produces stale velocity and coupling metrics.
 
 ## Map To Existing Skills
 

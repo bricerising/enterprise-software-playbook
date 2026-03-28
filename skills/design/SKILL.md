@@ -18,6 +18,11 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 
 **Monolith edge case**: In a monolith, use `design` to isolate modules *within* the process (Facade for subsystem boundaries, Adapter for third-party libs, Strategy for swappable implementations). If the goal is *decomposing* the monolith into separate deployable units or defining service boundaries, start with `architecture` — then return here for the in-process patterns each new service needs.
 
+## Inputs / Outputs
+
+**Inputs**: Archobs JSON — file coupling (xnbr, hubness), cluster leakage (required); architecture output (if exists); forecast lifecycle data (if wrapping external dep).
+**Outputs**: Pattern selection with rationale, implementation sketch, trade-offs. Consumed by `testing` (test strategy), `finish` (verification).
+
 ## Workflow
 
 0. **Load archobs data** (required): Run `archobs show risks --format json` and `archobs show clusters --format json` to get risk scores and coupling signals for the files under consideration. Use `xnbr` to identify files bridging multiple concerns, `hubness` to find fan-in bottlenecks, and cluster `leakage` to see where boundaries are porous. This data helps narrow the pattern choice — e.g., high xnbr suggests Facade or Strategy; high hubness suggests Mediator. If the artifacts do not exist, run `archobs report --repo <path> --out .archobs --suggestions-provider rules` and **wait for it to complete** before continuing.
@@ -44,6 +49,17 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
 6. Validate with 2 examples: a "happy path" and a likely future change.
 7. Confirm the choice reduces coupling and increases testability (or has a clear perf win).
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Load archobs data** (step 0) — xnbr and hubness guide pattern choice.
+2. **Identify the main pressure** (step 3) — creation, structure, or behavior.
+3. **Pick 1 primary pattern** (step 4) — avoid pattern soup.
+4. **Validate with 2 examples** (step 6) — happy path and a likely future change.
+
+Steps that can be cut under pressure: pattern longevity check (step 2b), stress-test probes (step 5), scriptic/systemic policy decision (step 1).
 
 ## Clarifying Questions
 
@@ -106,6 +122,13 @@ If you’re standardizing cross-cutting boundary behavior across multiple servic
 - Keep “pattern seams” small: a tiny interface plus focused implementations.
 - In systemic code, avoid top-level side effects; wire dependencies in a composition root and keep lifetimes explicit.
 - If the change axis is unclear, prototype with a simple interface + two implementations before formalizing.
+
+## Common failure modes
+
+- Applies patterns prematurely — one use case is not enough to justify a pattern. Wait for the second concrete case before formalizing.
+- Picks complex patterns when simple composition works — a Factory with one product, a Strategy with one algorithm. Start with the simplest refactor (extract function, introduce interface).
+- Confuses code patterns with system patterns — Saga, CQRS, Event Sourcing are system-level (`architecture`), not in-process (`design`).
+- Ignores archobs coupling data — picks patterns based on intuition instead of measured xnbr (bridging files → Facade) or hubness (fan-in → Mediator).
 
 ## References
 

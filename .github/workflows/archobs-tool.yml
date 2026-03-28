@@ -28,9 +28,10 @@ jobs:
           cache: "pip"
           cache-dependency-path: tools/archobs/pyproject.toml
 
-      # SECURITY: curl-pipe-sh — consider vendoring or checksum verification
       - name: Install codanna
         run: curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+        env:
+          CODANNA_VERSION: v0.9.18
 
       - name: Install archobs (core)
         run: pip install -e 'tools/archobs'

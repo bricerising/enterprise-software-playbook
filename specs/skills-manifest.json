@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "updated": "2026-03-28",
   "stages": {
     "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "forecast"],
