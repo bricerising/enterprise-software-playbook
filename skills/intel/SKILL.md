@@ -56,6 +56,11 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
 
 6. **Verify**: `intel stats` — check `events_total > 0` and `newest_event` is recent.
 
+## Inputs / Outputs
+
+**Inputs**: Topic scope (what to research); audience type (practitioner/executive/engineering/decision/digest/architecture); time window.
+**Outputs**: Audience-formatted intelligence brief with ranked signals, source citations, and "so what." Consumed by `forecast` (as data source), `plan` (as context), `architecture` (as ecosystem evidence).
+
 ## Chooser
 
 ### Content type (what data to gather)
@@ -179,6 +184,16 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
 
 9. **Flag gaps** — note stale sources, missing coverage, low-confidence signals.
 
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Check data freshness** (step 2) — `intel stats` must show recent data.
+2. **Gather signals** (step 3) — run the queries for the selected content type.
+3. **Synthesize the brief** (step 8) — through the output template for the chosen audience. No raw JSON.
+
+Steps that can be cut under pressure: audience-specific additional queries (step 4), deepening on high-signal hits (step 5), decision journal recording (step 6), gap flagging (step 9).
+
 ## Guardrails
 
 - Do not present intel output as authoritative fact — these are signals from configured feeds, not exhaustive research.
@@ -188,6 +203,13 @@ Success looks like: a brief with ranked signals, source citations, and a clear "
 - Do not mix brief types — pick one audience and commit.
 - Do not fabricate signals — only use data returned by `intel` commands.
 - Executive briefs must be readable by non-technical stakeholders — no jargon, no acronyms without expansion.
+
+## Common failure modes
+
+- Presents raw signal data instead of synthesizing for the audience — dumps search results or trend tables without interpretation or "so what."
+- Doesn't check data freshness before reporting — produces misleading briefs from stale or empty databases.
+- Anchors on high-volume, over-classified topics (e.g., `lang.typescript`) — these get broadly assigned by the classifier and titles may not be topically relevant even when marked "high."
+- Wrong audience framing — uses engineering jargon in an executive brief, or buries the "so what" in a practitioner brief.
 
 ## Output Template
 

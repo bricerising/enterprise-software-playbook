@@ -31,6 +31,11 @@ Definitions:
 - Do NOT use typescript when: choosing which design pattern to apply (use `design`); designing shared platform libraries (use `platform`).
 - Relax for scriptic code: short-lived scripts don't need full boundary discipline or explicit lifetimes.
 
+## Inputs / Outputs
+
+**Inputs**: TypeScript source files to create, review, or refactor.
+**Outputs**: Modified/created TypeScript source files following style guide principles. Applied inline during implementation; no downstream skill consumes output directly.
+
 ## Workflow
 
 1. Decide “scriptic vs systemic” and set policies (error strategy, boundary validation, ownership/lifetimes).
@@ -44,6 +49,17 @@ Definitions:
 9. For long‑running work (pollers, consumers, schedulers), model explicit “agents” with typed inputs/state and explicit shutdown.
 10. Test at seams (pure functions, decoders/validators, adapters).
 11. At I/O boundaries, make timeouts/retries/idempotency explicit (`resilience`) and keep telemetry consistent (`observability`); if 2+ services need the same boundary primitive, extract it (see `platform`).
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Read existing code** — understand the current error strategy, boundary patterns, and module structure before changing anything.
+2. **Apply boundary discipline** (steps 3, 5) — treat external inputs as `unknown`, validate at edges, make known failures explicit in types.
+3. **Keep module graph acyclic** (step 7) — enforce dependency direction; prefer `import type` for type-only.
+4. **Typecheck** (step 10) — verify no type errors introduced.
+
+Steps that can be cut under pressure: explicit lifetime modeling (step 8), agent patterns for long-running work (step 9), full composition root wiring (step 6).
 
 ## Guidelines
 
@@ -70,6 +86,13 @@ For the full set of guidelines, see [`references/guidelines.md`](references/guid
 - Don't use barrel exports (`index.ts`) across layer boundaries: they hide cyclic dependencies and bloat bundles.
 - Don't leave resource ownership implicit: if you create a connection/handle, define who calls `close`/`dispose`.
 - Don't use `any` as a shortcut: prefer `unknown` + narrowing at boundaries, or generics for reusable code.
+
+## Common failure modes
+
+- Over-types — adds unnecessary generics, utility types, or type gymnastics where simple concrete types would be clearer and more maintainable.
+- Adds type annotations or refactors to code that wasn't changed — the skill should apply to the code being worked on, not adjacent unchanged code.
+- Wraps every error in Result/Either even for internal code — the Throwless Pact applies at boundaries; internal pure functions can use simpler patterns.
+- Applies systemic rigor to scriptic code — short-lived scripts don't need composition roots, explicit lifetimes, or Result types.
 
 ## References
 

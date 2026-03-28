@@ -12,6 +12,11 @@ Make I/O failures boring: set explicit timeouts, retry safely, keep operations i
 
 Enterprise systems fail partially (timeouts, 5xx, queue lag). Resilience patterns make those failures bounded and observable.
 
+## Inputs / Outputs
+
+**Inputs**: I/O boundary code (HTTP/gRPC/DB/cache/queue clients); dependency map (what calls what).
+**Outputs**: Hardened code with resilience patterns applied (timeouts, retries, idempotency, breakers, bulkheads); failure model documentation. Consumed by `testing` and `finish`.
+
 ## Workflow
 
 1. Identify the I/O boundary: HTTP, gRPC, DB, cache, queue/stream, third-party API.
@@ -21,11 +26,24 @@ Enterprise systems fail partially (timeouts, 5xx, queue lag). Resilience pattern
 3. Apply patterns in this order:
    1. **Timeouts + cancellation**
    2. **Idempotency** (especially if retries exist)
+   > **GATE**: If adding retries, idempotency (pattern 2) MUST be addressed first. Never retry a non-idempotent operation without an idempotency key or server-side dedupe.
+
    3. **Retries with backoff + jitter** (bounded)
    4. **Circuit breaker** (when a dependency is unhealthy)
    5. **Bulkheads / concurrency limits** (to protect your own resources)
 4. Add observability (retry counts, breaker state, queue lag, error codes). Each metric should have a named decision it supports and an owner — see [`observability`](../observability/SKILL.md).
 5. Add consumer-visible tests for semantics; add a local smoke test for failure modes.
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Identify I/O boundaries** (step 1) — what calls what.
+2. **Apply timeout + cancellation** (step 3.1) — mandatory for every outbound call.
+3. **Ensure idempotency before retries** (step 3.2-3.3) — never retry without it.
+4. **Verify** (step 5) — test that timeout errors are stable and retries are bounded.
+
+Steps that can be cut under pressure: circuit breaker (step 3.4), bulkheads (step 3.5), detailed observability (step 4).
 
 ## Chooser (What To Use Where)
 
@@ -95,6 +113,13 @@ export function backoffDelayMs(
 - Idempotency: duplicate request/message does not double-apply side effects.
 - Bulkheads: dependency overload doesn’t starve unrelated work.
 - Breaker: opens under repeated failures and closes after recovery.
+
+## Common failure modes
+
+- Adds retries without idempotency — creates duplicate side effects (double charges, duplicate messages, repeated writes).
+- Sets timeouts too high (e.g., 30s for an API call in a 5s request budget) — effectively no timeout; the caller hangs.
+- Applies circuit breaker to every dependency — circuit breakers add complexity and should only be used for genuinely flakey/unhealthy dependencies, not stable ones.
+- Ignores cancellation propagation — the caller times out but the downstream work continues, wasting resources.
 
 ## References
 

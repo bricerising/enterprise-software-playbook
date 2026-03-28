@@ -14,6 +14,11 @@ Use code patterns for in-process structure; use system patterns when the problem
 
 **Monolith edge case**: If you're restructuring *within* a monolith without decomposing it into services (e.g., extracting modules, introducing internal boundaries, applying GoF patterns), use `design` instead. Use `architecture` when the monolith is being decomposed into separate deployable units, or when decisions span process/deployment/team boundaries.
 
+## Inputs / Outputs
+
+**Inputs**: Archobs JSON — cluster coupling, leakage, risk scores (required); plan scope (if exists); forecast lifecycle data (if external deps involved).
+**Outputs**: Pattern selection with rationale, decision table, boundary diagram, implementation tactics. Consumed by `design` (in-process patterns), `spec` (contracts), `plan` (task ordering).
+
 ## Workflow
 
 0. **Gather empirical data** (required — wait for completion):
@@ -67,6 +72,17 @@ Use code patterns for in-process structure; use system patterns when the problem
    - what balancing loop prevents runaway growth?
    - cross-reference with ecosystem pressure check from step 0b (if applicable) for empirically detected reinforcing loops, delays, and accumulations that may confirm or challenge the qualitative assessment
 10. Map to implementation tactics (often code-pattern wrappers/pipelines), testing strategy, and measurement ritual.
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Load archobs data** (step 0) — empirical coupling and boundary health.
+2. **Classify the problem and identify the main pressure** (steps 2-3) — single-process vs multi-process, which pressure dominates.
+3. **Choose primary pattern + decision table** (steps 7, 5) — pattern selection with explicit trade-offs and kill criteria.
+4. **Stress-test with failure path** (step 8) — at minimum: if X degrades, what breaks next?
+
+Steps that can be cut under pressure: ecosystem pressure check (step 0b), dynamics check (step 9), opportunity cost probe (step 6).
 
 ## Clarifying Questions
 
@@ -137,6 +153,13 @@ Use code patterns for in-process structure; use system patterns when the problem
 - **Feature store**: single source of truth for feature definitions/serving.
 - **Transfer learning**: adapt a pre-trained model instead of training from scratch.
 - **Blue-green/canary model deploys**: reduce risk when shipping new model versions.
+
+## Common failure modes
+
+- Defaults to microservices regardless of actual pressure — not every system needs service decomposition. Start with the pressure, not the pattern.
+- Picks patterns based on name recognition or familiarity rather than analyzing the actual pressure (reliability, consistency, domain complexity, scale, migration).
+- Ignores archobs coupling data — makes boundary decisions based on intuition instead of measured leakage, cohesion, and file risk.
+- Over-decomposes (too many services) — creates operational complexity and distributed system failure modes that didn't exist before.
 
 ## Map To Existing Skills
 

@@ -43,9 +43,24 @@ Each skill MUST contain:
 Each skill SHOULD contain:
 
 - **Chooser**: decision aid for picking sub-approach within the skill (e.g., "what test type where").
+- **Inputs / Outputs**: what the skill requires from upstream skills and what it produces for downstream skills. Place after Chooser. Keep to 5-10 lines.
 - **Clarifying Questions**: what to ask the user before applying the workflow.
 - **Guardrails**: what not to do / common pitfalls.
+- **Common failure modes**: 3-5 bullets documenting how agents actually fail when applying this skill. These serve as anti-anchors — "if your output looks like this, you're doing it wrong." Place after Guardrails.
+- **Minimum viable execution**: the 3-4 load-bearing steps that must always run, vs nice-to-have steps that can be cut under context or time pressure. Place after Workflow.
 - **References**: pointers to `references/` files (progressive disclosure).
+
+### Inline Gate Annotations
+
+Workflow steps MAY include `GATE:` annotations at critical decision points where agents commonly skip or execute superficially. Gates are inline content within Workflow, not a separate section.
+
+Format:
+
+```markdown
+> **GATE**: <condition that must be true before proceeding>
+```
+
+Gates differ from guardrails: guardrails are general rules; gates are step-specific checkpoints that block forward progress until satisfied.
 
 ## Progressive Disclosure Rules
 

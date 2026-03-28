@@ -16,6 +16,11 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
 - Do NOT use plan when: the change is tiny (rename, typo fix, single-file edit) — just do it.
 - Do NOT use plan for: writing spec artifacts or contracts (use `spec`); auto-routing across multiple skills (use `workflow`).
 
+## Inputs / Outputs
+
+**Inputs**: User request; archobs JSON from `archobs show all --format json` (required for non-tiny); forecast data (if external dependencies involved via step 4b).
+**Outputs**: Objective function, decision table (if 2+ approaches), ordered task list with acceptance criteria, measurement ladder. Consumed by downstream skills: `spec`, `architecture`, `design`, `testing`, `finish`.
+
 ## Workflow
 
 1. Write the objective function:
@@ -50,6 +55,8 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - **Second-Order Effects**: What happens next week / next quarter / next year? What new load, toil, coupling, or failure mode does this create? If this fails in 6-12 months, what likely caused failure? Cross-reference with risk amplification from step 4b (if applicable). *(attach to decision table)*
    - **Opportunity Cost**: What are we saying "no" to? Are we favoring this due to sunk cost, familiarity, or novelty? *(attach to decision table)*
    - If probe output already exists from an earlier Define-stage skill in this flow (including `workflow` orchestration), refine it instead of re-running.
+> **GATE**: If step 6 identified 2+ viable approaches, a decision table MUST exist with trade-offs and kill criteria before proceeding. Do not skip to the task list — a plan without a decision is just a to-do list.
+
 8. Choose the minimum up-front artifacts:
    - if boundary semantics/contracts change → use `spec`
    - if cross-service/system pressure exists → use `architecture`
@@ -63,6 +70,17 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
    - measurement ladder: decision, 3 leading indicators, 3 lagging outcomes, instrumentation source, review ritual (owner + cadence + trigger)
    - exact commands (tests/lint/typecheck/build) if known
    - if unknown, list what you will run and ask once for preferred commands
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Write objective function** (step 1) — goal + constraints + anti-goals.
+2. **Load archobs data** (step 4) — risk-based task ordering depends on this.
+3. **Decision table** (step 6) — required if 2+ approaches exist.
+4. **Ordered task list with acceptance criteria** (step 9) — every task must be verifiable.
+
+Steps that can be cut under pressure: system sketch (step 2), stress-test probes (step 7), measurement ladder (step 10).
 
 ## Clarifying Questions
 
@@ -80,6 +98,14 @@ Create a short plan that a developer (or agent) can execute end-to-end: ordered 
 - No metric without a named decision it informs.
 - For non-trivial work, include explicit opportunity costs; avoid decision-by-default.
 - If you propose retries, also propose idempotency/dedupe and time budgets (`resilience`).
+
+## Common failure modes
+
+- Produces task lists without acceptance criteria — tasks cannot be verified as done.
+- Skips the decision table when 2+ approaches exist, defaulting to the first idea without evaluating alternatives.
+- Does not load archobs data, so task ordering ignores empirical risk scores and cluster health.
+- Conflates constraints with anti-goals — constraints are things you must satisfy; anti-goals are things you're explicitly choosing not to optimize.
+- Plans that are just "the steps I was going to take anyway" — no risk identification, no stop points, no blast-radius check.
 
 ## Output Template
 

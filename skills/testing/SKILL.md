@@ -10,13 +10,32 @@ metadata: {"stage":"Verify","tags":["test-coverage","consumer-tests","characteri
 
 Improve coverage by exercising consumer-visible behavior with infra mocked and behavior preserved.
 
+## Inputs / Outputs
+
+**Inputs**: Spec/contract artifacts from `spec` or `plan` (optional but preferred); consumer-facing entrypoints to test.
+**Outputs**: Test suite pinning consumer-visible behavior; coverage report. Consumed by `finish` and `review`.
+
 ## Workflow
 
 1. Read relevant specs (system + service) and map them to consumer-visible flows and invariants.
 2. Identify consumer-facing entrypoints: HTTP/gRPC handlers, public service methods, event consumers, cache/storage adapters, jobs.
+
+> **GATE**: Do not write tests until consumer-facing entrypoints are identified (step 2). If no entrypoints are listed, go back — tests without identified entrypoints tend to test implementation details.
+
 3. Add tests for success and failure paths that a consumer can observe (invalid input, downstream failures, permissions, timeouts where applicable).
 4. Mock infra boundaries (DB, Redis, network listeners, clocks/timers). Prefer calling handlers/functions directly instead of running real servers.
 5. Run focused coverage and iterate until the target is met (default 80% unless the spec says otherwise).
+
+## Minimum viable execution
+
+When context or time is constrained, these are the load-bearing steps:
+
+1. **Read specs and map to consumer-visible flows** (step 1) — tests must trace back to spec'd behavior.
+2. **Identify consumer-facing entrypoints** (step 2) — determines what to test.
+3. **Write success + failure path tests** (step 3) — both paths, not just happy path.
+4. **Run coverage** (step 5) — verify the tests actually exercise the code.
+
+Steps that can be cut under pressure: mocking strategy optimization (step 4), coverage iteration beyond first pass.
 
 ## Chooser (What Test Type Where)
 
@@ -49,6 +68,13 @@ Improve coverage by exercising consumer-visible behavior with infra mocked and b
 - Preserve externally visible behavior and API shapes.
 - Avoid real network/listen calls in unit tests; mock them.
 - Keep tests consumer-focused; do not assert internal implementation details beyond outputs/side effects.
+
+## Common failure modes
+
+- Tests implementation details instead of consumer-visible behavior (e.g., asserting internal method call counts instead of response shape).
+- Defaults to unit tests regardless of context — should use the chooser to pick the right test type.
+- Mocks the thing being tested instead of its dependencies — the test exercises the mock, not the code.
+- Tests happy path only, skips failure modes — missing tests for invalid input, downstream failures, permission denials, and timeouts.
 
 ## Commands
 
