@@ -89,15 +89,20 @@ describe('rebuildFts', () => {
 });
 
 describe('rebuildTopicIndex', () => {
-  it('rebuilds event_topics from JSON', () => {
+  it('reclassifies events and rebuilds event_topics', () => {
     const before = db.prepare('SELECT count(*) as c FROM event_topics').get() as { c: number };
     expect(before.c).toBe(10);
 
     const count = rebuildTopicIndex(db);
-    expect(count).toBe(10);
 
+    // rebuildTopicIndex now delegates to reclassifyTopics which runs the
+    // full classifier pipeline — the returned count should match the actual
+    // rows inserted, and all original events should still exist.
     const after = db.prepare('SELECT count(*) as c FROM event_topics').get() as { c: number };
-    expect(after.c).toBe(10);
+    expect(count).toBe(after.c);
+
+    const events = db.prepare('SELECT count(*) as c FROM events').get() as { c: number };
+    expect(events.c).toBe(10);
   });
 });
 

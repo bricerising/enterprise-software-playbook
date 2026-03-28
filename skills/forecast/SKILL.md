@@ -1,6 +1,6 @@
 ---
 name: forecast
-description: "Predict likely next developments from internal development patterns (git history, archobs clusters) and external signals (intel feeds). Use when you need forward-looking intelligence — what's GOING to happen, not what already happened. NOT for gathering raw signals (use intel); NOT for architecture analysis (use archobs); NOT for implementation planning (use plan)."
+description: "Predict likely next developments from internal development patterns (git history, archobs clusters) and external signals (intel feeds). Use when you need forward-looking intelligence — what's GOING to happen, not what already happened. NOT for gathering raw signals (use intel); NOT for static code-structure analysis (coupling, boundary health, risk scores — use archobs); NOT for implementation planning (use plan)."
 metadata: {"stage":"Define","tags":["forecast","prediction","scenarios","chains","lifecycle","convergence","trends","intelligence","bayesian","entropy","cusum","hmm","decay","trajectory","momentum","velocity","feature-prediction","git-history","development-patterns","change-analysis","adjacency"],"aliases":["forecast","predict","scenarios","what-next","forward-looking","trajectory","momentum","velocity","feature-prediction"]}
 ---
 

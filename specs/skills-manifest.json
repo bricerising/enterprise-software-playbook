@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "updated": "2026-03-16",
+  "version": 4,
+  "updated": "2026-03-26",
   "stages": {
     "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "forecast"],
     "Standardize": ["typescript", "platform"],
@@ -14,7 +14,7 @@
       "stage": "Define",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
-      "related": ["architecture", "design", "plan", "forecast", "review", "finish"],
+      "related": ["architecture", "design", "plan", "forecast", "review", "finish", "intel", "workflow"],
       "overhead": "moderate"
     },
     "architecture": {
@@ -22,7 +22,7 @@
       "stage": "Define",
       "tags": ["system-patterns", "distributed-systems", "consistency", "microservices", "integration", "domain-boundaries", "event-driven", "saga"],
       "trigger": "Work spans multiple services/processes or needs eventual consistency or clearer integration seams.",
-      "related": ["design", "resilience", "platform", "spec", "archobs"],
+      "related": ["design", "resilience", "platform", "spec", "archobs", "forecast"],
       "overhead": "significant"
     },
     "debug": {
@@ -30,7 +30,7 @@
       "stage": "Harden",
       "tags": ["incident-response", "triage", "logs", "tracing", "metrics", "production-issue", "5xx", "latency", "regression", "postmortem"],
       "trigger": "Investigating errors, latency spikes, 5xx responses, SLO violations, or regressions in an instrumented app.",
-      "related": ["observability", "resilience"],
+      "related": ["observability", "resilience", "testing", "platform"],
       "overhead": "minimal"
     },
     "design": {
@@ -38,7 +38,7 @@
       "stage": "Define",
       "tags": ["code-patterns", "refactoring", "extensibility", "decoupling", "testability", "gof", "in-process"],
       "trigger": "Need to choose an in-process code pattern (creational/structural/behavioral) for refactoring or extensibility.",
-      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs"],
+      "related": ["patterns-creational", "patterns-structural", "patterns-behavioral", "architecture", "typescript", "archobs", "forecast"],
       "overhead": "minimal"
     },
     "finish": {
@@ -86,7 +86,7 @@
       "stage": "Define",
       "tags": ["implementation-plan", "task-breakdown", "risk-assessment", "verification-plan", "scope", "trade-offs", "decision-table"],
       "trigger": "Non-trivial, cross-cutting, or ambiguous work that needs a scoped task breakdown before starting.",
-      "related": ["spec", "workflow", "architecture", "archobs"],
+      "related": ["spec", "workflow", "architecture", "archobs", "forecast"],
       "overhead": "moderate"
     },
     "platform": {
@@ -126,7 +126,7 @@
       "stage": "Define",
       "tags": ["spec-first", "contracts", "acceptance-criteria", "decision-records", "nfrs", "openapi", "protobuf", "adr"],
       "trigger": "Creating or updating specs, API contracts, ADRs, or task lists — especially before major behavior changes.",
-      "related": ["plan", "architecture", "testing", "archobs"],
+      "related": ["plan", "architecture", "testing", "archobs", "forecast"],
       "overhead": "significant"
     },
     "testing": {
@@ -134,7 +134,7 @@
       "stage": "Verify",
       "tags": ["test-coverage", "consumer-tests", "characterization", "regression-prevention", "unit-test", "integration-test", "mocking", "vitest"],
       "trigger": "Adding tests, raising coverage, writing regression tests, or pinning consumer-visible behavior.",
-      "related": ["spec", "review", "finish"],
+      "related": ["spec", "review", "finish", "security"],
       "overhead": "moderate"
     },
     "typescript": {

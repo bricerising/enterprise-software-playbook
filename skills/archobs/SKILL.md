@@ -1,6 +1,6 @@
 ---
 name: archobs
-description: "Run architecture observability analysis on a git repository to measure coupling, boundary health, risk hotspots, and temporal drift. Use when you need empirical data about code structure before making architecture or refactoring decisions, or to validate that changes improved boundary discipline. NOT for choosing architecture patterns (use architecture); NOT for choosing code patterns (use design); NOT for adversarial code review (use review)."
+description: "Run architecture observability analysis on a git repository to measure coupling, boundary health, risk hotspots, and temporal drift. Use when you need empirical data about code structure before making architecture or refactoring decisions, or to validate that changes improved boundary discipline. NOT for choosing architecture patterns (use architecture); NOT for choosing code patterns (use design); NOT for adversarial code review (use review); NOT for trajectory prediction or trend forecasting from cluster activity (use forecast)."
 metadata: {"stage":"Define","tags":["architecture-observability","coupling","boundary-health","risk-hotspots","refactoring","graph-analysis","clustering","drift","code-structure"],"aliases":["archobs","architecture-analysis","coupling-analysis","boundary-analysis","code-health"]}
 ---
 

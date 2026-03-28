@@ -25,7 +25,13 @@ Definitions:
 - **Scriptic**: short‑lived scripts/one‑offs; optimize for speed and simplicity; `throw` is usually fine.
 - **Systemic**: long‑lived apps/services/libraries; optimize for explicit boundaries, typed failures, and explicit lifetimes.
 
-## Workflow (default)
+## Chooser
+
+- Use **typescript** when: creating new TS modules, modeling domain types, applying the Throwless Pact (Result/Either), validating external inputs (Zod/io-ts), organizing imports, or preventing cyclic dependencies.
+- Do NOT use typescript when: choosing which design pattern to apply (use `design`); designing shared platform libraries (use `platform`).
+- Relax for scriptic code: short-lived scripts don't need full boundary discipline or explicit lifetimes.
+
+## Workflow
 
 1. Decide “scriptic vs systemic” and set policies (error strategy, boundary validation, ownership/lifetimes).
 2. Separate pure logic from side effects (I/O, time, randomness, global state).
@@ -48,6 +54,22 @@ For the full set of guidelines, see [`references/guidelines.md`](references/guid
 - **Boundaries**: treat external inputs as `unknown`; validate/parse once at the edge; keep "wire" shapes separate from domain types.
 - **Lifetimes**: make resource ownership explicit (create/start/stop/dispose); prefer `AbortSignal` for cancellation.
 - **Modules**: prevent cyclic imports; use a composition root; one feature per file; avoid barrel exports across layers.
+
+## Clarifying Questions
+
+- Is this scriptic (short-lived script) or systemic (long-lived app/service/library)?
+- What runtime: Node.js, browser, or both?
+- Is there an existing error strategy (throw vs Result/Either)?
+- Are there existing lint/format configs (ESLint, Prettier) to follow?
+- Does this module sit at an I/O boundary (HTTP, DB, filesystem)?
+
+## Guardrails
+
+- Don't apply systemic rigor to scriptic code: short-lived scripts don't need Result types, composition roots, or explicit lifetimes.
+- Don't scatter validation across layers: decode `unknown` once at boundaries, then trust typed values internally.
+- Don't use barrel exports (`index.ts`) across layer boundaries: they hide cyclic dependencies and bloat bundles.
+- Don't leave resource ownership implicit: if you create a connection/handle, define who calls `close`/`dispose`.
+- Don't use `any` as a shortcut: prefer `unknown` + narrowing at boundaries, or generics for reusable code.
 
 ## References
 
@@ -78,7 +100,7 @@ Use this list when reviewing/refactoring TypeScript:
 - Long-running loops are explicit agents with shutdown/await paths.
 - Tests cover pure logic and boundary adapters (decoders, repositories, clients).
 
-## Output template
+## Output Template
 
 When asked to apply this guide, respond with:
 

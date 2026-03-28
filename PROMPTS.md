@@ -319,11 +319,32 @@ Prioritize: evidence, counterpoints, explicit owner + next step.
 
 ## Mechanics (in-process building blocks)
 
-### Apply a concrete code pattern
+### Introduce a creational pattern (Factory / Builder / Prototype)
 
 ```text
-Use patterns-<creational|structural|behavioral> (read the matching `skills/patterns-*/SKILL.md`).
+Use patterns-creational (read skills/patterns-creational/SKILL.md).
 
-Problem: <what needs structure?>
-Goal: Introduce a pattern seam that improves readability/testability without over-engineering.
+Problem: <what makes object construction complex: variant explosion, environment wiring, lifecycle constraints, testability>
+Goal: Introduce the smallest creational seam (factory/builder/prototype) that decouples callers from concrete types.
+Constraint: Keep creation near the composition root; avoid wrapping a single concrete type.
+```
+
+### Introduce a structural pattern (Adapter / Facade / Decorator / Proxy)
+
+```text
+Use patterns-structural (read skills/patterns-structural/SKILL.md).
+
+Boundary: <what are callers depending on, and what do you want to hide or translate?>
+Goal: Add the minimal wrapper or indirection (adapter/facade/decorator/proxy) that stabilizes the boundary.
+Constraint: Prefer composition; don't wrap what you can change directly; forward lifetimes (close/dispose).
+```
+
+### Introduce a behavioral pattern (Strategy / Observer / State / Command)
+
+```text
+Use patterns-behavioral (read skills/patterns-behavioral/SKILL.md).
+
+Pressure: <pluggable algorithms, event/listener, state machine, middleware pipeline, undo/redo, or request chain>
+Goal: Make responsibilities and ordering explicit with the smallest behavioral pattern that fits.
+Constraint: Define error semantics (stop/skip/accumulate) and ownership (subscribe/unsubscribe, start/stop) up front.
 ```

@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
-import { loadTopics, classify, classifyIds, getLoadedTopics, getCachedIdf, loadStatModel, clearStatModel, hasStatModel } from '../src/collector/topic-classifier.js';
+import { loadTopics, classify, classifyIds, getLoadedTopics, getCachedIdf, loadStatModel, clearStatModel, hasStatModel, getStatModelMeta } from '../src/collector/topic-classifier.js';
 import {
   tokenize,
   computeIDF,
@@ -1271,6 +1271,92 @@ describe('Statistical model ensemble', () => {
       const restoredFoundation = restored.find((t) => t.id === 'ai.foundation-models');
       expect(restoredFoundation).toBeDefined();
       expect(restoredFoundation!.score).toBe(baselineScore);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('getStatModelMeta', () => {
+  afterEach(() => {
+    clearStatModel();
+  });
+
+  it('returns null when no model is loaded', () => {
+    clearStatModel();
+    expect(getStatModelMeta()).toBeNull();
+  });
+
+  it('returns correct metadata after loading a model', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-meta-'));
+    try {
+      const vocab: Record<string, number> = { bedrock: 0, agents: 1, llm: 2 };
+      const idf = [1.0, 1.0, 1.0];
+      const weights: Record<number, number> = { 0: 2.0, 1: 1.5, 2: 1.0 };
+      const trainingDate = '2026-03-23T14:30:00Z';
+
+      const model: ClassifierModel = {
+        version: 4,
+        created_at: '2026-03-20T10:00:00Z',
+        vocabulary: vocab,
+        idf,
+        classifiers: {
+          'ai.foundation-models': { weights, bias: 0, score_threshold: 0.5 },
+          'compute.gpu': { weights, bias: -1, score_threshold: 0.3 },
+        },
+        training_meta: {
+          training_db: 'test.db',
+          num_examples: 200,
+          num_positive_per_topic: { 'ai.foundation-models': 80, 'compute.gpu': 40 },
+          training_date: trainingDate,
+        },
+      };
+
+      const modelPath = join(tmpDir, 'classifier-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+
+      const meta = getStatModelMeta();
+      expect(meta).not.toBeNull();
+      expect(meta!.version).toBe(4);
+      expect(meta!.created_at).toBe('2026-03-20T10:00:00Z');
+      expect(meta!.training_date).toBe(trainingDate);
+      expect(meta!.vocabulary_size).toBe(3);
+      expect(meta!.num_classifiers).toBe(2);
+      expect(meta!.topic_ids).toContain('ai.foundation-models');
+      expect(meta!.topic_ids).toContain('compute.gpu');
+      expect(meta!.topic_ids).toHaveLength(2);
+    } finally {
+      clearStatModel();
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null after clearStatModel', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'intel-meta-clear-'));
+    try {
+      const model: ClassifierModel = {
+        version: 3,
+        created_at: new Date().toISOString(),
+        vocabulary: { test: 0 },
+        idf: [1.0],
+        classifiers: { 'ai.foundation-models': { weights: { 0: 1.0 }, bias: 0 } },
+        training_meta: {
+          training_db: 'test.db',
+          num_examples: 50,
+          num_positive_per_topic: { 'ai.foundation-models': 25 },
+          training_date: new Date().toISOString(),
+        },
+      };
+
+      const modelPath = join(tmpDir, 'classifier-model.json');
+      writeFileSync(modelPath, JSON.stringify(model));
+      expect(loadStatModel(modelPath)).toBe(true);
+      expect(getStatModelMeta()).not.toBeNull();
+
+      clearStatModel();
+      expect(getStatModelMeta()).toBeNull();
     } finally {
       clearStatModel();
       rmSync(tmpDir, { recursive: true, force: true });

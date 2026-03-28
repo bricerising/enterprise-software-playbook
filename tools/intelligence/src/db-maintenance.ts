@@ -107,49 +107,14 @@ export function rebuildFts(db: Database.Database): void {
 
 /**
  * Rebuild event_topics from events.topics JSON. Runs in batches.
+ * Includes confidence values by parsing the topics JSON and looking up
+ * confidence from the events table's title/content via the classifier.
+ *
+ * Delegates to reclassifyTopics to ensure confidence is preserved.
  */
-export function rebuildTopicIndex(db: Database.Database, batchSize = 1000): number {
-  // Clear existing
-  db.exec('DELETE FROM event_topics');
-
-  let total = 0;
-  let offset = 0;
-
-  const selectStmt = db.prepare(`
-    SELECT event_id, topics FROM events
-    LIMIT ? OFFSET ?
-  `);
-  const insertStmt = db.prepare(
-    'INSERT OR IGNORE INTO event_topics (event_id, topic) VALUES (?, ?)',
-  );
-
-  while (true) {
-    const rows = selectStmt.all(batchSize, offset) as Array<{
-      event_id: string;
-      topics: string;
-    }>;
-    if (rows.length === 0) break;
-
-    const insertBatch = db.transaction(() => {
-      for (const row of rows) {
-        try {
-          const topics = JSON.parse(row.topics) as string[];
-          for (const topic of topics) {
-            insertStmt.run(row.event_id, topic);
-            total++;
-          }
-        } catch {
-          // Skip rows with invalid JSON
-        }
-      }
-    });
-    insertBatch();
-
-    offset += batchSize;
-    if (rows.length < batchSize) break;
-  }
-
-  return total;
+export function rebuildTopicIndex(db: Database.Database, batchSize = 500): number {
+  const result = reclassifyTopics(db, batchSize);
+  return result.topic_rows;
 }
 
 /**

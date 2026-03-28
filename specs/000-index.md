@@ -18,6 +18,7 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
 - [`specs/005-application-integration.md`](005-application-integration.md): How to integrate this library into a target app repo so agents auto-apply the workflow.
 - [`specs/006-intelligence-tool.md`](006-intelligence-tool.md): Spec for the intelligence tool (`tools/intelligence/`) — lightweight SQLite-backed collector and query engine for tech/AI/AWS signals.
 - [`specs/007-intelligence-forecast-module.md`](007-intelligence-forecast-module.md): Spec for the forecast module (`tools/intelligence/src/queries/forecast.ts`) — lifecycle positioning, chain detection with statistical rigor, transitive chains, scenario projection, and multiscale convergence.
+<!-- 008: number reserved (not used) -->
 - [`specs/skills-manifest.json`](skills-manifest.json): Machine-readable stage/tag index for retrieval and routing.
 - [`specs/tasks.md`](tasks.md): Backlog of work with acceptance criteria.
 - [`specs/quickstart.md`](quickstart.md): Copy/paste commands to validate/package skills locally.
@@ -39,6 +40,7 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
   - [`004`](decisions/004-triage-boundary-wrappers-decision-tree.md): Triage boundary wrappers / decision tree
   - [`005`](decisions/005-add-security-hardening-skill.md): Add security hardening skill
   - [`006`](decisions/006-review-protocol-for-code-reviews.md): Review protocol for code reviews
+  <!-- decisions 007, 008: numbers reserved (not used) -->
   - [`009`](decisions/009-v2-skill-names-and-navigation.md): V2 skill names and navigation
   - [`010`](decisions/010-move-skills-under-skills-folder.md): Move skills under skills/ folder
   - [`011`](decisions/011-explicit-system-model-and-feedback-discipline.md): Explicit system model and feedback discipline

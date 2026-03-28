@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { IntelResponse } from '../../types.js';
 import { ok } from '../../util/envelope.js';
+import { checkTopicReviewWarning } from '../review-warning.js';
 import type {
   ForecastData, ComputeForecastOpts,
   ChangePointSummary, DynamicItem,
@@ -71,6 +72,8 @@ export function computeForecast(
     });
   }
   const warnings: string[] = [];
+  const reviewWarning = checkTopicReviewWarning(db);
+  if (reviewWarning) warnings.push(reviewWarning);
 
   const now = Date.now();
   const { t: oldestEvent } = db.prepare('SELECT MIN(fetched_at) AS t FROM events').get() as { t: string | null };
@@ -146,9 +149,7 @@ export function computeForecast(
   );
 
   const limits = summary ? SUMMARY_LIMITS : (compact ? COMPACT_LIMITS : null);
-  const dynamicsPerType = limits
-    ? Math.max(limits.dynamics_per_type, COMPACT_LIMITS.dynamics_per_type)
-    : undefined;
+  const dynamicsPerType = limits ? limits.dynamics_per_type : undefined;
   const dynamics = detectDynamics(chains, lifecycles, multiscale, entropy, dynamicsPerType, freshTopics);
 
   // Build change_points_summary: topics with CUSUM change points, sorted by recency
@@ -224,7 +225,7 @@ export function computeForecast(
     const effectiveLimits: Record<string, number> = { ...limits };
     if (summary && filteredScenarios.length < 3) {
       effectiveLimits.ranked_chains = Math.max(limits.ranked_chains, COMPACT_LIMITS.ranked_chains);
-      effectiveLimits.dynamics_per_type = Math.max(limits.dynamics_per_type, COMPACT_LIMITS.dynamics_per_type);
+      effectiveLimits.dynamics_per_type = COMPACT_LIMITS.dynamics_per_type;
       effectiveLimits.lifecycles = Math.max(limits.lifecycles, COMPACT_LIMITS.lifecycles);
     }
 

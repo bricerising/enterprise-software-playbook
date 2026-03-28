@@ -32,6 +32,14 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 - **Prototype**: clone existing instances to avoid complex constructors; preserve runtime types.
 - **Singleton** (caution): one instance truly required; prefer passing dependencies explicitly or container-managed singletons.
 
+## Clarifying Questions
+
+- What makes object construction complex (variants, environment wiring, lifecycle constraints)?
+- How many concrete types exist today, and how often do new ones get added?
+- Who owns the decision of which concrete type to create (caller, config, runtime context)?
+- Is testability a primary driver (need to inject fakes/stubs)?
+- Are there lifecycle constraints (resources that need explicit shutdown/dispose)?
+
 ## Implementation Checklist
 
 - Make factories return interfaces/abstract types; hide concrete constructors in one place.
@@ -41,6 +49,14 @@ A note on scope: these guidelines assume **systemic** TypeScript (long‑lived a
 - Avoid import-time wiring in systemic code; create/wire dependencies in a composition root so lifetimes are explicit.
 - If created objects own resources, make lifetimes explicit (`start/stop/dispose`) and define ownership (who shuts it down).
 - Keep object graphs shallow in tests by injecting fakes/mocks (avoid global state).
+
+## Guardrails
+
+- Don't use Factory for a single concrete type: if there's only one implementation and no foreseeable variant, use a plain constructor.
+- Don't use Singleton for testability: prefer explicit dependency injection. Container-managed singletons are acceptable; module-level globals are not.
+- Don't use Builder when a simple options object suffices: Builder adds value when construction has ordering constraints or validation between steps.
+- Don't hide variant selection behind string keys: use typed discriminants (`as const` maps, unions) so the compiler catches missing cases.
+- Don't let factories accumulate unrelated creation logic: one factory per product family.
 
 ## Snippets (optional)
 

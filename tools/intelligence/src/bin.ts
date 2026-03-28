@@ -14,11 +14,12 @@ import { listEvents, getEvent } from './queries/events.js';
 import { addEntry, listEntries, searchJournal } from './queries/journal.js';
 import { querySources } from './queries/sources.js';
 import { queryTopics } from './queries/topics.js';
+import { auditTopics, markTopicReviewCompleted } from './queries/audit.js';
 import { queryStats } from './queries/stats.js';
 import { buildPack } from './queries/pack.js';
 import { computeForecast, saveSnapshot, evaluateForecasts } from './queries/forecast/index.js';
 import { startMcpServer } from './mcp/server.js';
-import { loadTopics, loadStatModel } from './collector/topic-classifier.js';
+import { loadTopics, loadStatModel, classify, getLoadedTopics, getStatModelMeta } from './collector/topic-classifier.js';
 import { ControlClient } from './control/channel.js';
 import {
   generateTrainingSet,
@@ -279,9 +280,9 @@ program
   });
 
 // --- topics ---
-program
+const topics = program
   .command('topics')
-  .description('List configured topics')
+  .description('List and audit configured topics')
   .option('--active', 'Only topics with events in last 7d')
   .option('--match <keyword>', 'Filter by keyword')
   .action((opts) => {
@@ -300,6 +301,47 @@ program
             configuredTopics,
             active: opts.active,
             match: opts.match,
+          }),
+        ),
+      );
+      output(result, fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+topics
+  .command('audit')
+  .description('Quarterly topic health audit: volume, overlap, lifecycle, chains')
+  .option('--domain <domain>', 'Filter to a specific domain (e.g., ai, compute)')
+  .option('--flagged', 'Only show topics with flags')
+  .option('--below-minimum', 'Only show topics below minimum volume')
+  .option('--overlap <topic>', 'Only show topics overlapping with the given topic')
+  .option('--mark-reviewed', 'Record that a topic review was completed today')
+  .action((opts) => {
+    try {
+      const config = getConfig(program.opts());
+      const dbPath = getDbPath(config, program.opts().db);
+      const fmt = program.opts().format ?? 'json';
+
+      if (opts.markReviewed) {
+        const writer = openWriter(dbPath);
+        try {
+          const result = markTopicReviewCompleted(writer);
+          output(ok(result), fmt);
+        } finally {
+          writer.close();
+        }
+        return;
+      }
+
+      const result = sqliteBusyRetry(() =>
+        withReader(dbPath, (db) =>
+          auditTopics(db, {
+            domain: opts.domain,
+            flagged: opts.flagged,
+            belowMinimum: opts.belowMinimum,
+            overlap: opts.overlap,
           }),
         ),
       );
@@ -1174,6 +1216,104 @@ classifier
       }), fmt);
     } catch (err) {
       handleError(err, 'maintenance');
+    }
+  });
+
+classifier
+  .command('test <text>')
+  .description('Classify a text snippet and print topic scores (debugging)')
+  .option('--model <path>', 'Path to stat model (default: ~/.local/share/intel/classifier-model.json)')
+  .option('--top <n>', 'Max topics to return', '10')
+  .action((text: string, opts: { model?: string; top: string }) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+
+      loadTopics();
+
+      const defaultDir = joinPath(
+        process.env.HOME ?? process.env.USERPROFILE ?? '.',
+        '.local', 'share', 'intel',
+      );
+      const modelPath = opts.model
+        ? resolvePath(opts.model)
+        : joinPath(defaultDir, 'classifier-model.json');
+      const modelLoaded = loadStatModel(modelPath);
+
+      const maxTopics = parseInt(opts.top, 10) || 10;
+      const results = classify(null, text, maxTopics);
+
+      const meta = getStatModelMeta();
+      const lrTopicIds = meta ? new Set(meta.topic_ids) : new Set<string>();
+
+      const scored = results.map((r) => ({
+        id: r.id,
+        confidence: r.confidence,
+        score: r.score,
+        method: lrTopicIds.has(r.id) ? 'logistic' : 'bm25_fallback',
+      }));
+
+      const warnings: string[] = [];
+      if (!modelLoaded) {
+        warnings.push('No stat model loaded; all topics scored via BM25 fallback.');
+      }
+
+      output(ok({
+        input: text,
+        scoring_engine: modelLoaded ? 'logistic+bm25_fallback' : 'bm25_fallback',
+        topics_loaded: getLoadedTopics().length,
+        results: scored,
+      }, { warnings }), fmt);
+    } catch (err) {
+      handleError(err, 'read');
+    }
+  });
+
+classifier
+  .command('status')
+  .description('Show classifier model status and scoring engine info')
+  .option('--model <path>', 'Path to stat model (default: ~/.local/share/intel/classifier-model.json)')
+  .action((opts: { model?: string }) => {
+    try {
+      const fmt = program.opts().format ?? 'json';
+
+      loadTopics();
+      const topics = getLoadedTopics();
+
+      const defaultDir = joinPath(
+        process.env.HOME ?? process.env.USERPROFILE ?? '.',
+        '.local', 'share', 'intel',
+      );
+      const modelPath = opts.model
+        ? resolvePath(opts.model)
+        : joinPath(defaultDir, 'classifier-model.json');
+      loadStatModel(modelPath);
+
+      const meta = getStatModelMeta();
+      let scoring_engine: string;
+      if (meta) {
+        scoring_engine = 'logistic';
+      } else if (topics.length > 0) {
+        scoring_engine = 'bm25_fallback';
+      } else {
+        scoring_engine = 'uninitialized';
+      }
+
+      output(ok({
+        scoring_engine,
+        topics_loaded: topics.length,
+        model: meta
+          ? {
+              version: meta.version,
+              created_at: meta.created_at,
+              training_date: meta.training_date,
+              vocabulary_size: meta.vocabulary_size,
+              num_classifiers: meta.num_classifiers,
+              model_path: modelPath,
+            }
+          : null,
+      }), fmt);
+    } catch (err) {
+      handleError(err, 'read');
     }
   });
 

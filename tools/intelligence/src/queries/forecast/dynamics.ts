@@ -1,5 +1,5 @@
 import type { ChainItem, LifecycleItem, MultiscaleItem, EntropyItem, DynamicItem } from './types.js';
-import { MAX_DYNAMICS_PER_TYPE } from './types.js';
+import { MAX_DYNAMICS_PER_TYPE, DAMPENING_RECENCY_DAYS } from './types.js';
 
 /* ── F2. Systems dynamics detection ────────────────────────────────── */
 
@@ -119,7 +119,7 @@ function detectDampening(lifecycles: LifecycleItem[]): DynamicItem[] {
   for (const lc of lifecycles) {
     if (lc.phase !== 'decaying') continue;
 
-    const recentCps = lc.change_points.filter((cp) => cp <= 14);
+    const recentCps = lc.change_points.filter((cp) => cp <= DAMPENING_RECENCY_DAYS);
     if (recentCps.length === 0) continue;
 
     const mostRecent = Math.min(...recentCps);

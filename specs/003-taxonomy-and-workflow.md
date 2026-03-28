@@ -86,9 +86,10 @@ Unless you have a strong reason to deviate:
 9. `security`
 10. `observability`
 11. `testing`
-12. `finish`
+12. `review` (when non-trivial changes warrant adversarial review)
+13. `finish`
 
-`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
+`forecast` feeds into `plan` for roadmap and situational awareness. `intel` provides external context on demand. `review` feeds into `finish` — confirmed findings should be resolved before the definition-of-done pass. In-process pattern application (`patterns-*`) is usually a supporting step during implementation, not the starting point.
 
 The sequence is a guideline, not rigid — `workflow` applies proportionality-based skipping (e.g., skip `architecture` unless cross-service, skip `platform` unless 2+ services duplicate boundary logic).
 

@@ -45,7 +45,7 @@ archobs show velocity [--window 30] [--compare] [--format json] [--out-file path
 
 **Problem**: Cluster metrics lack commit activity data, forcing separate extraction.
 
-**Solution**: In `pipeline.py:report()`, join commit data to cluster assignments and compute `recent_commits_30d` and `recent_commits_90d` per cluster. Add to `_CLUSTER_TABLE_COLS` and `_CLUSTER_JSON_COLS` in display.py.
+**Solution**: In `pipeline.py:report()`, join commit data to cluster assignments and compute `recent_file_changes_30d` and `recent_file_changes_90d` per cluster (counts file-change events, not distinct commits; use `show velocity` for distinct commit counts). Add to `_CLUSTER_TABLE_COLS` and `_CLUSTER_JSON_COLS` in display.py.
 
 ### 3. `archobs show edges <cluster_id>` (P1)
 
@@ -107,7 +107,7 @@ After `recent_commits` fields are added to cluster_metrics (change #2), they app
 | `tools/archobs/src/archobs/display.py` | `format_velocity()`, `format_edges()`, `read_commits()`, `read_graph_edges()`; enhanced `_generate_cluster_label()`; updated cluster column lists; updated `format_all()` |
 | `tools/archobs/src/archobs/cli.py` | `show velocity`, `show edges` subcommands; split `--top` in `show all` |
 | `tools/archobs/src/archobs/suggestions.py` | Fix drift scope; enhance xnbr suggestion |
-| `tools/archobs/src/archobs/pipeline.py` | `recent_commits_30d`/`recent_commits_90d` in cluster metrics; persist annotated graph_edges |
+| `tools/archobs/src/archobs/pipeline.py` | `recent_file_changes_30d`/`recent_file_changes_90d` in cluster metrics; persist annotated graph_edges |
 | `tools/archobs/tests/test_show.py` | Tests for velocity, edges, cluster labels, split --top |
 | `tools/archobs/tests/test_core.py` | Tests for suggestion improvements |
 | `skills/archobs/SKILL.md` | Velocity/edges commands; init vs report clarification |

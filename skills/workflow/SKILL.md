@@ -12,6 +12,12 @@ This skill is a workflow orchestrator: it routes work across the other skills in
 
 Default loop: **Define → Standardize → Harden → Verify → Mechanics**.
 
+## Chooser
+
+- Use **workflow** when: the user gives a general request ("add feature X", "fix this bug", "refactor module Y") without naming a specific skill. Workflow picks the right skills and sequences them.
+- Do NOT use workflow when: the user names a specific skill ("run plan", "write a spec", "do a review") — invoke that skill directly.
+- Do NOT use workflow for: one-shot questions about code, explanations, or small edits that don't need multi-skill orchestration.
+
 ## Workflow
 
 ### 0) Calibrate scope (keep overhead proportional)
@@ -126,6 +132,14 @@ Start with ecosystem signals, then check internal readiness. Use when the questi
 
 **Security hardening pass**:
 `security` → `testing` → `review` (type: security) → `finish`
+
+## Clarifying Questions
+
+- What is the scope of the change (tiny/normal/big)?
+- Are there existing specs, plans, or ADRs that constrain the approach?
+- Which services, boundaries, or contracts are affected?
+- Are there deployment constraints (freeze windows, feature flags, rollback requirements)?
+- Is this greenfield or modifying existing behavior?
 
 ## Guardrails
 

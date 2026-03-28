@@ -10,7 +10,7 @@ More importantly, the data is locked inside the pipeline. Agents can't query it.
 
 Redesign as a lightweight tool in `tools/intelligence/` that:
 
-1. **Collects data** continuously from curated sources (RSS, HN, Lobsters, EDGAR, Earnings)
+1. **Collects data** continuously from curated sources (RSS, HN, EDGAR, Earnings)
 2. **Exposes intelligence** as CLI commands and MCP tools that agents can invoke
 3. **Runs on SQLite** — no Postgres, no Redis, no Kafka, no Docker required
 
@@ -44,7 +44,13 @@ The collector runs as a daemon. Everything else is on-demand query. Agents synth
 │  │ intel trends    │◀───────────────────┤                    │
 │  │ intel search    │◀───────────────────┤                    │
 │  │ intel events    │◀───────────────────┤                    │
-│  │ intel sources   │◀───────────────────┘                    │
+│  │ intel sources   │◀───────────────────┤                    │
+│  │ intel forecast  │◀───────────────────┤                    │
+│  │ intel topics    │◀───────────────────┤                    │
+│  │ intel stats     │◀───────────────────┤                    │
+│  │ intel pack      │◀───────────────────┤                    │
+│  │ intel journal   │◀───────────────────┤                    │
+│  │ intel audit     │◀───────────────────┘                    │
 │  └─────────────────┘                                         │
 │        │                                                     │
 │        ▼                                                     │
@@ -147,7 +153,7 @@ sequenceDiagram
 CREATE TABLE events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id    TEXT    UNIQUE NOT NULL,           -- stable per-source ID
-    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','lobsters','edgar','earnings')),
+    source      TEXT    NOT NULL CHECK(source IN ('rss','hackernews','edgar','earnings')),
     feed        TEXT,                              -- feed name/identifier
     url           TEXT,
     canonical_url TEXT,                            -- normalized URL for cross-source dedup
@@ -209,8 +215,10 @@ END;
 
 -- Normalized topic index for fast topic queries and trend computation
 CREATE TABLE event_topics (
-    event_id TEXT NOT NULL,
-    topic    TEXT NOT NULL,
+    event_id   TEXT NOT NULL,
+    topic      TEXT NOT NULL,
+    confidence REAL,                                  -- classifier confidence (0.0-1.0)
+    score      REAL,                                  -- raw classifier score before thresholding
     PRIMARY KEY (event_id, topic),
     FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
 );
@@ -237,6 +245,22 @@ CREATE TABLE collector_health (
     http_last_modified TEXT,                      -- Last-Modified from last successful response
     PRIMARY KEY (source, feed)
 );
+
+-- Tool operational metadata (key-value store for timestamps, state)
+CREATE TABLE tool_metadata (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Operator journal entries
+CREATE TABLE journal_entries (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    content    TEXT    NOT NULL,
+    tags       TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(tags)),
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_journal_entries_created ON journal_entries(created_at);
 
 -- Data retention: events older than retention_days are prunable
 -- Enforced by `intel db prune`
@@ -287,7 +311,7 @@ All JSON outputs use a consistent envelope so agents can parse responses predict
 ```json
 {
   "tool": "intel",
-  "schema_version": "v1",
+  "schema_version": "v2",
   "status": "ok",
   "data": { },
   "warnings": [],
@@ -326,7 +350,7 @@ Every paginated response includes explicit pagination metadata so agents can dec
 ```json
 {
   "tool": "intel",
-  "schema_version": "v1",
+  "schema_version": "v2",
   "status": "error",
   "error": {
     "code": "SQLITE_BUSY",
@@ -528,9 +552,18 @@ intel stats
   "events_24h": 487,
   "events_7d": 3201,
   "sources": 12,
+  "sources_healthy": 10,
+  "sources_stale": 1,
+  "sources_error": 1,
+  "topics_total": 66,
   "topics_active_7d": 38,
   "oldest_event": "2026-02-01T00:00:00Z",
-  "newest_event": "2026-03-13T14:35:00Z"
+  "newest_event": "2026-03-13T14:35:00Z",
+  "collector_running": true,
+  "last_collect_at": "2026-03-13T14:30:00Z",
+  "retention_days": 30,
+  "topic_review_last_completed": "2026-01-15T10:00:00Z",
+  "topic_review_overdue": true
 }
 ```
 
@@ -621,6 +654,39 @@ The command reports the checkpoint result triple: busy flag (whether the checkpo
 
 `quick-check` runs `PRAGMA quick_check`, a faster alternative to `PRAGMA integrity_check` that skips some index consistency checks but detects common corruption. Use periodically or after unexpected crashes. The collector daemon should run `quick_check` automatically at startup if a stale PID file is detected (indicating a previous unclean shutdown) and log the result. If corruption is detected, the daemon should refuse to start and surface the error clearly, rather than silently operating on a damaged database.
 
+### `intel journal`
+
+Operator journal for recording observations, decisions, and notes alongside the intelligence data. Stub — full specification TBD.
+
+```
+intel journal add "Observed unusual correlation between ai.training and compute.gpu"
+intel journal list                   # recent entries
+intel journal list --since 7d        # entries from last 7 days
+intel journal list --tag review      # entries with a specific tag
+```
+
+### `intel training-set`
+
+Manage labeled training data for the topic classifier. Fully specified in [spec 019](019-classifier-training-data.md).
+
+```
+intel training-set list              # show training set summary
+intel training-set add <event-id>    # Deferred (2026-03-26): superseded by reservoir sampling (spec 019)
+intel training-set export            # export labeled data for classifier training
+intel training-set progress          # show labeling progress per topic
+```
+
+### `intel classifier`
+
+Classifier management and evaluation commands. Core commands (`evaluate`, `train`) fully specified in [spec 019](019-classifier-training-data.md).
+
+```
+intel classifier evaluate            # run classifier against labeled training set
+intel classifier train               # retrain classifier from current training set
+intel classifier test <text>         # Classify text and print topic scores (debugging)
+intel classifier status              # Show model version, training date, topic count, scoring engine
+```
+
 ## Collector Design
 
 ### Source Adapters
@@ -638,8 +704,7 @@ interface SourceAdapter {
 
 1. **RSS/Atom** — generic feed polling with `rss-parser`. Handles most sources. Supports conditional GET via `ETag` and `If-Modified-Since` headers: the adapter stores the server's `ETag` and `Last-Modified` response headers per feed in `collector_health` and sends them on subsequent requests. When the server returns `304 Not Modified`, the adapter skips parsing entirely. This reduces bandwidth, avoids re-downloading unchanged feeds, and keeps request volumes polite.
 2. **Hacker News** — HN API with new/top/best modes. 100ms inter-request delay.
-3. **Lobsters** — RSS-based but with tag extraction from Lobsters categories.
-4. **EDGAR** — SEC filing RSS with form-type extraction and CIK parsing. Must comply with SEC EDGAR access requirements:
+3. **EDGAR** — SEC filing RSS with form-type extraction and CIK parsing. Must comply with SEC EDGAR access requirements:
    - **User-Agent**: every request must include a descriptive header: `intel-collector/0.1.0 (<operator-email>)`. The operator email is configured in `config.yaml` under `collector.edgar_contact`.
    - **Rate limit**: hard cap at 10 requests/second (SEC-monitored maximum). The adapter should self-limit well below this — 2 req/s default with configurable ceiling. Config validation must enforce `edgar_max_rps <= 10`; values above 10 are rejected at startup.
    - **Startup validation**: if any feed has `source: edgar`, the collector must validate that `collector.edgar_contact` is set and non-empty, and that `collector.edgar_max_rps` does not exceed 10. Fail fast with a clear error if either check fails — running EDGAR requests without a declared User-Agent risks IP blocks, and exceeding 10 rps risks rate limiting or blocking by the SEC.
@@ -885,6 +950,8 @@ intel mcp                        # start MCP server (stdio transport)
 | `intel_stats` | `intel stats` | Database statistics and health overview |
 | `intel_pack` | `intel pack` | Bounded evidence bundle for agent synthesis |
 | `intel_forecast` | `intel forecast` | Forward-looking predictions from topic co-movement and lifecycle analysis (see spec 007) |
+| `intel_forecast_snapshot` | `intel forecast --summary` | Compact forecast snapshot for agent consumption (top scenarios, chains, change points) |
+| `intel_forecast_evaluate` | `intel forecast evaluate` | Evaluate forecast accuracy against actual outcomes |
 
 The MCP server reads the same SQLite file as the CLI. No separate process needed beyond the collector daemon.
 
@@ -954,10 +1021,6 @@ feeds:
     poll_interval: 300
     max_items: 100
 
-  - source: lobsters
-    name: Lobsters
-    poll_interval: 300
-
   - source: edgar
     name: SEC EDGAR
     form_types: [8-K, 10-K, 10-Q]
@@ -999,7 +1062,6 @@ tools/intelligence/
 │   │   │   ├── types.ts                 # SourceAdapter interface
 │   │   │   ├── rss.ts                   # RSS/Atom adapter
 │   │   │   ├── hackernews.ts            # HN API adapter
-│   │   │   ├── lobsters.ts              # Lobsters adapter
 │   │   │   ├── edgar.ts                 # SEC EDGAR adapter
 │   │   │   └── earnings.ts             # SEC Earnings (10-K/10-Q) adapter
 │   │   ├── content-fetcher.ts           # Readability extraction

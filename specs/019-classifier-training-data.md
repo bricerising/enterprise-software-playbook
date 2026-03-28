@@ -4,6 +4,8 @@
 
 > **Taxonomy note**: The topic set has grown from spec 013's original 61 topics to 66 (additions: `macro.monetary-policy`, `market.payments`, `market.crypto`, `ai.research`, `devex.methodology`).
 
+> **Amendment (2026-03)**: Phase 2 now uses **L2-regularized Logistic Regression** instead of Complement Naive Bayes (CNB). CNB suffered from class imbalance: Platt scaling B values were too high, making calibrated probability thresholds unreachable for rare topics. Logistic regression with per-topic `score_threshold` (found via F1 maximization) replaces the Platt scaling pipeline. Model version >= 3 is required; the `bm25_val_includes_title` field distinguishes v3+ models.
+
 ## Problem
 
 The intelligence tool's topic classifier (spec 006, §Topic Classification) uses keyword/regex matching with learned confidence weights. Spec 015's Q1 2026 audit surfaced two classifier health warnings: **~31% of events are unclassified** (`unclassified_pct: 0.310`) and **5.9% are assigned to 4+ topics** (`multi_topic_pct: 0.059`), the over-classification threshold. Spec 013 identifies classifier precision as a key improvement area, and the topic lifecycle process (spec 013, §Topic Lifecycle) requires manual audit data to validate thresholds.
@@ -23,14 +25,14 @@ Add a training data generation system that:
 2. Produces a standalone SQLite training database with events awaiting topic labels
 3. Provides CLI commands for label management (assign topics, check progress, fetch next unreviewed)
 4. Provides an agent skill workflow for subagent-driven classification of each sampled event
-5. Replace the keyword/regex classifier with BM25 scoring (Phase 1) and train a Complement Naive Bayes probabilistic classifier from the labeled data (Phase 2)
+5. Replace the keyword/regex classifier with BM25 scoring (Phase 1) and train an L2-regularized Logistic Regression probabilistic classifier from the labeled data (Phase 2)
 
 ## Non-Goals
 
 - Active learning or smart sampling (uniform random is sufficient at current scale)
 - Persisting training databases in the main database schema (training DBs are standalone artifacts)
 
-> **Implementation ordering**: Phase 1 (BM25 scoring, §J) ships immediately alongside the training data infrastructure — it replaces the keyword/regex classifier with no training data dependency. Phase 2 (CNB training pipeline, §J) code ships in the same deliverable, but the trained model is produced only after labeling via §A-F (≥500 events). Phase 3 (continuous improvement loop) is deferred to §K as future work.
+> **Implementation ordering**: Phase 1 (BM25 scoring, §J) ships immediately alongside the training data infrastructure — it replaces the keyword/regex classifier with no training data dependency. Phase 2 (LR training pipeline, §J) code ships in the same deliverable, but the trained model is produced only after labeling via §A-F (≥500 events). Phase 3 (continuous improvement loop) is deferred to §K as future work.
 
 ## Scope
 
@@ -43,7 +45,7 @@ Add a training data generation system that:
 | Single-pass O(n) sampling algorithm | Phase 3 continuous improvement loop (§K) |
 | BM25 scoring engine — Phase 1 (§J) | Active learning sampling |
 | Drop `regex` field from `topics.yaml` (§J) | Automated retraining triggers |
-| CNB training pipeline — Phase 2 (§J) | |
+| LR training pipeline — Phase 2 (§J) | |
 | `intel classifier train` command (§J) | |
 
 ---
@@ -225,7 +227,7 @@ CREATE TABLE training_meta (
 - Two columns keep topic comparison simple while preserving confidence data for threshold analysis
 
 **Why `machine_scores` column:**
-- Stores the raw classifier scores (BM25 score or CNB log-odds) corresponding to each entry in `machine_topics`, in the same array order
+- Stores the raw classifier scores (BM25 score or LR logit) corresponding to each entry in `machine_topics`, in the same array order
 - Sigmoid-calibrated confidence compresses the score range — two topics with BM25 scores 4.1 and 9.0 may have similar confidences due to sigmoid saturation, but the raw scores reveal meaningful separation. Raw scores are more useful for threshold analysis (e.g., "how far above the 4.0 gate did this topic score?") and for calibrating the escalating threshold constants
 - Populated from the same `event_topics` query as `machine_confidences`. If the classifier does not record raw scores (pre-BM25 events), entries are stored as `null` — same convention as `machine_confidences` for pre-migration data
 
@@ -658,7 +660,7 @@ intel training-set evaluate /path/to/training.db --labeler sonnet   # compare so
 
 #### `intel classifier train <training-db>`
 
-Train a Complement Naive Bayes classifier model from labeled training data (Phase 2, §J).
+Train an L2-regularized logistic regression classifier model from labeled training data (Phase 2, §J).
 
 ```
 intel classifier train /path/to/training.db
@@ -669,8 +671,8 @@ intel classifier train /path/to/training.db --validation-split 0.3
 
 **Options:**
 - `--output <path>` — Output model JSON path. Default: `~/.local/share/intel/classifier-model-<timestamp>.json`. Must not already exist; collisions produce `INVALID_QUERY` error.
-- `--min-examples <n>` — Minimum positive examples per topic to train a CNB classifier for that topic. Topics below this threshold fall back to BM25. Default `20` (matches `CNB_MIN_EXAMPLES` in §G).
-- `--validation-split <ratio>` — Fraction of labeled data held out for validation. Default `0.2` (matches `CNB_VALIDATION_SPLIT` in §G). Range (0.0, 0.5].
+- `--min-examples <n>` — Minimum positive examples per topic to train an LR classifier for that topic. Topics below this threshold fall back to BM25. Default `20` (matches `CLASSIFIER_MIN_EXAMPLES` in §G).
+- `--validation-split <ratio>` — Fraction of labeled data held out for validation. Default `0.2` (matches `CLASSIFIER_VALIDATION_SPLIT` in §G). Range (0.0, 0.5].
 
 **Output:**
 ```json
@@ -680,9 +682,9 @@ intel classifier train /path/to/training.db --validation-split 0.3
   "status": "ok",
   "data": {
     "model_path": "/Users/user/.local/share/intel/classifier-model-2026-03-23T14-30-00.json",
-    "vocabulary_size": 15234,
+    "vocabulary_size": 4812,
     "per_topic": [
-      { "topic": "ai.foundation-models", "method": "cnb", "examples": 87, "val_precision": 0.91, "val_recall": 0.88, "val_f1": 0.89 },
+      { "topic": "ai.foundation-models", "method": "logistic", "examples": 87, "val_precision": 0.91, "val_recall": 0.88, "val_f1": 0.89 },
       { "topic": "data.governance", "method": "bm25_fallback", "examples": 12, "reason": "below min_examples threshold" }
     ],
     "overall_validation": {
@@ -697,19 +699,19 @@ intel classifier train /path/to/training.db --validation-split 0.3
 ```
 
 **Validation:**
-- Training DB must contain ≥500 labeled events (`CNB_MIN_TRAINING_EVENTS`); fewer produces `INVALID_QUERY` with message `"Insufficient training data: <n> labeled events, minimum 500 required."`
+- Training DB must contain ≥500 labeled events (`CLASSIFIER_MIN_TRAINING_EVENTS`); fewer produces `INVALID_QUERY` with message `"Insufficient training data: <n> labeled events, minimum 500 required."`
 - Output path must not already exist
 - Training DB `application_id` must be `0x54524E47`
 
 **Behavior:**
 - Opens training DB in `readonly` mode — does not modify the training database
-- Pipeline: load labeled events → split train/validation → build vocabulary (capped at `CNB_MAX_VOCABULARY`) → compute TF-IDF vectors → train 66 binary CNB classifiers → fit Platt calibration on validation set → serialize model JSON
+- Pipeline: load labeled events → stratified train/validation split → build chi-squared vocabulary (capped at `CLASSIFIER_MAX_VOCABULARY`) → compute TF-IDF vectors → train 66 binary LR classifiers → optimize per-topic score thresholds on validation set → compute per-topic `blend_alpha` from LR vs BM25 validation F1 → serialize model JSON
 - Model file is written atomically (write to temp file, then rename) to prevent partial model files
 - The trained model is **not** automatically loaded by the collector — the operator must configure the model path (see **Model loading** below). This prevents silent classifier changes during collection runs.
 - Topics with fewer than `--min-examples` positive examples are listed in the output with `method: "bm25_fallback"` and are not included in the model's classifiers
 
 **Model loading:**
-- The collector reads the model path from the `classifier_model` key in the config file (e.g., `~/.config/intel/config.yaml`). When `classifier_model` is set, the collector loads the model JSON at startup and uses CNB for topics with trained classifiers, falling back to BM25 for the rest. When `classifier_model` is unset (the default), the collector uses BM25-only (Phase 1 behavior).
+- The collector reads the model path from the `classifier_model` key in the config file (e.g., `~/.config/intel/config.yaml`). When `classifier_model` is set, the collector loads the model JSON at startup and uses LR for topics with trained classifiers, falling back to BM25 for the rest. When `classifier_model` is unset (the default), the collector uses BM25-only (Phase 1 behavior).
 - The `intel collect --once` and `intel collect` commands accept `--classifier-model <path>` as an override, taking precedence over the config file value. This enables A/B comparison: run a collection pass with and without the model to compare topic assignments.
 - On startup, the collector validates: model file exists, `version` field is supported, and model is not older than `MODEL_STALENESS_DAYS` (90 days). A stale model produces a warning (not an error) in the collection output. A missing or corrupt model file produces `INVALID_QUERY` with message `"Classifier model not found or invalid at <path>. Run 'intel classifier train' to produce a model, or remove 'classifier_model' from config to use BM25-only."`
 
@@ -808,9 +810,8 @@ tools/intelligence/src/
 ├── collector/
 │   ├── bm25.ts              — NEW (Phase 1): BM25 scoring engine + tokenizer
 │   ├── tfidf.ts             — NEW (Phase 2): TF-IDF vectorizer
-│   ├── naive-bayes.ts       — NEW (Phase 2): Complement NB (66 binary classifiers)
-│   ├── platt.ts             — NEW (Phase 2): Platt scaling (sigmoid calibration)
-│   └── topic-classifier.ts  — MODIFY (Phase 1): rewrite matchesTopic() and classify() to use BM25; (Phase 2): add CNB model loading via classifier_model config key
+│   ├── classifier.ts        — NEW (Phase 2): L2-regularized logistic regression (66 binary classifiers, per-topic thresholds)
+│   └── topic-classifier.ts  — MODIFY (Phase 1): rewrite matchesTopic() and classify() to use BM25; (Phase 2): add classifier model loading via classifier_model config key
 └── bin.ts                   — MODIFY: add training-set + classifier command groups
 
 config/
@@ -839,13 +840,11 @@ tools/intelligence/tests/
 | `computeIDF(topicDefs)` | `collector/bm25.ts` | Bootstrap IDF from keyword frequency across all 66 topics. Returns `Map<string, number>`. Replaced by corpus IDF after Phase 2 training. |
 | `scoreBM25(tokens, keywords, idf, opts)` | `collector/bm25.ts` | Compute BM25 score for a document against a topic's keyword set. Applies TF saturation (k1), length normalization (b), and IDF weighting. |
 | `matchesTopicBM25(event, topicDef, idf, opts)` | `collector/bm25.ts` | Full BM25 pipeline for one event × one topic: tokenize title/content, score with title boost, apply negative keyword suppression, check threshold gate, compute sigmoid confidence. Returns `BM25Result`. |
-| `buildVocabulary(documents, maxSize)` | `collector/tfidf.ts` | Build vocabulary from tokenized documents, capped at `maxSize` terms by document frequency. Returns `Map<string, number>` (term → index). |
+| `buildVocabularyChiSquared(documents, topicLabels, maxSize)` | `collector/tfidf.ts` | Build vocabulary using chi-squared feature selection. For each term, computes the max chi-squared statistic across all topics, then selects the top `maxSize` most discriminative terms. Returns `Map<string, number>` (term → index). |
 | `vectorize(tokens, vocabulary, idf)` | `collector/tfidf.ts` | Convert token array to sparse TF-IDF vector (sub-linear TF, L2 normalized). Returns `Map<number, number>` (index → weight). |
-| `trainCNB(vectors, labels, topicId)` | `collector/naive-bayes.ts` | Train a single Complement Naive Bayes binary classifier for one topic. Returns sparse log-theta vector and log prior. |
-| `predictCNB(vector, classifier)` | `collector/naive-bayes.ts` | Predict raw CNB score for a document vector against a trained classifier. Returns uncalibrated log-odds. |
-| `trainClassifier(trainingDb, opts)` | `collector/naive-bayes.ts` | Full training pipeline: load data → build vocabulary → train 66 CNB classifiers → fit Platt calibration → serialize model. Returns `ClassifierTrainResult`. |
-| `fitPlatt(scores, labels)` | `collector/platt.ts` | Fit Platt scaling sigmoid parameters (A, B) from raw CNB scores and binary labels using Newton's method. Returns `SigmoidParams`. |
-| `calibrate(score, params)` | `collector/platt.ts` | Apply Platt sigmoid calibration: `1 / (1 + exp(A*score + B))`. Returns calibrated probability in (0, 1). |
+| `trainLogistic(vectors, labels, topicId)` | `collector/classifier.ts` | Train an L2-regularized logistic regression binary classifier for one topic. Returns weight vector and bias. |
+| `findOptimalThreshold(scores, labels)` | `collector/classifier.ts` | Find optimal classification threshold via F1 maximization on validation set. Returns threshold and metrics. |
+| `trainClassifier(trainingDb, opts)` | `collector/classifier.ts` | Full training pipeline: load data → build vocabulary → train 66 logistic classifiers → find per-topic thresholds → serialize model. Returns `ClassifierTrainResult`. |
 
 ### Types
 
@@ -916,7 +915,7 @@ export interface UnreviewedEvent {
   author: string | null;
   machine_topics?: string[];            // omitted by default; included when showMachineLabels=true
   machine_confidences?: (number | null)[];  // omitted by default; null entries = pre-confidence-tracking events
-  machine_scores?: (number | null)[];       // omitted by default; null entries = pre-BM25 events (raw BM25/CNB scores)
+  machine_scores?: (number | null)[];       // omitted by default; null entries = pre-BM25 events (raw BM25/LR scores)
   published_at: string | null;
   fetched_at: string;
   score: number;
@@ -958,7 +957,7 @@ export interface TopicEvaluation {
 export interface BM25Opts {
   k1: number;              // TF saturation parameter (default 1.2)
   b: number;               // length normalization parameter (default 0.75)
-  titleBoost: number;      // title keyword multiplier (default 3.0)
+  titleBoost: number;      // title keyword multiplier (default 2.0)
 }
 
 export interface BM25Result {
@@ -969,12 +968,7 @@ export interface BM25Result {
 }
 
 export interface EscalatingThresholds {
-  thresholds: number[];    // [4.0, 5.5, 7.0, 8.5, 10.0] — 1st through 5th topic
-}
-
-export interface SigmoidParams {
-  a: number;               // Platt scaling parameter A
-  b: number;               // Platt scaling parameter B
+  thresholds: number[];    // [10.0, 14.0, 18.0, 22.0, 26.0] — 1st through 5th topic
 }
 
 export interface ClassifierModel {
@@ -983,16 +977,19 @@ export interface ClassifierModel {
   vocabulary: Record<string, number>;   // term → index
   idf: number[];                        // IDF weights per vocabulary term
   classifiers: Record<string, {         // topic_id → classifier params
-    log_theta: Record<number, number>;  // sparse: term_index → log(complement_theta)
-    platt_a: number;                    // Platt scaling sigmoid parameter A
-    platt_b: number;                    // Platt scaling sigmoid parameter B
-    prior: number;                      // log prior P(class)
+    weights: Record<number, number>;    // sparse: term_index → LR weight
+    bias: number;                       // LR bias term
+    score_threshold?: number;           // raw logit threshold optimized for F1
+    blend_alpha?: number;               // LR influence weight (0.05–0.5), proportional to LR vs BM25 relative strength
+    lr_val_f1?: number;                 // LR validation F1 for this topic
+    bm25_val_f1?: number;               // BM25 validation F1 for this topic
   }>;
   training_meta: {
     training_db: string;
     num_examples: number;
     num_positive_per_topic: Record<string, number>;
     training_date: string;
+    bm25_val_includes_title?: boolean;  // true if BM25 validation used title-boosted scoring (v3+ models)
   };
 }
 
@@ -1001,7 +998,7 @@ export interface ClassifierTrainResult {
   vocabulary_size: number;
   per_topic: Array<{
     topic: string;
-    method: 'cnb' | 'bm25_fallback';
+    method: 'logistic' | 'bm25_fallback';
     examples: number;
     val_precision?: number;
     val_recall?: number;
@@ -1027,7 +1024,7 @@ export interface TopicDefExtended {
 
 ### Dependencies
 
-No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naive Bayes, and Platt scaling are all implemented in pure TypeScript. Uses `better-sqlite3` (already a dependency) for the training database and model training data access.
+No new runtime dependencies. BM25 scoring, TF-IDF vectorization, and L2-regularized logistic regression are all implemented in pure TypeScript. Uses `better-sqlite3` (already a dependency) for the training database and model training data access.
 
 ---
 
@@ -1111,12 +1108,12 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 47. "react" does not appear as a token when input is "reactive" (word boundary respected)
 
 **BM25 scoring (6 tests)**:
-48. Title keywords receive `BM25_TITLE_BOOST` (3.0×) multiplier over content keywords
+48. Title keywords receive `BM25_TITLE_BOOST` (2.0×) multiplier over content keywords
 49. Repeated keyword in content produces diminishing returns (TF saturation with k1=1.2)
 50. Long documents score lower than short documents with the same keyword density (length normalization with b=0.75)
 51. Keywords appearing in fewer topics produce higher scores than keywords in many topics (IDF weighting)
-52. A single incidental keyword match scores below `BM25_THRESHOLDS[0]` (4.0) and is not classified
-53. Escalating thresholds enforce: 2nd topic requires ≥5.5, 3rd ≥7.0, 4th ≥8.5, 5th ≥10.0
+52. A single incidental keyword match scores below `BM25_THRESHOLDS[0]` (10.0) and is not classified
+53. Escalating thresholds enforce: 2nd topic requires ≥14.0, 3rd ≥18.0, 4th ≥22.0, 5th ≥26.0
 
 **Negative keywords (3 tests)**:
 54. A topic with matching negative keyword is suppressed regardless of positive BM25 score
@@ -1138,22 +1135,22 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 62. Keywords appearing in fewer topics produce higher IDF values than keywords appearing in many topics
 63. `computeIDF` is deterministic: same topic definitions produce identical IDF maps
 
-**CNB training pipeline (5 tests)**:
-64. `trainClassifier` produces a valid `ClassifierModel` JSON with vocabulary, IDF, and per-topic classifiers
-65. Topics with ≥`min_examples` positive examples use CNB; topics below threshold report `bm25_fallback`
-66. Vocabulary size is capped at `CNB_MAX_VOCABULARY` (20,000) — excess terms sorted by document frequency are dropped
-67. Platt calibration produces outputs in (0, 1) for all raw CNB scores in the validation set
+**LR training pipeline (5 tests)**:
+64. `trainClassifier` produces a valid `ClassifierModel` JSON with vocabulary, IDF, and per-topic classifiers (weights, bias, score_threshold, blend_alpha, lr_val_f1, bm25_val_f1)
+65. Topics with ≥`min_examples` positive examples use logistic regression; topics below threshold report `bm25_fallback`
+66. Vocabulary size is capped at `CLASSIFIER_MAX_VOCABULARY` (5,000) — terms selected by chi-squared discriminative power
+67. Per-topic score thresholds are optimized for F1 on validation set with minimum precision constraint
 68. Model serialization round-trips: `JSON.parse(JSON.stringify(model))` produces an identical model object
 
-**CNB prediction (3 tests)**:
-69. `predictCNB` produces scores for all 66 topics given a document vector
-70. Platt-calibrated output from CNB is in range [0.01, 0.99] for realistic input vectors (not degenerate)
+**LR prediction (3 tests)**:
+69. `predictLogistic` produces raw logit scores for a document vector against a trained classifier
+70. Topics gated by per-topic `score_threshold` — scores below threshold are not classified
 71. Topics below `min_examples` at training time fall back to BM25 scoring at prediction time
 
 **`intel classifier train` CLI (4 tests)**:
 72. Returns `INVALID_QUERY` when training DB has fewer than 500 labeled events
 73. Produces a valid model JSON file when given ≥500 labeled events (synthetic fixture)
-74. `--min-examples` flag is respected: setting to 50 changes which topics use CNB vs BM25 fallback
+74. `--min-examples` flag is respected: setting to 50 changes which topics use logistic regression vs BM25 fallback
 75. Output path collision produces `INVALID_QUERY` error
 
 ### Test Fixtures
@@ -1177,16 +1174,29 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 | `SAMPLING_ALGORITHM` | `"reservoir_sampling_algorithm_r"` | Algorithm identifier stored in `training_meta` and `generate` output |
 | `BM25_K1` | `1.2` | TF saturation parameter — diminishing returns for repeated terms. Standard BM25 default. |
 | `BM25_B` | `0.75` | Document length normalization — penalizes long boilerplate-heavy content. Standard BM25 default. |
-| `BM25_TITLE_BOOST` | `3.0` | Title keyword multiplier — keywords in the title carry 3× the weight of content keywords |
-| `BM25_THRESHOLDS` | `[4.0, 5.5, 7.0, 8.5, 10.0]` | Escalating minimum BM25 score for 1st through 5th topic assignment. Directly targets over-classification. |
-| `BM25_SIGMOID_MIDPOINT` | `6.0` | Sigmoid midpoint for BM25→confidence calibration: `1 / (1 + exp(-(score - midpoint) / temperature))` |
-| `BM25_SIGMOID_TEMPERATURE` | `2.0` | Sigmoid temperature for BM25→confidence calibration. Lower values produce a sharper transition. |
-| `CNB_MIN_EXAMPLES` | `20` | Minimum positive training examples per topic to train a CNB classifier. Topics below this fall back to BM25. |
-| `CNB_MIN_TRAINING_EVENTS` | `500` | Minimum total labeled events required to run `intel classifier train`. Guards against training on insufficient data. |
-| `CNB_MAX_VOCABULARY` | `20000` | Maximum vocabulary size for TF-IDF vectorization. Terms beyond this cap are dropped by document frequency. |
-| `CNB_VALIDATION_SPLIT` | `0.2` | Fraction of labeled data held out for validation during `intel classifier train`. Range (0.0, 0.5]. |
-| `CNB_PROBABILITY_THRESHOLD` | `0.3` | Minimum Platt-calibrated probability for a CNB topic assignment. Lower than 0.5 because CNB with Platt scaling produces conservative probabilities for rare topics. |
+| `BM25_TITLE_BOOST` | `2.0` | Title keyword multiplier — keywords in the title carry 2× the weight of content keywords |
+| `BM25_THRESHOLDS` | `[10.0, 14.0, 18.0, 22.0, 26.0]` | Escalating minimum BM25 score for 1st through 5th topic assignment. Directly targets over-classification. |
+| `BM25_SIGMOID_MIDPOINT` | `14.0` | Sigmoid midpoint for BM25→confidence calibration: `1 / (1 + exp(-(score - midpoint) / temperature))` |
+| `BM25_SIGMOID_TEMPERATURE` | `4.0` | Sigmoid temperature for BM25→confidence calibration. Lower values produce a sharper transition. |
+| `CLASSIFIER_MIN_EXAMPLES` | `20` | Minimum positive training examples per topic to train a logistic classifier. Topics below this fall back to BM25. |
+| `CLASSIFIER_MIN_TRAINING_EVENTS` | `500` | Minimum total labeled events required to run `intel classifier train`. Guards against training on insufficient data. |
+| `CLASSIFIER_MAX_VOCABULARY` | `5000` | Maximum vocabulary size for TF-IDF vectorization. Terms selected by chi-squared feature selection (most discriminative terms across topics). Chi-squared makes a large vocabulary unnecessary — discriminative terms outperform high-frequency terms. |
+| `CLASSIFIER_VALIDATION_SPLIT` | `0.2` | Fraction of labeled data held out for validation during `intel classifier train`. Range (0.0, 0.5]. |
+| `CLASSIFIER_MIN_MODEL_VERSION` | `4` | Minimum model version required. Models below this version are rejected at load time with message `"version <n> (need ≥3, re-train with logistic regression)"`. See version history below. |
+| `LR_LEARNING_RATE` | `0.5` | Initial SGD learning rate for logistic regression training. |
+| `LR_DECAY` | `0.95` | Per-epoch learning rate decay factor. `lr = lr0 × decay^epoch`. |
+| `LR_LAMBDA` | `0.001` | L2 regularization strength. Controls weight magnitude penalty. |
+| `LR_EPOCHS` | `30` | Number of SGD passes over the training data. |
+| `LR_TRAIN_SEED` | `123` | PRNG seed for deterministic SGD shuffling during LR training. |
 | `MODEL_STALENESS_DAYS` | `90` | Warn if the classifier model file is older than this many days. Aligns with quarterly retraining cadence. |
+
+**Model version history:**
+
+| Version | Description |
+|---------|-------------|
+| 1-2 | Legacy CNB (Complement Naive Bayes) with Platt scaling. Rejected at load time. |
+| 3 | Transitional. Added `bm25_val_includes_title` and per-topic `score_threshold`. |
+| 4 | Current. L2-regularized logistic regression. Fields: `weights`, `bias`, `score_threshold`, `blend_alpha`, `lr_val_f1`, `bm25_val_f1`. Chi-squared vocabulary selection. Stratified train/validation split. |
 
 ---
 
@@ -1203,11 +1213,11 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 | Partial generation failure (disk full, I/O error) | All inserts are wrapped in a single transaction. On failure: rollback + delete partial file. See §C `generate` transaction safety. |
 | Training set staleness vs. 120-day retention | The source DB prunes events older than 120 days (spec 006). Training sets snapshot event data at generation time, so labeled data is preserved — but training sets older than ~120 days reference events no longer in the source DB. Cross-referencing (e.g., `evaluate` command, regression tests) should use the training DB's snapshot, not re-query the source DB. |
 | Full content storage inflates training DB | Full RSS article content (10-50KB per event) pushes the training DB to 33-165MB for ~3,331 events. The classifier caps at 3,000 chars and subagents are recommended ~4,000 chars, so most content goes unused. However, the training DB is a self-contained artifact that outlives the source DB's 120-day retention — the full content is the only preserved copy. Tradeoff accepted: storage is cheap, and future analysis (e.g., longer-context classifiers) may benefit from full content. |
-| BM25 threshold calibration | Initial thresholds [4.0, 5.5, 7.0, 8.5, 10.0] are estimates. If too aggressive (high), recall drops; if too permissive (low), over-classification persists. Mitigation: Brier score loop (spec 007 §J2) provides online correction; training data (§A-F) enables retroactive validation; thresholds are constants (§G), not buried in logic. |
+| BM25 threshold calibration | Thresholds [10.0, 14.0, 18.0, 22.0, 26.0] are tuned empirically. If too aggressive (high), recall drops; if too permissive (low), over-classification persists. Mitigation: Brier score loop (spec 007 §J2) provides online correction; training data (§A-F) enables retroactive validation; thresholds are constants (§G), not buried in logic. |
 | Bootstrap IDF diverges from corpus IDF | Bootstrap IDF (keyword frequency across 66 topics) approximates corpus statistics but may over-weight rare keywords that are common in actual RSS content. Mitigation: Phase 2's corpus IDF from real training data replaces bootstrap IDF; the Brier score loop corrects for systematic errors in the interim. |
-| CNB overfitting on small training set | With 500 minimum labeled events spread across 66 topics, some topics may have ≤20 examples — too few for reliable CNB training. Mitigation: per-topic `min_examples` threshold (default 20); topics below threshold fall back to BM25; vocabulary cap (20K) limits model complexity; 20% validation holdout catches overfitting before model deployment. |
-| Model file size | CNB model with 20K vocabulary × 66 topics: ~1-2MB JSON. Acceptable for a file loaded once at startup. If vocabulary grows beyond 50K terms, consider binary serialization. |
-| Two-classifier maintenance burden | BM25 fallback + CNB primary creates two code paths to test and maintain. Mitigation: fallback is per-topic (not a global mode switch); as training data grows, fewer topics use fallback; converges to CNB-only when all topics have sufficient examples. |
+| LR overfitting on small training set | With 500 minimum labeled events spread across 66 topics, some topics may have ≤20 examples — too few for reliable LR training. Mitigation: per-topic `min_examples` threshold (default 20); topics below threshold fall back to BM25; L2 regularization (lambda=0.001) limits weight magnitude; chi-squared vocabulary cap (5K) limits model complexity; stratified 20% validation holdout catches overfitting before model deployment. |
+| Model file size | LR model with 5K vocabulary × 66 topics: ~500KB-1MB JSON. Acceptable for a file loaded once at startup. |
+| Two-classifier maintenance burden | BM25 fallback + LR primary creates two code paths to test and maintain. Mitigation: fallback is per-topic (not a global mode switch); as training data grows, fewer topics use fallback; converges to LR-only when all topics have sufficient examples. |
 | Confidence scale shift after `reclassify` | Phase 1 changes the confidence formula from the current compressed [0.5, 0.8] range to full-range sigmoid-calibrated BM25 scores. After `intel db reclassify`, all `event_topics` confidence scores shift to the new scale. The Brier score loop (spec 007, §J2) has learned `topic_weights` against the old distribution — these weights become miscalibrated after the scale change. Mitigation: the Brier loop will re-learn weights from new forecast outcomes, but there is a transition period (1-2 forecast cycles) where confidence-weighted chain detection may over- or under-weight topics. This is acceptable because chain detection already uses binary topic presence as the primary signal, with confidence as a secondary weight. |
 
 ---
@@ -1253,21 +1263,21 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 | `--dry-run` on `generate` | Preview without creating DB | Lets operator verify parameters (sample size, output path) before committing to a large training database; avoids generate-delete-regenerate cycles |
 | `--labeler` filter on `evaluate` | Filter evaluated events by labeler | Enables direct comparison of labeler quality (haiku vs sonnet vs human) without exporting to JSONL and scripting; complements the `labeler` column and inter-rater reliability design |
 | Hamming loss in `evaluate` output | `symmetric_diff / (events × topics)` | Standard multi-label metric that captures both FP and FN in a single number; complements per-topic precision/recall with an aggregate quality signal |
-| `machine_scores` column in training DB | Raw BM25/CNB scores alongside confidence | Sigmoid-calibrated confidence compresses the score range — raw scores preserve threshold-analysis information (e.g., how far above the gate a topic scored). `null` for pre-BM25 events, same convention as `machine_confidences`. |
+| `machine_scores` column in training DB | Raw BM25/LR scores alongside confidence | Sigmoid-calibrated confidence compresses the score range — raw scores preserve threshold-analysis information (e.g., how far above the gate a topic scored). `null` for pre-BM25 events, same convention as `machine_confidences`. |
 
 ### Classifier Evolution (§J)
 
 | Decision | Selected | Rationale |
 |----------|----------|-----------|
 | Phase 1: BM25 before ML | BM25 scoring ships without training data | Fixes most damaging problems immediately (substring matching, no term weighting); validates tokenizer and IDF code reused by Phase 2; buys time for labeled training data |
-| Phase 2: Complement Naive Bayes | CNB over logistic regression, embeddings, or fastText | Zero new dependencies (pure TypeScript); designed for class imbalance; calibrated with Platt scaling; interpretable per-term contributions; 12 positive examples viable via complement formulation |
+| Phase 2: L2-Regularized Logistic Regression | LR over CNB, embeddings, or fastText | Zero new dependencies (pure TypeScript SGD); class-balanced sample weights handle imbalance; per-topic threshold optimization replaces failed Platt scaling; interpretable per-term weights; chi-squared vocabulary selection. CNB was the original design but failed: complement distributions converged, Platt B values too high for rare topics. |
 | Not sentence embeddings | Rejected MiniLM/ONNX approach | ~60MB dependency footprint; poor interpretability (384-dim vectors); cosine similarity poorly calibrated; overkill for vocabulary-driven taxonomy |
-| Not fastText | Rejected native binding approach | Native addon portability issues; less maintained npm bindings; dependency weight unjustified vs pure-TS CNB |
+| Not fastText | Rejected native binding approach | Native addon portability issues; less maintained npm bindings; dependency weight unjustified vs pure-TS LR |
 | Not LLM triage | Rejected API-based classification | Violates offline operation constraint; poorly calibrated confidence; API dependency for core pipeline function |
-| Phased rollout | BM25 → CNB, not single-step ML | Training data doesn't exist yet; BM25 is a validated intermediate step; BM25 code (tokenizer, IDF) is reused by Phase 2's TF-IDF vectorizer |
+| Phased rollout | BM25 → LR, not single-step ML | Training data doesn't exist yet; BM25 is a validated intermediate step; BM25 code (tokenizer, IDF) is reused by Phase 2's TF-IDF vectorizer |
 | Ship Phases 1-2 with training data | Single deliverable | Phase 1 (BM25) is immediately useful with no training data dependency; Phase 2 code ships ready but model awaits labeling; avoids a second integration cycle for classifier work |
-| `intel classifier train` min 500 labeled events | `CNB_MIN_TRAINING_EVENTS = 500` | Below ~500 events, per-topic sample sizes are too small for reliable CNB training even with the complement formulation; 500 across 66 topics averages ~7.6 per topic, but the distribution is uneven — popular topics get enough, rare topics fall back to BM25 |
-| 20% validation holdout | `CNB_VALIDATION_SPLIT = 0.2` | Standard ML practice; 80/20 split balances training set size against validation reliability; validation set fits Platt calibration and reports per-topic metrics |
+| `intel classifier train` min 500 labeled events | `CLASSIFIER_MIN_TRAINING_EVENTS = 500` | Below ~500 events, per-topic sample sizes are too small for reliable LR training; 500 across 66 topics averages ~7.6 per topic, but the distribution is uneven — popular topics get enough, rare topics fall back to BM25 |
+| 20% validation holdout | `CLASSIFIER_VALIDATION_SPLIT = 0.2` | Standard ML practice; 80/20 split balances training set size against validation reliability; stratified split ensures rare topics have validation coverage; validation set used for threshold optimization and per-topic metrics |
 | Atomic model write | Write to temp file, then rename | Prevents partial model files from being accidentally loaded; same pattern as SQLite's WAL checkpoint |
 | No auto-load of trained model | Operator configures `classifier_model` config key or `--classifier-model` CLI flag | Silent classifier changes during collection would be surprising; explicit configuration ensures the operator reviews validation metrics before deploying. Stale model (>90 days) produces warning, not error. |
 | Drop `regex` from `topics.yaml` | Remove `regex` field from all 13 topics | BM25 word-boundary tokenization handles all 13 regex use cases (case-insensitive acronyms, multi-word phrases). The one structured pattern (CVE IDs) converts to a `"CVE"` keyword. Eliminates a code path (regex compilation, `(?i)` flag conversion) without loss of classification quality. |
@@ -1277,7 +1287,7 @@ No new runtime dependencies. BM25 scoring, TF-IDF vectorization, Complement Naiv
 
 ## J. Classifier Evolution Path
 
-> **Scope note**: Phases 1-2 are implementation scope, shipping alongside §A-F as a single deliverable. Phase 1 (BM25 scoring) takes effect immediately with no training data dependency — it replaces the keyword/regex classifier at ship time. Phase 2 (CNB training pipeline) code ships, but the trained model is produced only after sufficient labeling (≥500 events via §A-F). Phase 3 (Continuous Improvement Loop) is deferred to §K as future work.
+> **Scope note**: Phases 1-2 are implementation scope, shipping alongside §A-F as a single deliverable. Phase 1 (BM25 scoring) takes effect immediately with no training data dependency — it replaces the keyword/regex classifier at ship time. Phase 2 (LR training pipeline) code ships, but the trained model is produced only after sufficient labeling (≥500 events via §A-F). Phase 3 (Continuous Improvement Loop) is deferred to §K as future work.
 
 ### Current Classifier Problems
 
@@ -1304,15 +1314,15 @@ Replace substring keyword matching with tokenized BM25 scoring — the same algo
    - TF saturation (k1=1.2): diminishing returns for repeated terms
    - Document length normalization (b=0.75): penalizes long boilerplate-heavy content
    - IDF weighting: rare keywords score higher than common keywords
-   - Title boost (3x): keywords in the title carry 3x the weight of content keywords
+   - Title boost (2x): keywords in the title carry 2x the weight of content keywords
 
 2. **Negative keywords** — new `negative_keywords` field in `topics.yaml`
    - Per-topic terms that suppress classification regardless of positive score
    - Example: `macro.energy` negative: `["medieval", "manuscript", "metaphor", "figurative"]`
 
 3. **Minimum score threshold + escalating gate**
-   - Require BM25 score >= 4.0 to classify (eliminates single-incidental-keyword false positives)
-   - Escalating threshold for additional topics: 1st=4.0, 2nd=5.5, 3rd=7.0, 4th=8.5, 5th=10.0
+   - Require BM25 score >= 10.0 to classify (eliminates single-incidental-keyword false positives)
+   - Escalating threshold for additional topics: 1st=10.0, 2nd=14.0, 3rd=18.0, 4th=22.0, 5th=26.0
    - Directly targets the over-classification problem
 
 4. **Sigmoid-calibrated confidence**
@@ -1357,7 +1367,7 @@ function classify(event: EventRow, topicDefs: TopicDefExtended[], idf: Map<strin
   scored.sort((a, b) => b.score - a.score);
 
   // 4. Apply escalating threshold gate per rank position
-  //    1st topic: ≥4.0, 2nd: ≥5.5, 3rd: ≥7.0, 4th: ≥8.5, 5th: ≥10.0
+  //    1st topic: ≥10.0, 2nd: ≥14.0, 3rd: ≥18.0, 4th: ≥22.0, 5th: ≥26.0
   const result: TopicMatch[] = [];
   for (let i = 0; i < scored.length && i < BM25_THRESHOLDS.length; i++) {
     if (scored[i].score >= BM25_THRESHOLDS[i]) {
@@ -1396,54 +1406,62 @@ Key differences from the current `classify()`:
 - Reclassify is already an O(n) pass over the events table (spec 006, `intel db reclassify`). At 33K events × 66 topics, this completes in seconds.
 - The verification step for Phase 1 (§Verification) includes `intel collect --once && intel stats` — the `reclassify` step should be run first to establish a clean baseline: `intel db reclassify && intel stats`.
 
-### Phase 2: TF-IDF + Complement Naive Bayes (requires labeled training data)
+### Phase 2: TF-IDF + L2-Regularized Logistic Regression (requires labeled training data)
 
-Once §A-F produces labeled training data (minimum ~500 events, ideally 2,000+), train a proper probabilistic multi-label classifier.
+Once §A-F produces labeled training data (minimum ~500 events, ideally 2,000+), train a proper multi-label classifier.
 
-**Why Complement Naive Bayes (CNB):**
+**Why Logistic Regression (LR) over CNB:**
 
-| Criterion | CNB | Logistic Regression | Embeddings (MiniLM) | fastText |
+CNB (Complement Naive Bayes) was the original Phase 2 design but failed in practice due to extreme class imbalance. With 66 topics and ~3K training events, most topics have <100 positive examples. CNB's complement distributions converged, producing near-identical scores for all topics. Platt scaling B values were too high, making calibrated probability thresholds unreachable for rare topics. LR learns a decision boundary directly from positive examples with class-balanced sample weights (sklearn "balanced" formula), avoiding the convergence problem.
+
+| Criterion | LR | CNB | Embeddings (MiniLM) | fastText |
 |---|---|---|---|---|
-| TypeScript impl | Pure TS, ~200 lines | Needs optimizer (~1000 lines) or ONNX | ONNX Runtime (~60MB) | Native binding (~30MB) |
-| Class imbalance | Designed for it (learns from complement) | Requires explicit balancing | Good | Moderate |
-| Min training data | Low (12 positives viable via complement) | Moderate | Minimal (pretrained) | Moderate |
-| Calibration | Good with Platt scaling | Naturally calibrated | Poor (cosine != probability) | Poor |
-| Interpretability | High (per-term contributions) | High | Low (384-dim vectors) | Moderate |
-| Dependencies | Zero | Zero or ONNX | ~60MB ONNX + model | ~30MB native |
-
-CNB is specifically designed for imbalanced multi-label text classification. For rare topics like `data.governance` (~12 in a 10% sample), CNB still has ~2,988 negative examples to learn from via the complement formulation. It produces inspectable per-term contributions for debugging, and with Platt scaling produces calibrated probabilities for the Brier score loop. Implementable in pure TypeScript with zero new dependencies.
+| TypeScript impl | Pure TS, ~200 lines (SGD) | Pure TS, ~200 lines | ONNX Runtime (~60MB) | Native binding (~30MB) |
+| Class imbalance | Class-balanced weights | Designed for it but failed in practice | Good | Moderate |
+| Min training data | 20 positives (with balancing) | Low (12 positives via complement) | Minimal (pretrained) | Moderate |
+| Calibration | Per-topic threshold optimization | Failed (Platt B too high) | Poor (cosine != probability) | Poor |
+| Interpretability | High (per-term weights) | High (per-term contributions) | Low (384-dim vectors) | Moderate |
+| Dependencies | Zero | Zero | ~60MB ONNX + model | ~30MB native |
 
 **Architecture:**
 
 ```
-title + content → Tokenize → TF-IDF vector (10-20K vocab)
+title + content → Tokenize → chi-squared vocabulary (5K terms) → TF-IDF vector (L2 normalized)
                                     ↓
-                    66 independent CNB binary classifiers
+                    66 independent binary LR classifiers (SGD, L2 reg)
                                     ↓
-                         Platt sigmoid calibration
+                         Per-topic score_threshold gate (F1-optimized)
                                     ↓
-                      × topic_weight (Brier loop, spec 007 §J2)
-                                    ↓
-                    Threshold filter → Top-5 by score
+                    LR topics + BM25 fallback topics → merge → Top-5 by confidence
 ```
 
-**CNB threshold and topic selection:**
+**Training pipeline:**
 
-CNB outputs Platt-calibrated probabilities in (0, 1) — unlike BM25's raw scores, these are directly interpretable as classification confidence. The threshold filter works as follows:
+1. Load labeled events (≥500, `reviewed_at IS NOT NULL`).
+2. Tokenize all documents: `(title + ' ' + content).slice(0, 3000)`.
+3. **Stratified train/validation split** (80/20, seed 42): sort topics by rarity (fewest positive examples first), allocate at least one positive example per topic to the validation set, then fill remaining validation slots from unassigned indices. This ensures even rare topics have validation coverage.
+4. **Chi-squared vocabulary** from training docs only: for each term, compute the maximum chi-squared statistic across all topics (measuring term-topic discriminative power), select the top 5,000 terms. Chi-squared selects *discriminative* terms rather than merely *common* ones, making a large vocabulary unnecessary.
+5. Compute corpus IDF from training docs; vectorize with sub-linear TF and L2 normalization.
+6. For each topic with ≥`MIN_EXAMPLES` (20) positive training examples:
+   a. Train a binary LR classifier using SGD with L2 regularization and class-balanced sample weights.
+   b. Score the validation set with raw logits (`dot(w, x) + bias`).
+   c. **Find optimal threshold**: walk raw scores from highest to lowest, tracking precision/recall/F1 at each threshold. Select the threshold that maximizes F1 subject to `minPrecision` (0.10) — this prevents over-permissive thresholds on highly imbalanced data.
+   d. **Compute BM25 validation F1** for the same topic by running `matchesTopicBM25` on each validation document (with title boost).
+   e. **Compute `blend_alpha`**: `min(0.5, max(0.05, lr_val_f1 / (bm25_val_f1 + lr_val_f1 + 0.01)))` — LR influence is proportional to its relative strength vs BM25 for this topic.
+7. Topics with <20 positive examples are listed as `bm25_fallback` and excluded from the model's classifiers.
+8. Serialize model JSON (version 4) with vocabulary, IDF, per-topic classifiers, and training metadata.
 
-1. Each of the 66 CNB classifiers produces a calibrated probability. Multiply by `topic_weight` (Brier loop correction).
-2. Apply a fixed probability threshold: topics with calibrated probability < `CNB_PROBABILITY_THRESHOLD` (0.3) are discarded. This is intentionally lower than 0.5 because CNB with Platt scaling tends to produce conservative probabilities for rare topics — a 0.5 cutoff would suppress valid classifications for low-frequency topics.
-3. Sort remaining topics by calibrated probability descending.
-4. Take top 5.
+**Inference (classify with model loaded):**
 
-Phase 1's escalating thresholds are **not** applied to CNB — they exist to compensate for BM25's uncalibrated scores. Platt-calibrated probabilities are self-regulating: a topic that genuinely fits the event produces a high probability regardless of how many other topics also match. Over-classification is controlled by the probability threshold and the natural sparsity of well-calibrated CNB output (most topics score well below 0.3 for any given event).
+- **Path A (LR-primary)**: For topics with trained LR classifiers, compute raw logit from the L2-normalized TF-IDF vector. Gate by per-topic `score_threshold`. Apply negative keyword and context_required guards. Convert to confidence via sigmoid.
+- **Path B (BM25-fallback)**: For topics without LR classifiers, use BM25 with escalating thresholds (same as Phase 1).
+- **Merge**: Combine both paths, sort by confidence descending, take top 5.
 
-For topics that fall back to BM25 (insufficient training data), Phase 1's escalating thresholds still apply to those topics' scores. The two scoring methods are unified after thresholding: BM25 sigmoid confidence and CNB calibrated probability are both in (0, 1) and are directly comparable for the final top-5 sort.
+Phase 1's escalating thresholds are **not** applied to LR topics — they are replaced by per-topic `score_threshold` values optimized for F1 during training. For BM25-fallback topics, escalating thresholds still apply via the flat minimum gate (`BM25_THRESHOLDS[0]`).
 
 **Components:**
-- `src/collector/tfidf.ts` — TF-IDF vectorizer (sub-linear TF, L2 normalization, 10-20K vocabulary)
-- `src/collector/naive-bayes.ts` — Complement NB (66 binary classifiers, sparse log-theta vectors)
-- `src/collector/platt.ts` — Platt scaling (sigmoid calibration, 2 parameters per topic)
+- `src/collector/tfidf.ts` — TF-IDF vectorizer (sub-linear TF, L2 normalization, chi-squared vocabulary builder)
+- `src/collector/classifier.ts` — L2-regularized logistic regression (66 binary classifiers, SGD training, per-topic threshold optimization)
 - CLI command: `intel classifier train <training-db>` — offline training pipeline
 - Model file: single JSON (~500KB-2MB), versioned, loaded on startup
 
@@ -1451,7 +1469,7 @@ For topics that fall back to BM25 (insufficient training data), Phase 1's escala
 
 **Fallback strategy:** Topics with <20 training examples fall back to Phase 1 BM25 scoring. As training data grows, fewer topics use the fallback.
 
-**Integration with existing learning loop:** The Brier score feedback loop (spec 007, §J2) already updates `topic_weights`. Phase 2's calibrated probabilities feed more meaningful scores into this loop. The `topicWeight` multiplier is retained as an online correction factor that adjusts for classifier drift between retraining cycles.
+**Integration with existing learning loop:** The Brier score feedback loop (spec 007, §J2) already updates `topic_weights`. Phase 2's per-topic threshold optimization provides better classification quality. The `topicWeight` multiplier is retained as an online correction factor that adjusts for classifier drift between retraining cycles.
 
 **Dependency on training data:** Requires a completed (or partially completed) training set from §A-F with ≥500 labeled events.
 
@@ -1463,13 +1481,13 @@ Once the training pipeline is established:
 
 1. **Periodic retraining**: Retrain when training set grows by 500+ new labels via `intel classifier train`
 2. **Regression test suite**: High-confidence labels (≥0.95) from training data become CI fixtures (see §K.2)
-3. **Active learning sampling**: Bias next sampling round toward events where the classifier is uncertain (confidence 0.3-0.7) or disagrees between BM25 and CNB
+3. **Active learning sampling**: Bias next sampling round toward events where the classifier is uncertain (confidence 0.3-0.7) or disagrees between BM25 and LR
 4. **Confidence-weighted chains**: Chain detection (spec 007) weights co-occurrences by calibrated confidence rather than treating all classifications equally
 5. **Quarterly retraining aligned with spec 013 topic lifecycle reviews**: New topics, retired topics, and keyword changes trigger a retrain cycle
 
 ### Evaluation Matrix
 
-| Criterion | Current (Keyword) | Phase 1 (BM25) | Phase 2 (CNB) |
+| Criterion | Current (Keyword) | Phase 1 (BM25) | Phase 2 (LR) |
 |---|---|---|---|
 | Precision | Poor | Good | Very Good |
 | Recall | Good (broad) | Good | Very Good |
@@ -1477,8 +1495,8 @@ Once the training pipeline is established:
 | Dependencies | Zero | Zero | Zero |
 | Inference latency | <1ms | <1ms | <1ms |
 | Training data required | None | None | 500+ labels |
-| Interpretability | High | High | High |
-| Calibration quality | Poor | Moderate | Good (Platt) |
+| Interpretability | High | High | High (per-term weights) |
+| Calibration quality | Poor | Moderate | Good (per-topic threshold) |
 | Serializable model | N/A | ~50KB JSON | ~1MB JSON |
 
 ### Risks
@@ -1486,10 +1504,10 @@ Once the training pipeline is established:
 | Risk | Phase | Mitigation |
 |---|---|---|
 | BM25 threshold tuning is wrong | 1 | Use the existing Brier score loop to learn per-topic thresholds. Start conservative (higher threshold) and let the learning loop adjust. |
-| Insufficient training data for rare topics | 2 | CNB handles this via complement formulation. Topics with <20 examples fall back to BM25. |
+| Insufficient training data for rare topics | 2 | LR uses class-balanced sample weights to handle imbalance. Topics with <20 examples fall back to BM25. |
 | Vocabulary drift over 120-day retention | 2 | Retrain quarterly (aligned with spec 013). New vocabulary terms not in the trained model are still captured by the BM25 fallback. |
 | Model staleness | 2 | Version field in model JSON. `intel classifier train` produces latest version. Warn if model is older than 90 days. |
-| Two-classifier complexity (BM25 fallback + CNB primary) | 2 | Fallback is per-topic, triggered only when training data is insufficient. Converges to CNB-only as training data grows. |
+| Two-classifier complexity (BM25 fallback + LR primary) | 2 | Fallback is per-topic, triggered only when training data is insufficient. Converges to LR-only as training data grows. |
 
 ---
 
@@ -1497,7 +1515,7 @@ Once the training pipeline is established:
 
 1. **Precision/recall computation**: Now in-scope as the `intel training-set evaluate` command (§C). Once a training set is sufficiently labeled (≥10 events), the command computes per-topic precision/recall/F1, overall macro-averaged scores, over-classification rate, and confusion pairs.
 
-2. **Classifier regression tests**: Extract high-confidence labels from completed training sets into a fixed test suite that runs on CI. Prevents classifier regressions when keywords, BM25 thresholds, or CNB models are modified.
+2. **Classifier regression tests**: Extract high-confidence labels from completed training sets into a fixed test suite that runs on CI. Prevents classifier regressions when keywords, BM25 thresholds, or LR models are modified.
 
 3. **Active learning**: Use initial labeling results to identify topics with low precision and over-sample events from those topics in subsequent training sets. In Phase 3, bias sampling toward events where the classifier is uncertain (confidence 0.3-0.7).
 
@@ -1588,7 +1606,7 @@ intel events --topic macro.energy --since 24h --limit 10
 npx vitest run tests/topics.test.ts
 ```
 
-### Phase 2: CNB classifier (§J)
+### Phase 2: LR classifier (§J)
 
 ```bash
 # 1. Train the classifier on labeled training data
