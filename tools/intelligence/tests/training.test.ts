@@ -486,13 +486,12 @@ describe('getNextUnreviewed', () => {
   });
 
   it('returns empty array when all events are reviewed', () => {
-    // Label all events
-    const events = tdb
-      .prepare('SELECT event_id FROM training_events')
-      .all() as Array<{ event_id: string }>;
-    for (const e of events) {
-      updateTrainingLabel(tdb, e.event_id, { human_topics: [] });
-    }
+    // Mark all events as reviewed directly — avoids calling updateTrainingLabel
+    // 1000 times (each invocation loads topics from disk for validation), which
+    // exceeds the 10s test timeout on CI runners.
+    tdb.prepare(
+      `UPDATE training_events SET reviewed_at = datetime('now'), human_topics = '[]' WHERE reviewed_at IS NULL`,
+    ).run();
 
     const result = getNextUnreviewed(tdb, 1);
     if (result.status === 'ok') {
