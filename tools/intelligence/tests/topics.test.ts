@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -22,16 +22,21 @@ import { buildVocabulary, buildVocabularyChiSquared, computeCorpusIDF, vectorize
 import { fitPlatt, calibrate } from '../src/collector/platt.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const topicsPath = join(__dirname, '..', 'config', 'topics.yaml');
+const topicsPath = join(__dirname, 'fixtures', 'topics-test.yaml');
+const FIXTURE_TOPIC_COUNT = 66;
 
-beforeAll(() => {
+// Re-pin the fixture before every test. Some production code paths (e.g.
+// trainClassifier) call loadTopics() with no args and replace the in-memory
+// topic set with whatever DEFAULT_TOPICS_PATH points at, so a test running
+// later in the file would otherwise inherit production taxonomy.
+beforeEach(() => {
   loadTopics(topicsPath);
 });
 
 describe('loadTopics', () => {
   it('loads topics from YAML', () => {
     const topics = getLoadedTopics();
-    expect(topics.length).toBeGreaterThan(50);
+    expect(topics.length).toBe(FIXTURE_TOPIC_COUNT);
   });
 
   it('each topic has required fields', () => {

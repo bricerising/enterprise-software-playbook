@@ -719,7 +719,7 @@ db.command('rebuild-topic-index')
       const dbPath = getDbPath(config, program.opts().db);
       const writer = openWriter(dbPath);
       try {
-        const count = rebuildTopicIndex(writer);
+        const count = rebuildTopicIndex(writer, config.topics_file);
         output(ok({ status: 'completed', topic_rows: count }), program.opts().format ?? 'json');
       } finally {
         writer.close();
@@ -737,7 +737,7 @@ db.command('reclassify')
       const dbPath = getDbPath(config, program.opts().db);
       const writer = openWriter(dbPath);
       try {
-        const result = reclassifyTopics(writer);
+        const result = reclassifyTopics(writer, config.topics_file);
         output(ok({ status: 'completed', ...result }), program.opts().format ?? 'json');
       } finally {
         writer.close();
@@ -1067,8 +1067,9 @@ trainingSet
   .action((trainingDbPath, opts) => {
     try {
       const fmt = program.opts().format ?? 'json';
+      const config = getConfig(program.opts());
       if (opts.model) {
-        loadTopics();
+        loadTopics(config.topics_file);
         if (!loadStatModel(opts.model)) {
           output(error({
             code: 'INVALID_QUERY',
@@ -1085,6 +1086,7 @@ trainingSet
           minSamples: parseInt(opts.minSamples, 10),
           labeler: opts.labeler,
           reclassify: !!opts.model,
+          topicsPath: config.topics_file,
         });
         output(result, fmt);
       } finally {

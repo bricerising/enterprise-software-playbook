@@ -112,8 +112,8 @@ export function rebuildFts(db: Database.Database): void {
  *
  * Delegates to reclassifyTopics to ensure confidence is preserved.
  */
-export function rebuildTopicIndex(db: Database.Database, batchSize = 500): number {
-  const result = reclassifyTopics(db, batchSize);
+export function rebuildTopicIndex(db: Database.Database, topicsPath?: string, batchSize = 500): number {
+  const result = reclassifyTopics(db, topicsPath, batchSize);
   return result.topic_rows;
 }
 
@@ -121,8 +121,8 @@ export function rebuildTopicIndex(db: Database.Database, batchSize = 500): numbe
  * Reclassify all events through the current topic classifier.
  * Updates both events.topics JSON and event_topics table.
  */
-export function reclassifyTopics(db: Database.Database, batchSize = 500): { events_processed: number; topic_rows: number } {
-  loadTopics(undefined, db);
+export function reclassifyTopics(db: Database.Database, topicsPath?: string, batchSize = 500): { events_processed: number; topic_rows: number } {
+  loadTopics(topicsPath, db);
 
   // Load statistical model for ensemble scoring (same default path as collector)
   const defaultDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'intel');

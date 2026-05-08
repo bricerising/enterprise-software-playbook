@@ -1,0 +1,1171 @@
+# Decision-relevant topic definitions for intelligence classification
+# Taxonomy: Spec 013 — organized by SDLC decisions, not vendors
+#
+# Each topic has:
+#   keywords: terms that trigger classification (case-insensitive)
+#   priority: higher values win when multiple topics match (1-100)
+#   context_required: if true, short acronyms require surrounding context terms
+#
+# Priority bands (spec 013):
+#   70-80: Security events (immediate attention)
+#   55-65: AI developments (fast-moving)
+#   40-55: Architecture, data, market, regulation (moderate pace)
+#   35-45: Languages, compute (slower-moving)
+#   30-40: DevEx and operations
+
+topics:
+  # =========================================================================
+  # ai — AI & Machine Learning
+  # Decisions: AI integration, stack selection, build vs buy
+  # =========================================================================
+
+  - id: ai.foundation-models
+    label: Foundation Models
+    keywords:
+      - large language model
+      - llm
+      - foundation model
+      - openai
+      - chatgpt
+      - gpt-4
+      - gpt-5
+      - dall-e
+      - whisper
+      - anthropic
+      - claude
+      - sonnet
+      - opus
+      - haiku
+      - gemini
+      - google ai
+      - bard
+      - palm
+      - llama
+      - meta ai
+      - llama 3
+      - llama 4
+      - bedrock
+      - amazon bedrock
+      - diffusion model
+      - generative ai
+      - gen ai
+    priority: 60
+    context_required: true
+    context_terms: [llm, gpt, claude, gemini, llama, bedrock, anthropic, openai, foundation, generative]
+
+  - id: ai.coding-assistants
+    label: AI Coding Assistants
+    keywords:
+      - copilot
+      - cursor
+      - code generation
+      - ai coding
+      - code assistant
+      - windsurf
+      - cline
+      - aider
+    priority: 55
+    context_required: true
+    context_terms: [code, coding, programming, developer, ide, editor, copilot, cursor, autocomplete]
+
+  - id: ai.agents
+    label: AI Agents
+    keywords:
+      - ai agent
+      - autonomous agent
+      - agentic
+      - tool use
+      - function calling
+      - agent framework
+    priority: 60
+
+  - id: ai.rag
+    label: Retrieval Augmented Generation
+    keywords:
+      - retrieval augmented generation
+      - rag pipeline
+      - rag application
+    priority: 55
+    context_required: true
+    context_terms: [retrieval, generation, embedding, vector, context, augment]
+
+  - id: ai.inference
+    label: ML Inference
+    keywords:
+      - inference
+      - model serving
+      - quantization
+      - gguf
+      - vllm
+      - tgi
+      - ollama
+      - local inference
+      - edge inference
+    priority: 55
+    context_required: true
+    context_terms: [model, llm, ml, ai, neural, gpu, latency, serving, deployment, transformer]
+
+  - id: ai.training
+    label: ML Training & Fine-Tuning
+    keywords:
+      - fine-tuning
+      - fine tuning
+      - rlhf
+      - dpo
+      - training run
+      - pretraining
+      - sagemaker
+      - sage maker
+      - training data
+      - pre-training
+      - model training
+      - hyperparameter
+    priority: 55
+    context_required: true
+    context_terms: [fine-tuning, fine tuning, rlhf, dpo, pretrain, sagemaker, epoch, model, llm, neural, ml, ai, gpu, dataset, loss]
+
+  - id: ai.safety
+    label: AI Safety & Alignment
+    keywords:
+      - ai safety
+      - alignment
+      - red teaming
+      - jailbreak
+      - guardrails
+      - responsible ai
+    priority: 60
+    context_required: true
+    context_terms: [ai, llm, model, machine learning, language model, neural, chatbot, gpt, claude, artificial intelligence]
+
+  - id: ai.multimodal
+    label: Multimodal AI
+    keywords:
+      - multimodal
+      - stable diffusion
+      - midjourney
+      - image generation
+      - text to image
+      - text to video
+      - text to speech
+      - vision model
+      - computer vision
+      - object detection
+      - image classification
+      - image segmentation
+      - video understanding
+    priority: 55
+    context_required: true
+    context_terms: [neural, model, ai, ml, machine learning, deep learning, transformer, generation]
+
+  - id: ai.protocols
+    label: AI Protocols & Interop
+    keywords:
+      - model context protocol
+      - mcp server
+      - mcp tool
+      - a2a protocol
+      - agent protocol
+    priority: 55
+    context_required: true
+    context_terms: [model, context, protocol, tool, server, anthropic, agent]
+
+  # =========================================================================
+  # compute — Compute & Deployment
+  # Decisions: Stack selection, architecture evolution, operational model
+  # =========================================================================
+
+  - id: compute.serverless
+    label: Serverless & FaaS
+    keywords:
+      - serverless
+      - faas
+      - function as a service
+      - cloudflare workers
+      - vercel edge
+      - aws lambda
+      - lambda function
+      - wasm
+      - webassembly
+      - spin
+      - fermyon
+      - wasmcloud
+      - component model
+    priority: 40
+    context_required: true
+    context_terms: [aws, amazon, serverless, function, invoke, cold start, faas, edge, wasm, webassembly, component]
+
+  - id: compute.containers
+    label: Containers & Orchestration
+    keywords:
+      - kubernetes
+      - k8s
+      - kubectl
+      - helm
+      - kustomize
+      - docker
+      - container
+      - dockerfile
+      - docker compose
+      - podman
+      - amazon ecs
+      - elastic container service
+      - amazon eks
+      - elastic kubernetes
+      - fargate
+    priority: 45
+    context_required: true
+    context_terms: [aws, amazon, container, fargate, task, kubernetes, k8s, cluster, pod, docker, orchestrat]
+
+  - id: compute.iac
+    label: Infrastructure as Code
+    keywords:
+      - terraform
+      - hashicorp
+      - opentofu
+      - tofu
+      - hcl
+      - pulumi
+      - cloudformation
+      - cloud formation
+      - cfn
+      - aws cdk
+      - cloud development kit
+      - infrastructure as code
+    priority: 40
+    context_required: true
+    context_terms: [aws, amazon, construct, stack, infrastructure, terraform, iac, provision, opentofu, tofu]
+
+  - id: compute.edge
+    label: Edge Computing
+    keywords:
+      - edge computing
+      - edge function
+      - edge runtime
+      - edge network
+      - edge deployment
+      - edge node
+      - edge location
+      - edge worker
+      - durable objects
+      - iot gateway
+      - fog computing
+    priority: 35
+
+  - id: compute.gpu
+    label: GPU & Accelerators
+    keywords:
+      - gpu
+      - nvidia
+      - cuda
+      - h100
+      - a100
+      - b200
+      - tpu
+      - trainium
+      - inferentia
+    priority: 45
+
+  - id: compute.semiconductor
+    label: Semiconductors & Chips
+    keywords:
+      - semiconductor
+      - chip
+      - fab
+      - tsmc
+      - asml
+      - arm
+      - risc-v
+    priority: 40
+
+  - id: compute.cloud-platforms
+    label: Cloud Platforms
+    negative_keywords: [recipe, cookbook, bakery]
+    keywords:
+      - amazon web services
+      - amazon s3
+      - s3 bucket
+      - amazon ec2
+      - elastic compute
+      - cloud platform
+      - multi-cloud
+      - cloud migration
+      - azure
+      - gcp
+      - google cloud
+      - aws update
+      - aws release
+    priority: 35
+    context_required: true
+    context_terms: [aws, amazon, bucket, storage, object, instance, compute, cloud, azure, gcp]
+
+  - id: compute.networking
+    label: Cloud Networking
+    keywords:
+      - service mesh
+      - istio
+      - envoy
+      - api gateway
+      - load balancer
+      - cdn
+    priority: 35
+
+  # =========================================================================
+  # security — Security
+  # Decisions: Security posture, dependency governance
+  # =========================================================================
+
+  - id: security.vulnerabilities
+    label: Vulnerabilities & CVEs
+    keywords:
+      - vulnerability
+      - cve
+      - exploit
+      - zero-day
+      - 0day
+      - security advisory
+      - security update
+      - patch tuesday
+      - security bulletin
+      - security patch
+      - remote code execution
+      - denial of service
+      - buffer overflow
+      - use after free
+      - out of bounds
+    priority: 65
+    context_required: true
+    context_terms: [cve, vulnerability, exploit, security, patch, advisory, attack, zero-day, flaw, threat]
+
+  - id: security.supply-chain
+    label: Supply Chain Security
+    keywords:
+      - supply chain
+      - sbom
+      - dependency confusion
+      - typosquat
+      - malicious package
+    priority: 70
+
+  - id: security.appsec
+    label: Application Security
+    keywords:
+      - appsec
+      - owasp
+      - xss
+      - sql injection
+      - ssrf
+      - csrf
+      - authentication bypass
+    priority: 65
+
+  - id: security.cloud
+    label: Cloud Security
+    keywords:
+      - cloud security
+      - data breach
+      - iam vulnerability
+      - privilege escalation
+    priority: 60
+    context_required: true
+    context_terms: [cloud, aws, azure, gcp, iam, bucket, security, breach]
+
+  - id: security.cryptography
+    label: Cryptography
+    keywords:
+      - encryption
+      - tls
+      - certificate
+      - post-quantum
+      - pqc
+      - cryptography
+    priority: 55
+
+  - id: security.identity
+    label: Identity & Access
+    keywords:
+      - passkey
+      - fido
+      - oidc
+      - oauth
+      - sso
+      - single sign-on
+      - identity provider
+      - aws iam
+      - identity and access
+    priority: 55
+    context_required: true
+    context_terms: [aws, amazon, role, policy, permission, identity, auth, access, login]
+
+  # =========================================================================
+  # data — Data & Storage
+  # Decisions: Stack selection, architecture evolution
+  # =========================================================================
+
+  - id: data.relational
+    label: Relational Databases
+    keywords:
+      - postgresql
+      - postgres
+      - citus
+      - mysql
+      - amazon rds
+      - relational database service
+      - amazon aurora
+      - aurora serverless
+      - aurora dsql
+      - sqlite
+      - libsql
+      - turso
+      - litestream
+      - relational database
+    priority: 45
+    context_required: true
+    context_terms: [aws, amazon, database, postgres, mysql, aurora, sql, relational]
+
+  - id: data.document
+    label: Document & KV Stores
+    keywords:
+      - dynamodb
+      - dynamo db
+      - mongodb
+      - couchdb
+      - document database
+      - key-value store
+      - nosql
+    priority: 45
+
+  - id: data.streaming
+    label: Event Streaming
+    keywords:
+      - kafka
+      - pulsar
+      - eventbridge
+      - event bridge
+      - event streaming
+      - message queue
+      - rabbitmq
+      - nats
+      - kinesis
+      - event-driven
+      - pub/sub
+      - pubsub
+      - message broker
+      - queue
+      - async messaging
+    priority: 45
+
+  - id: data.analytics
+    label: Data Analytics & Warehousing
+    keywords:
+      - data pipeline
+      - etl
+      - elt
+      - data lake
+      - data warehouse
+      - dbt
+      - snowflake
+      - databricks
+      - lakehouse
+      - data engineering
+      - data observability
+      - data reliability
+      - data quality
+      - data monitoring
+      - monte carlo
+      - lineage
+    priority: 40
+
+  - id: data.vector
+    label: Vector & Embedding Stores
+    keywords:
+      - embedding
+      - vector database
+      - vector store
+      - pinecone
+      - weaviate
+      - chromadb
+      - pgvector
+      - qdrant
+      - milvus
+    priority: 50
+
+  - id: data.caching
+    label: Caching & In-Memory
+    keywords:
+      - redis
+      - valkey
+      - dragonfly
+      - keydb
+      - memcached
+      - in-memory cache
+    priority: 40
+
+  - id: data.governance
+    label: Data Governance
+    keywords:
+      - data governance
+      - data quality
+      - data lineage
+      - data catalog
+      - data mesh
+      - data contract
+    priority: 40
+
+  # =========================================================================
+  # devex — Developer Experience & Operations
+  # Decisions: Build vs buy, operational model
+  # =========================================================================
+
+  - id: devex.cicd
+    label: CI/CD & Deployment
+    keywords:
+      - ci/cd
+      - cicd
+      - github actions
+      - gitlab ci
+      - jenkins
+      - argo cd
+      - flux
+      - deployment pipeline
+      - xcode
+      - xcode release
+      - apple developer tools
+      - ios sdk
+      - macos sdk
+      - build pipeline
+      - build system
+      - circleci
+      - travis ci
+      - buildkite
+      - tekton
+    priority: 35
+
+  - id: devex.observability
+    label: Observability
+    keywords:
+      - observability
+      - opentelemetry
+      - otel
+      - datadog
+      - grafana
+      - prometheus
+      - tracing
+      - metrics
+      - monitoring
+      - alerting
+      - dashboards
+      - log management
+      - apm
+    priority: 40
+
+  - id: devex.platform
+    label: Platform Engineering
+    keywords:
+      - platform engineering
+      - internal developer platform
+      - idp
+      - developer experience
+      - backstage
+      - developer portal
+    priority: 40
+
+  - id: devex.testing
+    label: Testing & Quality
+    keywords:
+      - test framework
+      - mutation testing
+      - test generation
+      - test coverage
+      - property-based testing
+      - fuzzing
+      - unit test
+      - integration test
+      - tdd
+      - end-to-end test
+      - e2e test
+      - test pyramid
+    priority: 35
+    context_required: true
+    context_terms: [test, testing, tdd, qa, quality, assertion, mock, spec]
+
+  - id: devex.api
+    label: API Design & Protocols
+    keywords:
+      - graphql
+      - grpc
+      - openapi
+      - rest api
+      - api design
+      - api gateway
+      - api versioning
+      - protobuf
+    priority: 40
+
+  - id: devex.cost
+    label: Cloud Cost & FinOps
+    keywords:
+      - finops
+      - cloud cost
+      - cost optimization
+      - cloud spending
+      - reserved instances
+      - spot instances
+    priority: 35
+
+  # =========================================================================
+  # lang — Languages & Runtimes
+  # Decisions: Stack selection, dependency governance
+  # =========================================================================
+
+  - id: lang.typescript
+    label: TypeScript & JS Runtimes
+    keywords:
+      - typescript
+      - tsc
+      - type system
+      - node.js
+      - nodejs
+      - npm
+      - deno
+    priority: 35
+    context_required: true
+    context_terms: [typescript, javascript, node, runtime, compiler, frontend, web, react, package, npm, js, ecmascript]
+
+  - id: lang.rust
+    label: Rust
+    keywords:
+      - rust
+      - cargo
+      - rustc
+      - borrow checker
+    priority: 35
+    context_required: true
+    context_terms: [programming, language, cargo, crate, compile, memory]
+
+  - id: lang.python
+    label: Python
+    keywords:
+      - python
+      - pip
+      - pypi
+      - cpython
+      - pep
+      - uv
+    priority: 35
+    context_required: true
+    context_terms: [python, pip, pypi, cpython, pep, package, programming, language, import, module]
+
+  - id: lang.go
+    label: Go
+    keywords:
+      - golang
+      - go module
+      - go 1.
+      - go generics
+      - goroutine
+      - go compiler
+      - go runtime
+      - go release
+      - go package
+      - go concurrency
+      - gopher
+    priority: 35
+    context_required: true
+    context_terms: [golang, goroutine, gopher, go module, go generics, go concurrency]
+
+  - id: lang.java
+    label: Java & JVM
+    keywords:
+      - java
+      - jvm
+      - kotlin
+      - graalvm
+      - spring boot
+      - quarkus
+      - gradle
+      - maven
+    priority: 35
+    context_required: true
+    context_terms: [programming, language, jvm, spring, enterprise, backend, runtime, compile]
+
+  - id: lang.wasm
+    label: WebAssembly
+    keywords:
+      - webassembly
+      - wasm
+      - wasi
+      - component model
+    priority: 35
+    context_required: true
+    context_terms: [web, assembly, runtime, browser, component, module, portable]
+
+  # =========================================================================
+  # arch — Architecture Patterns
+  # Decisions: Architecture evolution
+  # =========================================================================
+
+  - id: arch.microservices
+    label: Microservices & Boundaries
+    keywords:
+      - microservices
+      - monolith
+      - modular monolith
+      - domain-driven
+      - bounded context
+      - service boundary
+    priority: 45
+
+  - id: arch.event-driven
+    label: Event-Driven Architecture
+    keywords:
+      - event-driven
+      - event sourcing
+      - cqrs
+      - saga
+      - choreography
+      - orchestration
+      - step functions
+      - stepfunctions
+      - state machine
+      - workflow engine
+    priority: 45
+    context_required: true
+    context_terms: [architecture, pattern, event, message, workflow, aws, amazon, orchestrat]
+
+  - id: arch.reliability
+    label: Reliability & SRE
+    keywords:
+      - sre
+      - site reliability
+      - incident
+      - postmortem
+      - slo
+      - sli
+      - error budget
+      - chaos engineering
+    priority: 40
+
+  - id: arch.frontend
+    label: Frontend Architecture
+    keywords:
+      - react
+      - reactjs
+      - next.js
+      - nextjs
+      - jsx
+      - tsx
+      - server components
+      - ssr
+      - static site
+      - svelte
+      - vue
+      - frontend architecture
+      - swiftui
+      - webkit
+    priority: 40
+
+  - id: arch.migration
+    label: Migration & Modernization
+    keywords:
+      - modernization
+      - replatforming
+      - monolith-to-microservices
+      - legacy migration
+      - cloud migration
+      - strangler fig
+      - evolutionary architecture
+      - legacy system
+      - system migration
+      - migration strategy
+      - migration pattern
+      - platform migration
+      - database migration
+      - application modernization
+      - re-architecture
+    priority: 40
+    context_required: true
+    context_terms: [migration, migrat, moderniz, replatform, strangler, legacy]
+
+  # =========================================================================
+  # regulation — Compliance & Regulation
+  # Decisions: Compliance & regulation
+  # =========================================================================
+
+  - id: regulation.ai
+    label: AI Regulation
+    keywords:
+      - ai regulation
+      - ai act
+      - executive order
+      - ai governance
+      - eu ai act
+    priority: 55
+
+  - id: regulation.privacy
+    label: Privacy & Data Protection
+    keywords:
+      - gdpr
+      - ccpa
+      - data protection
+      - privacy
+      - consent
+      - right to be forgotten
+    priority: 45
+
+  - id: regulation.antitrust
+    label: Antitrust & Competition
+    keywords:
+      - antitrust
+      - monopoly
+      - doj
+      - ftc
+      - competition
+      - market dominance
+    priority: 50
+
+  - id: regulation.standards
+    label: Industry Standards
+    keywords:
+      - soc2
+      - soc 2
+      - iso 27001
+      - compliance automation
+      - fedramp
+      - hipaa
+      - pci dss
+      - nist 800
+      - fisma
+      - cmmc
+      - stateramp
+      - authority to operate
+      - compliance framework
+    priority: 45
+
+  # =========================================================================
+  # market — Market & Business Intelligence
+  # Decisions: Market position, build vs buy
+  # =========================================================================
+
+  - id: market.funding
+    label: Startup Funding
+    keywords:
+      - series a
+      - series b
+      - series c
+      - seed round
+      - funding round
+      - raised
+      - valuation
+    priority: 45
+
+  - id: market.acquisition
+    label: M&A Activity
+    keywords:
+      - acquisition
+      - merger
+      - acqui-hire
+      - acquired by
+      - buys
+    priority: 55
+
+  - id: market.earnings
+    label: Earnings & Revenue
+    keywords:
+      - earnings
+      - revenue
+      - quarterly results
+      - financial results
+      - cloud revenue
+      - aws revenue
+      - azure revenue
+      - gcp revenue
+      - cloud growth
+      - cloud segment
+      - sec filing
+      - 10-k
+      - 10-q
+      - 8-k
+      - annual report
+      - quarterly report
+      - raised guidance
+      - lowered guidance
+      - forward guidance
+      - full-year outlook
+      - earnings per share
+      - revenue growth
+      - operating profit
+      - profit margin
+      - operating income
+      - net income
+      - beat estimates
+      - missed estimates
+      - gross margin
+      - ebitda
+      - free cash flow
+    priority: 45
+    context_required: true
+    context_terms: [earnings, revenue, quarterly, financial, 10-k, 10-q, 8-k, guidance, profit, margin, income, ebitda]
+
+  - id: market.talent
+    label: Talent & Workforce
+    keywords:
+      - hiring
+      - talent
+      - workforce
+      - layoff
+      - laid off
+      - workforce reduction
+      - rif
+      - restructuring
+      - developer survey
+    priority: 50
+
+  - id: market.licensing
+    label: Open Source Licensing
+    keywords:
+      - open source license
+      - bsl
+      - sspl
+      - relicense
+      - source-available
+      - copyleft
+      - open source initiative
+      - open source definition
+      - software license
+      - open source governance
+      - license change
+      - licensing model
+    priority: 50
+    context_required: true
+    context_terms: [license, licensing, relicense, open source, copyleft, source-available]
+
+  - id: market.investment
+    label: Technology Investment
+    keywords:
+      - ai spending
+      - ai investment
+      - ai capex
+      - data center spending
+      - data center capex
+      - ai revenue
+      - technology investment
+      - capex
+    priority: 50
+
+  - id: market.ipo
+    label: IPOs & Public Markets
+    keywords:
+      - ipo
+      - initial public offering
+      - direct listing
+      - spac
+    priority: 50
+    context_required: true
+    context_terms: [ipo, offering, listing, exchange, nasdaq, nyse, prospectus]
+
+  # =========================================================================
+  # macro — Macroeconomic & Geopolitical Environment
+  # Decisions: Supply chain risk, cost planning, dependency governance
+  # =========================================================================
+
+  - id: macro.energy
+    label: Energy & Oil Markets
+    negative_keywords: [medieval, manuscript, metaphor, figurative]
+    keywords:
+      - oil price
+      - oil prices
+      - crude oil
+      - brent crude
+      - energy price
+      - energy prices
+      - energy cost
+      - energy costs
+      - natural gas price
+      - gasfield
+      - petroleum
+      - opec
+      - energy crisis
+      - energy market
+      - oil market
+      - fuel price
+      - energy transition
+      - refinery
+      - strait of hormuz
+      - oil exports
+      - oil drilling
+      - oil futures
+      - oil production
+      - barrel
+      - petrodollar
+      - eia
+      - energy information administration
+      - crude inventory
+      - lng
+    priority: 50
+    context_required: true
+    context_terms: [oil, crude, opec, petroleum, barrel, refinery, lng, energy market, energy crisis, natural gas, fuel]
+
+  - id: macro.geopolitics
+    label: Geopolitical Conflicts & Trade
+    keywords:
+      - sanctions
+      - tariff
+      - tariffs
+      - trade war
+      - embargo
+      - geopolitical
+      - military conflict
+      - missile
+      - invasion
+      - ceasefire
+      - peace deal
+      - export controls
+      - export ban
+      - trade restriction
+      - trade agreement
+      - trade deficit
+      - trade surplus
+      - trade representative
+      - foreign policy
+      - diplomacy
+      - defense spending
+    priority: 50
+    context_required: true
+    context_terms: [iran, china, russia, ukraine, israel, taiwan, trade, military, conflict, sanctions, tariff, geopolit, attack, strikes, troops, nato, army, navy]
+
+  - id: macro.commodities
+    label: Commodities & Raw Materials
+    keywords:
+      - commodity prices
+      - rare earth
+      - rare earths
+      - helium supply
+      - helium shortage
+      - neon gas
+      - neon supply
+      - lithium supply
+      - cobalt supply
+      - supply shortage
+      - supply disruption
+      - chip shortage
+      - semiconductor shortage
+      - mineral supply
+      - critical minerals
+      - commodity market
+      - raw materials shortage
+    priority: 45
+
+  - id: macro.monetary-policy
+    label: Monetary Policy & Central Banks
+    keywords:
+      - federal reserve
+      - interest rate
+      - rate hike
+      - rate cut
+      - fomc
+      - monetary policy
+      - quantitative easing
+      - quantitative tightening
+      - inflation
+      - cpi
+      - consumer price index
+      - yield curve
+      - treasury
+      - bond market
+      - central bank
+      - bank of england
+      - bank of japan
+    priority: 50
+
+  # =========================================================================
+  # New market topics
+  # =========================================================================
+
+  - id: market.payments
+    label: Payments & Fintech
+    keywords:
+      - payment processing
+      - fintech
+      - digital payments
+      - point of sale
+      - merchant services
+      - card network
+      - interchange
+      - payment gateway
+      - buy now pay later
+      - bnpl
+      - digital wallet
+      - neobank
+      - open banking
+      - payment rails
+      - real-time payments
+      - cross-border payments
+      - payment processor
+    priority: 45
+    context_required: true
+    context_terms: [payment, fintech, merchant, checkout, transaction, card, stripe, paypal]
+
+  - id: market.crypto
+    label: Cryptocurrency & Blockchain
+    keywords:
+      - cryptocurrency
+      - bitcoin
+      - ethereum
+      - blockchain
+      - defi
+      - decentralized finance
+      - smart contract
+      - web3
+      - nft
+      - consensus mechanism
+    priority: 45
+    context_required: true
+    context_terms: [crypto, bitcoin, ethereum, blockchain, defi, web3, nft, cryptocurrency]
+
+  # =========================================================================
+  # New AI topic
+  # =========================================================================
+
+  - id: ai.research
+    label: AI Research
+    keywords:
+      - arxiv
+      - pre-print
+      - preprint
+      - research paper
+      - conference paper
+      - peer review
+      - reinforcement learning
+      - natural language processing
+      - nlp
+      - robotics
+      - autonomous
+      - robot
+    priority: 50
+    context_required: true
+    context_terms: [ai, ml, machine learning, deep learning, neural, model, algorithm, training, inference, benchmark, dataset]
+
+  # =========================================================================
+  # New DevEx topic
+  # =========================================================================
+
+  - id: devex.methodology
+    label: Software Methodology
+    keywords:
+      - agile
+      - extreme programming
+      - continuous delivery
+      - continuous integration
+      - devops
+      - lean
+      - kanban
+      - retrospective
+      - pair programming
+      - mob programming
+      - trunk-based
+      - feature flag
+      - feature toggle
+      - team topology
+      - thoughtworks
+      - technology radar
+    priority: 35

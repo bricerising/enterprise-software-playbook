@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+
+const __testDir = dirname(fileURLToPath(import.meta.url));
+const FIXTURE_TOPICS_PATH = join(__testDir, 'fixtures', 'topics-test.yaml');
+const FIXTURE_TOPIC_COUNT = 66;
 import Database from 'better-sqlite3';
 import { openWriter } from '../src/db.js';
 import {
@@ -703,7 +708,7 @@ describe('evaluateTrainingSet', () => {
 
     labelEvents(tdb, machine, human);
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 5 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 5, topicsPath: FIXTURE_TOPICS_PATH });
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
       const aiSafety = result.data.per_topic.find((t) => t.topic === 'ai.safety');
@@ -738,7 +743,7 @@ describe('evaluateTrainingSet', () => {
 
     labelEvents(tdb, machine, human);
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 1 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 1, topicsPath: FIXTURE_TOPICS_PATH });
     if (result.status === 'ok') {
       expect(result.data.overall.over_classification_rate).toBeCloseTo(0.25, 2); // 5/20
       expect(result.data.overall.false_over_classification_rate).toBeCloseTo(0.25, 2); // 5/20
@@ -760,7 +765,7 @@ describe('evaluateTrainingSet', () => {
 
     labelEvents(tdb, machine, human);
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 30 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 30, topicsPath: FIXTURE_TOPICS_PATH });
     if (result.status === 'ok') {
       const insufficient = result.data.insufficient_data.find((t) => t.topic === 'data.governance');
       expect(insufficient).toBeDefined();
@@ -789,7 +794,7 @@ describe('evaluateTrainingSet', () => {
 
     labelEvents(tdb, machine, human);
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 1 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 1, topicsPath: FIXTURE_TOPICS_PATH });
     if (result.status === 'ok') {
       // Check confusion pairs contain FP for ai.safety and FN for ai.rag
       const fpSafety = result.data.confusion_pairs.find(
@@ -817,7 +822,7 @@ describe('evaluateTrainingSet', () => {
       updateTrainingLabel(tdb, e.event_id, { human_topics: ['ai.safety'] });
     }
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 1 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 1, topicsPath: FIXTURE_TOPICS_PATH });
     expect(result.status).toBe('error');
   });
 
@@ -837,11 +842,11 @@ describe('evaluateTrainingSet', () => {
 
     labelEvents(tdb, machine, human);
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 1 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 1, topicsPath: FIXTURE_TOPICS_PATH });
     if (result.status === 'ok') {
       // symmetric_diff = 2 per event × 10 events = 20
-      // hamming_loss = 20 / (10 × 66) ≈ 0.0303
-      expect(result.data.overall.hamming_loss).toBeCloseTo(20 / (10 * 66), 3);
+      // hamming_loss = 20 / (10 × FIXTURE_TOPIC_COUNT)
+      expect(result.data.overall.hamming_loss).toBeCloseTo(20 / (10 * FIXTURE_TOPIC_COUNT), 3);
     }
   });
 
@@ -872,7 +877,7 @@ describe('evaluateTrainingSet', () => {
       });
     }
 
-    const haikuResult = evaluateTrainingSet(tdb, { minSamples: 1, labeler: 'haiku' });
+    const haikuResult = evaluateTrainingSet(tdb, { minSamples: 1, labeler: 'haiku', topicsPath: FIXTURE_TOPICS_PATH });
     if (haikuResult.status === 'ok') {
       expect(haikuResult.data.evaluated_events).toBe(10);
     }
@@ -893,7 +898,7 @@ describe('evaluateTrainingSet', () => {
       updateTrainingLabel(tdb, e.event_id, { human_topics: ['ai.safety'] });
     }
 
-    const result = evaluateTrainingSet(tdb, { minSamples: 1 });
+    const result = evaluateTrainingSet(tdb, { minSamples: 1, topicsPath: FIXTURE_TOPICS_PATH });
     // Should still work — null confidences don't affect precision/recall
     expect(result.status).toBe('ok');
   });
