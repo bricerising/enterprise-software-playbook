@@ -719,7 +719,7 @@ db.command('rebuild-topic-index')
       const dbPath = getDbPath(config, program.opts().db);
       const writer = openWriter(dbPath);
       try {
-        const count = rebuildTopicIndex(writer);
+        const count = rebuildTopicIndex(writer, config.topics_file);
         output(ok({ status: 'completed', topic_rows: count }), program.opts().format ?? 'json');
       } finally {
         writer.close();

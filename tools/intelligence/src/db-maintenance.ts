@@ -112,8 +112,8 @@ export function rebuildFts(db: Database.Database): void {
  *
  * Delegates to reclassifyTopics to ensure confidence is preserved.
  */
-export function rebuildTopicIndex(db: Database.Database, batchSize = 500): number {
-  const result = reclassifyTopics(db, undefined, batchSize);
+export function rebuildTopicIndex(db: Database.Database, topicsPath?: string, batchSize = 500): number {
+  const result = reclassifyTopics(db, topicsPath, batchSize);
   return result.topic_rows;
 }
 
