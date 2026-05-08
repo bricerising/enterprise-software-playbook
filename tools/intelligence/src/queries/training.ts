@@ -107,6 +107,8 @@ export interface EvaluationOpts {
   labeler?: string;
   /** When true, re-run classify() on title/content instead of reading stored machine_topics. */
   reclassify?: boolean;
+  /** Override topics.yaml path (used by tests to pin a fixture). */
+  topicsPath?: string;
 }
 
 export interface EvaluationResult {
@@ -903,7 +905,7 @@ export function evaluateTrainingSet(
   }
 
   // Get all topic IDs for Hamming loss
-  const allTopics = loadTopics();
+  const allTopics = loadTopics(opts.topicsPath);
   const totalTopics = allTopics.length || 66;
 
   // Per-topic counters
