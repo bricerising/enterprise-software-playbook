@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 from typer.testing import CliRunner
 
+import archobs.display as display_module
 from archobs.cli import app
 from archobs.display import (
     format_all,
@@ -203,6 +204,27 @@ def test_read_file_metrics_ok(tmp_path: Path):
     df = read_file_metrics(tmp_path)
     assert len(df) == 5
     assert "risk" in df.columns
+
+
+def test_read_file_metrics_warns_for_incomplete_manifest(tmp_path: Path, capsys):
+    display_module._WARNED_MANIFEST_ROOTS.clear()
+    _make_file_metrics(tmp_path)
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "completed_stages": ["inventory", "git"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    df = read_file_metrics(tmp_path)
+    captured = capsys.readouterr()
+
+    assert len(df) == 5
+    assert "incomplete or mixed-generation" in captured.err
+    assert "inventory, git" in captured.err
 
 
 def test_read_cluster_metrics_ok(tmp_path: Path):
@@ -798,6 +820,15 @@ def _make_team_artifacts(tmp_path: Path) -> None:
     concentration_df.to_parquet(tmp_path / "concentration.parquet", index=False)
 
 
+def _make_empty_team_artifacts(tmp_path: Path) -> None:
+    pd.DataFrame(
+        columns=["cluster_id", "bus_factor", "top_author", "top_author_pct"]
+    ).to_parquet(tmp_path / "bus_factor.parquet", index=False)
+    pd.DataFrame(
+        columns=["cluster_id", "hhi", "author_count"]
+    ).to_parquet(tmp_path / "concentration.parquet", index=False)
+
+
 def test_format_team_table(tmp_path: Path):
     _make_team_artifacts(tmp_path)
     _make_cluster_metrics(tmp_path)
@@ -822,6 +853,26 @@ def test_format_team_json(tmp_path: Path):
     assert "bus_factor" in records[0]
 
 
+def test_format_team_empty_json_is_valid_array(tmp_path: Path):
+    _make_empty_team_artifacts(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    from archobs.display import read_bus_factor, read_concentration
+
+    text = format_team(read_bus_factor(tmp_path), read_concentration(tmp_path), cm, fmt="json")
+
+    assert json.loads(text) == []
+
+
+def test_format_team_empty_table_keeps_explanation(tmp_path: Path):
+    _make_empty_team_artifacts(tmp_path)
+    cm = _make_cluster_metrics(tmp_path)
+    from archobs.display import read_bus_factor, read_concentration
+
+    text = format_team(read_bus_factor(tmp_path), read_concentration(tmp_path), cm, fmt="table")
+
+    assert "No team metrics available" in text
+
+
 def test_format_team_csv(tmp_path: Path):
     _make_team_artifacts(tmp_path)
     _make_cluster_metrics(tmp_path)
@@ -841,3 +892,13 @@ def test_cli_show_team(tmp_path: Path):
     assert result.exit_code == 0
     records = json.loads(result.stdout)
     assert len(records) >= 1
+
+
+def test_cli_show_team_empty_json(tmp_path: Path):
+    _make_empty_team_artifacts(tmp_path)
+    _make_cluster_metrics(tmp_path)
+
+    result = runner.invoke(app, ["show", "team", "--out", str(tmp_path), "--format", "json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []

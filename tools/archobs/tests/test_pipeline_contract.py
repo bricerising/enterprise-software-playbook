@@ -17,9 +17,11 @@ from archobs.pipeline import (
     ReportResult,
     RunConfigOverrides,
     _compute_drift,
+    _persist_team_metric_artifacts,
     check_dependencies,
     load_suggestions,
     prepare_config,
+    run_report,
 )
 from archobs.storage import ArtifactStore, write_json, write_parquet
 
@@ -42,6 +44,8 @@ def test_prepare_config_applies_overrides(tmp_path: Path) -> None:
             algo="greedy-modularity",
             resolution=1.5,
             suggestions_provider="rules",
+            codanna_index_timeout_seconds=111,
+            codanna_search_timeout_seconds=22,
             codex_timeout_seconds=12,
             claude_timeout_seconds=34,
         ),
@@ -55,12 +59,101 @@ def test_prepare_config_applies_overrides(tmp_path: Path) -> None:
     assert config.graph.tau_sem == 0.25
     assert config.clustering.algorithm == "greedy-modularity"
     assert config.clustering.resolution == 1.5
+    assert config.graph.codanna_index_timeout_seconds == 111
+    assert config.graph.codanna_search_timeout_seconds == 22
     assert config.reporting.suggestions_provider == "rules"
     assert config.reporting.codex_timeout_seconds == 12
     assert config.reporting.claude_timeout_seconds == 34
     assert persisted.embedding.provider == "hashing"
     assert persisted.graph.k_sem == 8
+    assert persisted.graph.codanna_index_timeout_seconds == 111
+    assert persisted.graph.codanna_search_timeout_seconds == 22
     assert persisted.reporting.claude_timeout_seconds == 34
+
+
+def test_run_report_writes_completed_manifest(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    out = tmp_path / ".archobs"
+    messages: list[str] = []
+
+    def fake_report(self: AnalysisRun) -> ReportResult:
+        self._start_stage("inventory")
+        self._finish_stage("inventory")
+        return ReportResult(
+            summary={"report_index": "report/index.html"},
+            file_metrics=pd.DataFrame([{"path": "a.py", "risk": 0.1}]),
+            cluster_metrics=pd.DataFrame([{"cluster_id": 0, "leakage": 0.0}]),
+            drift_df=pd.DataFrame(columns=["window_end_ts", "cluster_count", "modularity", "ari_prev", "algorithm_used"]),
+        )
+
+    monkeypatch.setattr(AnalysisRun, "report", fake_report)
+    result = run_report(repo, out, default_config(), progress=messages.append)
+
+    manifest = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))
+    assert result.summary["report_index"] == "report/index.html"
+    assert messages == ["inventory started", "inventory completed"]
+    assert manifest["status"] == "complete"
+    assert manifest["completed_stages"] == ["inventory"]
+    assert manifest["repo"] == str(repo)
+    assert len(manifest["run_id"]) == 32
+    assert len(manifest["config_hash"]) == 64
+
+
+def test_run_report_marks_manifest_failed(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    out = tmp_path / ".archobs"
+
+    def fake_report(self: AnalysisRun) -> ReportResult:
+        self._finish_stage("inventory")
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(AnalysisRun, "report", fake_report)
+    try:
+        run_report(repo, out, default_config())
+        assert False, "Expected RuntimeError"
+    except RuntimeError:
+        pass
+
+    manifest = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    assert manifest["completed_stages"] == ["inventory"]
+    assert "RuntimeError: boom" in manifest["error"]
+
+
+def test_analysis_run_records_semantic_fallback_provenance(tmp_path: Path) -> None:
+    class FakeEmbeddingMeta:
+        provider_requested = "auto"
+
+        def to_dict(self) -> dict[str, object]:
+            return {"provider_requested": "auto", "provider_used": "codanna"}
+
+    class FakeEmbedding:
+        provider_used = "codanna"
+        meta = FakeEmbeddingMeta()
+
+    class FakeEdges:
+        semantic_meta = {
+            "semantic_provider_requested": "auto",
+            "semantic_provider": "hashing",
+            "semantic_fallback_reason": "codanna search timed out",
+        }
+
+    run = AnalysisRun(repo=None, store=ArtifactStore(tmp_path), config=default_config())
+    enriched = run._record_semantic_provenance(
+        pd.DataFrame([{"path": "a.py"}]),
+        FakeEmbedding(),
+        FakeEdges(),
+    )
+
+    manifest = json.loads((tmp_path / "embedding_run.json").read_text(encoding="utf-8"))
+    files_df = pd.read_parquet(tmp_path / "files.parquet")
+    assert enriched["semantic_provider"].tolist() == ["hashing"]
+    assert files_df["semantic_fallback_reason"].tolist() == ["codanna search timed out"]
+    assert manifest["provider_used"] == "codanna"
+    assert manifest["semantic_provider"] == "hashing"
+    assert manifest["semantic_fallback_reason"] == "codanna search timed out"
 
 
 def test_check_dependencies_returns_warnings(monkeypatch) -> None:
@@ -137,10 +230,66 @@ def test_load_suggestions_reads_stored_json(tmp_path: Path) -> None:
     assert "## Suggestion 1/1: Separate concerns" in blocks[0]
 
 
+def test_load_suggestions_blocks_stale_manifest(tmp_path: Path) -> None:
+    (tmp_path / "suggestions.json").write_text(
+        json.dumps(
+            {
+                "engine": "rules",
+                "error": None,
+                "items": [
+                    {
+                        "priority": "High",
+                        "title": "Old guidance",
+                        "why": "Stale",
+                        "change": "Do not emit",
+                        "scope": "src/",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"status": "stale", "stale_reason": "targeted command: cluster"}),
+        encoding="utf-8",
+    )
+
+    blocks, error = load_suggestions(tmp_path, limit=0)
+
+    assert blocks == []
+    assert error is not None
+    assert "targeted command: cluster" in error
+
+
 def test_load_suggestions_returns_empty_when_missing(tmp_path: Path) -> None:
     blocks, error = load_suggestions(tmp_path, limit=0)
     assert blocks == []
     assert error is not None
+
+
+def test_team_artifacts_overwrite_stale_outputs_with_empty_frames(tmp_path: Path) -> None:
+    pd.DataFrame([{"cluster_id": 1, "author": "old", "commit_count": 3, "file_count": 1, "pct_of_cluster": 1.0}]).to_parquet(
+        tmp_path / "author_stats.parquet",
+        index=False,
+    )
+    pd.DataFrame([{"cluster_id": 1, "bus_factor": 1, "top_author": "old", "top_author_pct": 1.0}]).to_parquet(
+        tmp_path / "bus_factor.parquet",
+        index=False,
+    )
+    pd.DataFrame([{"cluster_id": 1, "hhi": 1.0, "author_count": 1}]).to_parquet(
+        tmp_path / "concentration.parquet",
+        index=False,
+    )
+
+    _persist_team_metric_artifacts(
+        pd.DataFrame([{"commit_sha": "abc", "commit_ts": 1, "status": "M", "path": "a.py"}]),
+        pd.DataFrame([{"path": "a.py", "cluster_id": 0}]),
+        tmp_path,
+    )
+
+    assert pd.read_parquet(tmp_path / "author_stats.parquet").empty
+    assert pd.read_parquet(tmp_path / "bus_factor.parquet").empty
+    assert pd.read_parquet(tmp_path / "concentration.parquet").empty
 
 
 def test_compute_drift_uses_available_history_when_fixed_windows_are_too_wide() -> None:

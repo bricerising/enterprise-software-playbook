@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from archobs.storage import parquet_path
+from archobs.storage import parquet_path, run_manifest_issue
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +38,18 @@ def evaluate_fitness(
     violations: list[dict[str, Any]] = []
     by_category: dict[str, int] = {}
     warnings: list[str] = []
+
+    manifest_issue = run_manifest_issue(out)
+    if manifest_issue is not None:
+        warnings.append(manifest_issue)
+        violations.append({
+            "category": "artifact_consistency",
+            "entity": str(out),
+            "metric": "run_manifest",
+            "value": "invalid",
+            "threshold": "complete",
+        })
+        by_category["artifact_consistency"] = 1
 
     # --- File risk ---
     file_metrics_path = parquet_path(out, "file_metrics")
@@ -124,29 +136,35 @@ def evaluate_fitness(
     if bus_factor_path.exists():
         bus_factor_df = pd.read_parquet(bus_factor_path)
 
-        # Join with cluster_metrics for size filter
-        if "size" in cluster_metrics_df.columns:
-            bus_with_size = bus_factor_df.merge(
-                cluster_metrics_df[["cluster_id", "size"]],
-                on="cluster_id",
-                how="left",
+        if bus_factor_df.empty:
+            warnings.append(
+                "bus_factor.parquet is empty — bus factor check skipped. "
+                "The current report has no author data to evaluate."
             )
-            bus_filtered = bus_with_size[
-                bus_with_size["size"].fillna(0) >= t.min_cluster_size
-            ]
         else:
-            bus_filtered = bus_factor_df
+            # Join with cluster_metrics for size filter
+            if "size" in cluster_metrics_df.columns:
+                bus_with_size = bus_factor_df.merge(
+                    cluster_metrics_df[["cluster_id", "size"]],
+                    on="cluster_id",
+                    how="left",
+                )
+                bus_filtered = bus_with_size[
+                    bus_with_size["size"].fillna(0) >= t.min_cluster_size
+                ]
+            else:
+                bus_filtered = bus_factor_df
 
-        low_bus = bus_filtered[bus_filtered["bus_factor"] < t.min_bus_factor]
-        for _, row in low_bus.iterrows():
-            violations.append({
-                "category": "bus_factor",
-                "entity": f"cluster:{row['cluster_id']}",
-                "metric": "bus_factor",
-                "value": int(row["bus_factor"]),
-                "threshold": t.min_bus_factor,
-            })
-        by_category["bus_factor"] = len(low_bus)
+            low_bus = bus_filtered[bus_filtered["bus_factor"] < t.min_bus_factor]
+            for _, row in low_bus.iterrows():
+                violations.append({
+                    "category": "bus_factor",
+                    "entity": f"cluster:{row['cluster_id']}",
+                    "metric": "bus_factor",
+                    "value": int(row["bus_factor"]),
+                    "threshold": t.min_bus_factor,
+                })
+            by_category["bus_factor"] = len(low_bus)
     else:
         warnings.append(
             "bus_factor.parquet not found — bus factor check skipped. "

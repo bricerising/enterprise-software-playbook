@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 import json
 from pathlib import Path
+import time
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -42,9 +44,20 @@ def report_dir(base: str | Path) -> Path:
     return ensure_dir(Path(base) / "report")
 
 
+def _atomic_temp_path(target: Path) -> Path:
+    return target.with_name(f".{target.name}.{uuid4().hex}.tmp")
+
+
 def write_parquet(df: pd.DataFrame, base: str | Path, name: str) -> Path:
     target = parquet_path(base, name)
-    df.to_parquet(target, compression="snappy", index=False)
+    tmp = _atomic_temp_path(target)
+    try:
+        with tmp.open("wb") as handle:
+            df.to_parquet(handle, compression="snappy", index=False)
+        tmp.replace(target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
     return target
 
 
@@ -53,14 +66,64 @@ def read_parquet(base: str | Path, name: str) -> pd.DataFrame:
 
 
 def write_json(data: Any, base: str | Path, name: str) -> Path:
-    target = json_path(base, name)
+    return write_json_path(data, json_path(base, name))
+
+
+def write_json_path(data: Any, path: str | Path) -> Path:
+    target = Path(path)
+    ensure_dir(target.parent)
     serializable = asdict(data) if is_dataclass(data) else data
-    target.write_text(json.dumps(serializable, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp = _atomic_temp_path(target)
+    try:
+        tmp.write_text(json.dumps(serializable, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.replace(target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
     return target
 
 
 def read_json(base: str | Path, name: str) -> Any:
     return json.loads(json_path(base, name).read_text(encoding="utf-8"))
+
+
+def run_manifest_issue(base: str | Path) -> str | None:
+    root = Path(base)
+    if root.name == "report" and json_path(root.parent, "run_manifest").exists():
+        root = root.parent
+    path = json_path(root, "run_manifest")
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return f"{path} could not be parsed. Artifacts may be incomplete or mixed-generation."
+    if not isinstance(payload, dict):
+        return f"{path} is not a JSON object. Artifacts may be incomplete or mixed-generation."
+    status = payload.get("status")
+    if status == "complete":
+        return None
+    stages = payload.get("completed_stages")
+    stage_text = ", ".join(str(stage) for stage in stages) if isinstance(stages, list) else "unknown"
+    reason = payload.get("stale_reason") or payload.get("error")
+    detail = f" Reason: {reason}." if reason else ""
+    return (
+        f"{path} status is {status!r}. Artifacts may be incomplete or mixed-generation."
+        f"{detail} Completed stages: {stage_text}."
+    )
+
+
+def write_npy(array: np.ndarray, base: str | Path, name: str) -> Path:
+    target = npy_path(base, name)
+    tmp = _atomic_temp_path(target)
+    try:
+        with tmp.open("wb") as handle:
+            np.save(handle, array)
+        tmp.replace(target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return target
 
 
 class ArtifactStore:
@@ -95,11 +158,30 @@ class ArtifactStore:
         return read_json(self._base, name)
 
     def put_array(self, name: str, array: np.ndarray) -> None:
-        np.save(npy_path(self._base, name), array)
+        write_npy(array, self._base, name)
 
     def get_array(self, name: str) -> np.ndarray | None:
         path = npy_path(self._base, name)
         return np.load(path) if path.exists() else None
+
+    def invalidate_run_manifest(self, reason: str) -> None:
+        path = json_path(self._base, "run_manifest")
+        manifest: dict[str, Any] = {}
+        if path.exists():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                manifest = payload if isinstance(payload, dict) else {}
+            except json.JSONDecodeError:
+                manifest = {}
+        manifest.setdefault("completed_stages", [])
+        manifest.update(
+            {
+                "status": "stale",
+                "stale_reason": reason,
+                "updated_at": int(time.time()),
+            }
+        )
+        write_json(manifest, self._base, "run_manifest")
 
     def save_inventory(self, files_df: pd.DataFrame) -> None:
         self.put_df("files", files_df)

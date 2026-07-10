@@ -47,7 +47,10 @@ def _make_bus_factor(tmp_path: Path, factors: list[dict] | None = None) -> None:
             {"cluster_id": 0, "bus_factor": 3, "top_author": "Alice", "top_author_pct": 0.4},
             {"cluster_id": 1, "bus_factor": 2, "top_author": "Bob", "top_author_pct": 0.5},
         ]
-    df = pd.DataFrame(factors)
+    df = pd.DataFrame(
+        factors,
+        columns=["cluster_id", "bus_factor", "top_author", "top_author_pct"],
+    )
     df.to_parquet(tmp_path / "bus_factor.parquet", index=False)
 
 
@@ -117,6 +120,20 @@ class TestEvaluateFitness:
         assert "warnings" in result
         assert any("bus_factor" in w for w in result["warnings"])
 
+    def test_bus_factor_empty_is_reported_as_skipped(self, tmp_path: Path) -> None:
+        _make_file_metrics(tmp_path)
+        _make_cluster_metrics(tmp_path)
+        _make_bus_factor(tmp_path, [])
+
+        result = evaluate_fitness(tmp_path)
+
+        assert result["pass"] is True
+        assert "bus_factor" not in result["by_category"]
+        assert any(
+            "bus_factor.parquet is empty" in warning and "check skipped" in warning
+            for warning in result["warnings"]
+        )
+
     def test_min_cluster_size_filtering(self, tmp_path: Path) -> None:
         _make_file_metrics(tmp_path)
         # Cluster 0 has size 1 (below default min_cluster_size=2), cluster 1 has size 5
@@ -156,6 +173,20 @@ class TestEvaluateFitness:
         with pytest.raises(FileNotFoundError):
             evaluate_fitness(tmp_path)
 
+    def test_stale_manifest_fails_closed(self, tmp_path: Path) -> None:
+        _make_file_metrics(tmp_path, [0.3, 0.5])
+        _make_cluster_metrics(tmp_path)
+        (tmp_path / "run_manifest.json").write_text(
+            json.dumps({"status": "stale", "stale_reason": "targeted command: embed"}),
+            encoding="utf-8",
+        )
+
+        result = evaluate_fitness(tmp_path)
+
+        assert result["pass"] is False
+        assert result["by_category"]["artifact_consistency"] == 1
+        assert "targeted command: embed" in result["warnings"][0]
+
 
 class TestCheckCli:
     def test_passing_exit_code(self, tmp_path: Path) -> None:
@@ -182,9 +213,35 @@ class TestCheckCli:
         parsed = json.loads(result.stdout)
         assert parsed["pass"] is True
 
+    def test_ci_fails_closed_for_stale_manifest(self, tmp_path: Path) -> None:
+        _make_file_metrics(tmp_path, [0.3])
+        _make_cluster_metrics(tmp_path)
+        (tmp_path / "run_manifest.json").write_text(
+            json.dumps({"status": "stale", "stale_reason": "targeted command: build-graph"}),
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(app, ["check", "--out", str(tmp_path), "--ci"])
+
+        assert result.exit_code == 1
+        parsed = json.loads(result.stdout)
+        assert parsed["pass"] is False
+        assert parsed["by_category"]["artifact_consistency"] == 1
+
     def test_table_output(self, tmp_path: Path) -> None:
         _make_file_metrics(tmp_path, [0.3])
         _make_cluster_metrics(tmp_path)
         result = runner.invoke(app, ["check", "--out", str(tmp_path), "--format", "table"])
         assert result.exit_code == 0
         assert "PASS" in result.stdout
+
+    def test_table_output_warns_when_bus_factor_is_empty(self, tmp_path: Path) -> None:
+        _make_file_metrics(tmp_path, [0.3])
+        _make_cluster_metrics(tmp_path)
+        _make_bus_factor(tmp_path, [])
+
+        result = runner.invoke(app, ["check", "--out", str(tmp_path), "--format", "table"])
+
+        assert result.exit_code == 0
+        assert "bus_factor.parquet is empty" in result.stdout
+        assert "check skipped" in result.stdout

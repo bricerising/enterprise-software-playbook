@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 
+from archobs.config import ArchobsConfig
 from archobs.pipeline import (
     AnalysisRun,
     RunConfigOverrides,
@@ -62,6 +63,8 @@ def _load_and_override(
     algo: str | None = None,
     resolution: float | None = None,
     suggestions_provider: str | None = None,
+    codanna_index_timeout_seconds: int | None = None,
+    codanna_search_timeout_seconds: int | None = None,
     codex_timeout_seconds: int | None = None,
     claude_timeout_seconds: int | None = None,
 ) -> tuple:
@@ -74,10 +77,18 @@ def _load_and_override(
         algo=algo,
         resolution=resolution,
         suggestions_provider=suggestions_provider,
+        codanna_index_timeout_seconds=codanna_index_timeout_seconds,
+        codanna_search_timeout_seconds=codanna_search_timeout_seconds,
         codex_timeout_seconds=codex_timeout_seconds,
         claude_timeout_seconds=claude_timeout_seconds,
     )
     return prepare_config(repo, out, config, overrides)
+
+
+def _targeted_analysis_run(repo: Path, out: Path, loaded_config: ArchobsConfig, command: str) -> AnalysisRun:
+    store = ArtifactStore(out)
+    store.invalidate_run_manifest(f"targeted command: {command}")
+    return AnalysisRun(repo=repo, store=store, config=loaded_config)
 
 
 @app.command()
@@ -98,7 +109,7 @@ def extract_inventory(
     config: Path | None = typer.Option(None, resolve_path=True),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "extract inventory")
     files_df = run.inventory()
     typer.echo(f"Wrote inventory for {len(files_df)} files to {out}")
 
@@ -110,7 +121,7 @@ def extract_git(
     config: Path | None = typer.Option(None, resolve_path=True),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "extract git")
     git_result = run.git()
     typer.echo(f"Wrote {git_result.commit_file_row_count} commit-file rows to {out}")
 
@@ -122,7 +133,7 @@ def extract_deps(
     config: Path | None = typer.Option(None, resolve_path=True),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "extract deps")
     deps_result = run.deps()
     typer.echo(
         f"Wrote {deps_result.resolved_import_count} resolved imports and {deps_result.unresolved_import_count} unresolved imports to {out}"
@@ -139,7 +150,7 @@ def embed(
     dimensions: int = typer.Option(256),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config, provider=provider, model=model, dimensions=dimensions)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "embed")
     embedding_result = run.embed()
     typer.echo(
         f"Wrote {embedding_result.vector_count} embeddings using provider={embedding_result.provider_used}"
@@ -155,7 +166,7 @@ def build_graph_command(
     tau_sem: float = typer.Option(0.35),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config, k_sem=k_sem, tau_sem=tau_sem)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "build-graph")
     edge_result = run.build_graph()
     typer.echo(f"Wrote fused graph with {edge_result.edge_count} edges to {out}")
 
@@ -169,7 +180,7 @@ def cluster(
     resolution: float = typer.Option(1.0),
 ) -> None:
     loaded, _ = _load_and_override(repo, out, config, algo=algo, resolution=resolution)
-    run = AnalysisRun(repo=repo, store=ArtifactStore(out), config=loaded)
+    run = _targeted_analysis_run(repo, out, loaded, "cluster")
     cluster_result = run.cluster()
     typer.echo(f"Wrote {cluster_result.cluster_count} clusters using {cluster_result.algorithm_used}")
 
@@ -187,6 +198,8 @@ def report(
     algo: str = typer.Option("auto"),
     resolution: float = typer.Option(1.0),
     suggestions_provider: str | None = typer.Option(None),
+    codanna_index_timeout_seconds: int | None = typer.Option(None),
+    codanna_search_timeout_seconds: int | None = typer.Option(None),
     codex_timeout_seconds: int | None = typer.Option(None),
     claude_timeout_seconds: int | None = typer.Option(None),
 ) -> None:
@@ -202,10 +215,15 @@ def report(
         algo=algo,
         resolution=resolution,
         suggestions_provider=suggestions_provider,
+        codanna_index_timeout_seconds=codanna_index_timeout_seconds,
+        codanna_search_timeout_seconds=codanna_search_timeout_seconds,
         codex_timeout_seconds=codex_timeout_seconds,
         claude_timeout_seconds=claude_timeout_seconds,
     )
-    report_result = run_report(repo, out, loaded)
+    def report_progress(message: str) -> None:
+        typer.echo(f"[archobs] {message}", err=True)
+
+    report_result = run_report(repo, out, loaded, progress=report_progress)
     summary = report_result.summary
     typer.echo(f"Report: {summary['report_index']}")
     typer.echo(f"Clusters: {summary['cluster_count']}  Edges: {summary['edge_count']}  Embeddings: {summary['embedding_provider']}")

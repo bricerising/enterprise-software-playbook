@@ -40,10 +40,9 @@ def _report_dir(base: str | Path) -> Path:
 
 
 def _write_json(data: dict, base: str | Path, name: str) -> Path:
-    target = Path(base) / f"{name}.json"
-    _ensure_dir(target.parent)
-    target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return target
+    from archobs.storage import write_json_path
+
+    return write_json_path(data, Path(base) / f"{name}.json")
 
 
 # ---------------------------------------------------------------------------
@@ -435,10 +434,10 @@ def write_report_html(
 
 
 def write_summary_json(summary: dict[str, object], out_dir: str | Path) -> Path:
+    from archobs.storage import write_json_path
+
     report_root = _report_dir(out_dir)
-    target = report_root / "summary.json"
-    target.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return target
+    return write_json_path(summary, report_root / "summary.json")
 
 
 def render_prepared_report(

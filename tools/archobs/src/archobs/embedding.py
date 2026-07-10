@@ -23,6 +23,7 @@ __all__ = [
     "codanna_available",
     "codanna_dependency_warning",
     "default_embedding_provider",
+    "build_hashing_embeddings",
     "embedding_graph_embeddings",
     "embedding_provider_used",
     "embedding_vector_count",
@@ -131,10 +132,10 @@ def enrich_files_with_embeddings(files_df: pd.DataFrame, embedding: EmbeddingRes
 def persist_embedding_artifacts(embedding: EmbeddingResult, out: str | Path) -> None:
     """Persist embedding artifacts through the published result contract."""
 
-    from archobs.storage import npy_path, write_json, write_parquet
+    from archobs.storage import write_json, write_npy, write_parquet
 
     write_parquet(embedding.vector_meta, out, "embedding_metadata")
-    np.save(npy_path(out, "embeddings"), embedding_graph_embeddings(embedding))
+    write_npy(embedding_graph_embeddings(embedding), out, "embeddings")
     write_json(embedding.meta.to_dict(), out, "embedding_run")
 
 
@@ -156,6 +157,12 @@ def _hashing_embeddings(texts: list[str], dimensions: int) -> np.ndarray:
             sign = 1.0 if digest[4] % 2 == 0 else -1.0
             matrix[row_idx, index] += sign
     return _normalize_rows(matrix)
+
+
+def build_hashing_embeddings(texts: list[str], dimensions: int) -> np.ndarray:
+    """Build deterministic local embeddings for fallback semantic graph edges."""
+
+    return _hashing_embeddings(texts, dimensions)
 
 
 def codanna_available() -> bool:

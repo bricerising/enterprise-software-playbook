@@ -16,6 +16,7 @@ Add author/team analysis to archobs that:
 2. Computes per-cluster author distribution, bus factor, and knowledge concentration (HHI)
 3. Exposes results via `archobs show team` with table/json/csv output
 4. Produces Parquet artifacts that the fitness check (spec 018) can consume
+5. Represents unavailable team history without implying that bus-factor analysis ran successfully
 
 ## Non-Goals
 
@@ -59,17 +60,18 @@ This is an additive change — existing consumers reference columns by name, not
 
 ### Pipeline Integration
 
-In `AnalysisRun.report()`, after `_enrich_cluster_commit_counts`:
+In `AnalysisRun.report()`, after `_enrich_cluster_commit_counts`, always persist current-generation frames:
 
 ```python
-if "author" in commit_files_df.columns:
-    author_stats_df = compute_author_stats(commit_files_df, file_metrics_df)
-    bus_factor_df = compute_bus_factor(author_stats_df)
-    concentration_df = compute_knowledge_concentration(author_stats_df)
-    write_parquet(author_stats_df, store.base_path, "author_stats")
-    write_parquet(bus_factor_df, store.base_path, "bus_factor")
-    write_parquet(concentration_df, store.base_path, "concentration")
+author_stats_df = compute_author_stats(commit_files_df, file_metrics_df)
+bus_factor_df = compute_bus_factor(author_stats_df)
+concentration_df = compute_knowledge_concentration(author_stats_df)
+write_parquet(author_stats_df, store.base_path, "author_stats")
+write_parquet(bus_factor_df, store.base_path, "bus_factor")
+write_parquet(concentration_df, store.base_path, "concentration")
 ```
+
+Writing schema-correct empty frames clears prior-generation team data. Consumers MUST treat empty team frames as unavailable analysis rather than as a measured zero-risk result.
 
 ## Interface
 
@@ -78,6 +80,10 @@ if "author" in commit_files_df.columns:
 ```
 archobs show team [--sort bus_factor|concentration|size] [--min-size 2] [--format json|table|csv]
 ```
+
+When team analysis is unavailable, table output returns an explanatory no-data message and JSON output returns the valid empty collection `[]`.
+
+**Acceptance scenario**: Given a completed report with no author-bearing commit data, when a consumer runs `archobs show team --format json`, then the command exits successfully with `[]` and never emits a non-JSON explanatory string on stdout.
 
 ### Parquet Artifacts
 
@@ -110,6 +116,8 @@ archobs show team [--sort bus_factor|concentration|size] [--min-size 2] [--forma
 - Pipeline produces author_stats.parquet
 - show team table/json/csv formats
 - show team CLI integration
+- Empty team artifacts replace prior-generation values
+- Empty team JSON output is `[]`, not plain text
 
 ## Risks
 
@@ -117,7 +125,7 @@ archobs show team [--sort bus_factor|concentration|size] [--min-size 2] [--forma
 |---|---|
 | Author name variants (John vs john vs John D.) | Out of scope — note as limitation; future identity resolution |
 | Large repos with many authors | Parquet is efficient; no in-memory scaling concern |
-| Backward compat with existing artifacts | `if "author" in df.columns` guard everywhere |
+| Backward compat with existing artifacts | Persist current schema even when source author data is absent; consumers recognize empty artifacts as unavailable |
 
 ## Verification
 
