@@ -56,6 +56,8 @@ Success looks like: numbered risk hotspots, measured boundary leakage, and prior
 
 > **GATE**: Do not proceed to step 4 until the `archobs report` command has finished. Steps 4-9 depend on the artifacts it produces. If the command was run in background, wait for completion — do not read stale or missing artifacts.
 
+The completed run must leave `.archobs/run_manifest.json` with `status: "complete"`. A full report marks any prior HTML report stale while it is running and keeps it visibly stale if the run fails. A targeted stage marks the workspace stale, visibly marks any existing HTML report, and causes `archobs show` result commands to fail until a full report restores a complete generation.
+
 4. **Read results** — use `archobs show` to extract metrics (no ad-hoc Python or Parquet libraries needed).
 
    All `show` subcommands read from Parquet artifacts independently — **run them in parallel** when calling from an agent. This avoids sequential round-trips and is 5-6x faster.

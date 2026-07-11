@@ -26,6 +26,14 @@ from archobs.pipeline import (
 from archobs.storage import ArtifactStore, write_json, write_parquet
 
 
+_STATIC_REPORT_HTML = """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>old report</title></head>
+<body><main>Old successful analysis</main></body>
+</html>
+"""
+
+
 def test_prepare_config_applies_overrides(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -104,6 +112,10 @@ def test_run_report_marks_manifest_failed(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     out = tmp_path / ".archobs"
+    report = out / "report"
+    report.mkdir(parents=True)
+    for name in ("index.html", "graph.html"):
+        (report / name).write_text(_STATIC_REPORT_HTML, encoding="utf-8")
 
     def fake_report(self: AnalysisRun) -> ReportResult:
         self._finish_stage("inventory")
@@ -120,6 +132,41 @@ def test_run_report_marks_manifest_failed(tmp_path: Path, monkeypatch) -> None:
     assert manifest["status"] == "failed"
     assert manifest["completed_stages"] == ["inventory"]
     assert "RuntimeError: boom" in manifest["error"]
+    for name in ("index.html", "graph.html"):
+        document = (out / "report" / name).read_text(encoding="utf-8")
+        assert "Analysis is stale." in document
+        assert "full report failed: RuntimeError: boom" in document
+        assert document.count('id="archobs-stale-report"') == 1
+
+
+def test_run_report_marks_existing_static_reports_stale_while_running(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    out = tmp_path / ".archobs"
+    report = out / "report"
+    report.mkdir(parents=True)
+    for name in ("index.html", "graph.html"):
+        (report / name).write_text(_STATIC_REPORT_HTML, encoding="utf-8")
+
+    def fake_report(self: AnalysisRun) -> ReportResult:
+        for name in ("index.html", "graph.html"):
+            document = (out / "report" / name).read_text(encoding="utf-8")
+            assert "Analysis is stale." in document
+            assert "full report running" in document
+        return ReportResult(
+            summary={"report_index": "report/index.html"},
+            file_metrics=pd.DataFrame([{"path": "a.py", "risk": 0.1}]),
+            cluster_metrics=pd.DataFrame([{"cluster_id": 0, "leakage": 0.0}]),
+            drift_df=pd.DataFrame(
+                columns=["window_end_ts", "cluster_count", "modularity", "ari_prev", "algorithm_used"]
+            ),
+        )
+
+    monkeypatch.setattr(AnalysisRun, "report", fake_report)
+    run_report(repo, out, default_config())
+
+    manifest = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "complete"
 
 
 def test_analysis_run_records_semantic_fallback_provenance(tmp_path: Path) -> None:

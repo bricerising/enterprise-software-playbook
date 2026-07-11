@@ -897,6 +897,7 @@ def run_report(
         write_manifest("running")
 
     write_manifest("running")
+    store.mark_static_reports_stale("full report running")
     run = AnalysisRun(
         repo=repo,
         store=store,
@@ -907,7 +908,9 @@ def run_report(
     try:
         result = run.report()
     except Exception as exc:
-        write_manifest("failed", error=f"{type(exc).__name__}: {exc}")
+        error = f"{type(exc).__name__}: {exc}"
+        write_manifest("failed", error=error)
+        store.mark_static_reports_stale(f"full report failed: {error}")
         raise
     write_manifest("complete")
     return result

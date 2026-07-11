@@ -8,7 +8,6 @@ from pathlib import Path
 import pandas as pd
 from typer.testing import CliRunner
 
-import archobs.display as display_module
 from archobs.cli import app
 from archobs.display import (
     format_all,
@@ -206,8 +205,7 @@ def test_read_file_metrics_ok(tmp_path: Path):
     assert "risk" in df.columns
 
 
-def test_read_file_metrics_warns_for_incomplete_manifest(tmp_path: Path, capsys):
-    display_module._WARNED_MANIFEST_ROOTS.clear()
+def test_read_file_metrics_rejects_incomplete_manifest(tmp_path: Path, capsys):
     _make_file_metrics(tmp_path)
     (tmp_path / "run_manifest.json").write_text(
         json.dumps(
@@ -219,12 +217,16 @@ def test_read_file_metrics_warns_for_incomplete_manifest(tmp_path: Path, capsys)
         encoding="utf-8",
     )
 
-    df = read_file_metrics(tmp_path)
+    try:
+        read_file_metrics(tmp_path)
+        assert False, "Expected SystemExit"
+    except SystemExit as exc:
+        assert exc.code == 1
     captured = capsys.readouterr()
 
-    assert len(df) == 5
     assert "incomplete or mixed-generation" in captured.err
     assert "inventory, git" in captured.err
+    assert "Run `archobs report`" in captured.err
 
 
 def test_read_cluster_metrics_ok(tmp_path: Path):

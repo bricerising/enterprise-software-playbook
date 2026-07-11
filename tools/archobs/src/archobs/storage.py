@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
+import html
 import json
 from pathlib import Path
+import re
 import time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -113,6 +115,91 @@ def run_manifest_issue(base: str | Path) -> str | None:
     )
 
 
+_STALE_REPORT_STYLE_ID = "archobs-stale-report-style"
+_STALE_REPORT_START = "<!-- archobs-stale-report:start -->"
+_STALE_REPORT_END = "<!-- archobs-stale-report:end -->"
+
+
+def _stale_report_banner(reason: str) -> str:
+    escaped_reason = html.escape(reason, quote=True)
+    return (
+        f"{_STALE_REPORT_START}\n"
+        '<aside id="archobs-stale-report" role="alert" aria-live="assertive">\n'
+        "  <strong>Analysis is stale.</strong> This workspace changed or a report run did not complete "
+        "after this report was generated. Run <code>archobs report</code> before using these results. "
+        f"Reason: {escaped_reason}\n"
+        "</aside>\n"
+        f"{_STALE_REPORT_END}"
+    )
+
+
+def _with_stale_report_banner(document: str, reason: str) -> str:
+    """Add or replace the visible stale marker in an existing static report."""
+    start = document.find(_STALE_REPORT_START)
+    if start >= 0:
+        end = document.find(_STALE_REPORT_END, start)
+        if end < 0:
+            raise ValueError("report contains an unterminated archobs stale marker")
+        document = document[:start] + document[end + len(_STALE_REPORT_END):]
+
+    if _STALE_REPORT_STYLE_ID not in document:
+        head_end = re.search(r"</head\s*>", document, flags=re.IGNORECASE)
+        if head_end is None:
+            raise ValueError("report does not contain a closing </head> tag")
+        style = f"""
+<style id="{_STALE_REPORT_STYLE_ID}">
+  #archobs-stale-report {{
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    margin: 0;
+    padding: 0.9rem 1.25rem;
+    border-bottom: 2px solid #991b1b;
+    background: #fef2f2;
+    color: #7f1d1d;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.45;
+    text-align: center;
+  }}
+  #archobs-stale-report code {{
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+    background: rgba(153, 27, 27, 0.12);
+  }}
+</style>
+"""
+        document = document[:head_end.start()] + style + document[head_end.start():]
+
+    body_start = re.search(r"<body\b[^>]*>", document, flags=re.IGNORECASE)
+    if body_start is None:
+        raise ValueError("report does not contain an opening <body> tag")
+    return document[:body_start.end()] + "\n" + _stale_report_banner(reason) + document[body_start.end():]
+
+
+def _write_text_atomic(text: str, target: Path) -> None:
+    tmp = _atomic_temp_path(target)
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def _mark_static_reports_stale(base: Path, reason: str) -> None:
+    report_root = base / "report"
+    for name in ("index.html", "graph.html"):
+        target = report_root / name
+        if not target.exists():
+            continue
+        try:
+            document = target.read_text(encoding="utf-8")
+            _write_text_atomic(_with_stale_report_banner(document, reason), target)
+        except (OSError, UnicodeError, ValueError):
+            # The manifest is the freshness source of truth; static report banners are best-effort.
+            continue
+
+
 def write_npy(array: np.ndarray, base: str | Path, name: str) -> Path:
     target = npy_path(base, name)
     tmp = _atomic_temp_path(target)
@@ -182,6 +269,10 @@ class ArtifactStore:
             }
         )
         write_json(manifest, self._base, "run_manifest")
+        self.mark_static_reports_stale(reason)
+
+    def mark_static_reports_stale(self, reason: str) -> None:
+        _mark_static_reports_stale(self._base, reason)
 
     def save_inventory(self, files_df: pd.DataFrame) -> None:
         self.put_df("files", files_df)
