@@ -97,6 +97,12 @@ archobs schema cluster_metrics
 
 The HTML report is also available at `.archobs/report/index.html`.
 
+### Artifact freshness
+
+A full `archobs report` writes `.archobs/run_manifest.json` with `"status": "complete"`. While a full report is running, any prior `report/index.html` and `report/graph.html` are visibly marked stale; if the run fails before replacement HTML is rendered, the failed run reason remains visible in those pages. Targeted commands such as `extract inventory` and `build-graph` mark the manifest stale because they can leave the workspace with mixed-generation artifacts, and they add the same stale-data alert to existing static reports.
+
+`archobs show` result commands fail rather than emit data while an existing manifest is stale, running, failed, or malformed. Automation that reads Parquet files directly must make the same `status == "complete"` check as part of its freshness guard; rerun `archobs report` to restore a usable generation.
+
 ### Run individual stages
 
 You can run each stage separately if you want to inspect intermediate artifacts:
@@ -110,7 +116,7 @@ archobs build-graph --repo .          # fused graph
 archobs cluster --repo .              # subsystem clustering
 ```
 
-Each stage writes Parquet files to `.archobs/` that downstream stages consume.
+Each stage writes Parquet files to `.archobs/` that downstream stages consume, but marks the workspace stale until a subsequent full report completes. Do not treat the prior HTML report or `show` output as current after a targeted stage.
 
 ## Key options
 
@@ -129,6 +135,7 @@ After running `archobs report`, the `.archobs/` directory contains:
 
 ```
 .archobs/
+  run_manifest.json            # trust state; complete only after a full report
   config.json                 # your configuration
   files.parquet               # file inventory
   commits.parquet             # git co-change data

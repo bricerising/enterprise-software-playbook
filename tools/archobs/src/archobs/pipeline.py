@@ -7,9 +7,15 @@ leaf computation modules directly.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from hashlib import sha256
+import json
 from pathlib import Path
 import shutil
+import subprocess
+import time
+from uuid import uuid4
 
 import pandas as pd
 
@@ -34,6 +40,8 @@ class RunConfigOverrides:
     algo: str | None = None
     resolution: float | None = None
     suggestions_provider: str | None = None
+    codanna_index_timeout_seconds: int | None = None
+    codanna_search_timeout_seconds: int | None = None
     codex_timeout_seconds: int | None = None
     claude_timeout_seconds: int | None = None
 
@@ -112,6 +120,10 @@ def _apply_overrides(config: ArchobsConfig, overrides: RunConfigOverrides | None
         config.clustering.resolution = overrides.resolution
     if overrides.suggestions_provider is not None:
         config.reporting.suggestions_provider = overrides.suggestions_provider
+    if overrides.codanna_index_timeout_seconds is not None:
+        config.graph.codanna_index_timeout_seconds = overrides.codanna_index_timeout_seconds
+    if overrides.codanna_search_timeout_seconds is not None:
+        config.graph.codanna_search_timeout_seconds = overrides.codanna_search_timeout_seconds
     if overrides.codex_timeout_seconds is not None:
         config.reporting.codex_timeout_seconds = overrides.codex_timeout_seconds
     if overrides.claude_timeout_seconds is not None:
@@ -168,6 +180,8 @@ class AnalysisRun:
     repo: str | Path | None
     store: ArtifactStore
     config: ArchobsConfig
+    progress: Callable[[str], None] | None = None
+    stage_callback: Callable[[str], None] | None = None
     _inventory_df: pd.DataFrame | None = field(default=None, init=False, repr=False)
     _git_result: GitHistoryResult | None = field(default=None, init=False, repr=False)
     _deps_result: object | None = field(default=None, init=False, repr=False)
@@ -179,6 +193,49 @@ class AnalysisRun:
         if self.repo is None:
             raise ValueError("repo is required for this analysis stage")
         return self.repo
+
+    def _start_stage(self, stage: str) -> None:
+        if self.progress is not None:
+            self.progress(f"{stage} started")
+
+    def _finish_stage(self, stage: str) -> None:
+        if self.progress is not None:
+            self.progress(f"{stage} completed")
+        if self.stage_callback is not None:
+            self.stage_callback(stage)
+
+    def _record_semantic_provenance(
+        self,
+        files_df: pd.DataFrame,
+        embedding_result: object,
+        edge_result: object,
+    ) -> pd.DataFrame:
+        semantic_meta = dict(getattr(edge_result, "semantic_meta", {}) or {})
+        provider_used = getattr(embedding_result, "provider_used", "unknown")
+        embedding_meta = getattr(embedding_result, "meta", None)
+        provider_requested = getattr(embedding_meta, "provider_requested", provider_used)
+        semantic_provider = str(semantic_meta.get("semantic_provider", provider_used))
+        semantic_requested = str(semantic_meta.get("semantic_provider_requested", provider_requested))
+        fallback_reason = semantic_meta.get("semantic_fallback_reason")
+
+        enriched = files_df.copy()
+        enriched["semantic_provider"] = semantic_provider
+        enriched["semantic_provider_requested"] = semantic_requested
+        enriched["semantic_fallback_reason"] = "" if fallback_reason is None else str(fallback_reason)
+        self.store.save_inventory(enriched)
+        self._inventory_df = enriched
+
+        embedding_run = embedding_meta.to_dict() if hasattr(embedding_meta, "to_dict") else {}
+        embedding_run.update(
+            {
+                "semantic_provider_requested": semantic_requested,
+                "semantic_provider": semantic_provider,
+            }
+        )
+        if fallback_reason is not None:
+            embedding_run["semantic_fallback_reason"] = str(fallback_reason)
+        self.store.put_json("embedding_run", embedding_run)
+        return enriched
 
     def inventory(self) -> pd.DataFrame:
         if self._inventory_df is None:
@@ -263,8 +320,15 @@ class AnalysisRun:
                 resolved_embedding.provider_used,
                 self.config.graph,
                 cache_path=self.store.cache_path,
+                provider_requested=resolved_embedding.meta.provider_requested,
+                fallback_dimensions=resolved_embedding.meta.dimensions,
             )
             edge_result.persist(self.store.base_path)
+            graph_files_df = self._record_semantic_provenance(
+                graph_files_df,
+                resolved_embedding,
+                edge_result,
+            )
             self._edge_result = edge_result
         return self._edge_result
 
@@ -292,26 +356,46 @@ class AnalysisRun:
         from archobs.storage import write_parquet
 
         # Run all stages
+        self._start_stage("inventory")
         files_df = self.inventory()
+        self._finish_stage("inventory")
+
+        self._start_stage("git")
         git_result = self.git(files_df)
         commit_files_df = git_result.commit_files_df
         files_df = git_result.enrich_files(files_df)
         self.store.save_inventory(files_df)
         self._inventory_df = files_df
+        self._finish_stage("git")
 
+        self._start_stage("deps")
         deps_result = self.deps(files_df)
+        self._finish_stage("deps")
+
+        self._start_stage("embeddings")
         embedding_result = self.embed(files_df, deps_result=deps_result)
         files_df = self._inventory_df if self._inventory_df is not None else self.store.load_inventory()
+        self._finish_stage("embeddings")
 
+        self._start_stage("graph")
         edge_result = self.build_graph(
             files_df=files_df,
             commit_files_df=commit_files_df,
             deps_result=deps_result,
             embedding_result=embedding_result,
         )
+        self._finish_stage("graph")
+        files_df = self._inventory_df if self._inventory_df is not None else files_df
+        semantic_meta = dict(getattr(edge_result, "semantic_meta", {}) or {})
+        semantic_provider = str(semantic_meta.get("semantic_provider", embedding_result.provider_used))
+        semantic_fallback_reason = semantic_meta.get("semantic_fallback_reason")
+
+        self._start_stage("cluster")
         cluster_result = self.cluster(files_df=files_df, edge_result=edge_result)
+        self._finish_stage("cluster")
 
         # Compute metrics
+        self._start_stage("metrics")
         sem_df, dep_df, fused_df = edge_result.report_inputs()
         clusters_df, cluster_metadata = cluster_result.report_inputs()
         graph = build_graph(files_df, fused_df)
@@ -326,20 +410,31 @@ class AnalysisRun:
             drift_window_count=self.config.clustering.drift_window_count,
         )
         file_metrics_df, cluster_metrics_df, metrics_summary = metrics.report_inputs()
+        self._finish_stage("metrics")
 
         # Compute drift
+        self._start_stage("drift")
         drift_df = _compute_drift(
             files_df, commit_files_df, sem_df, dep_df, self.config,
         )
+        self._finish_stage("drift")
 
         # Build summary
         summary_base = {
             **metrics_summary,
             **(cluster_metadata or {}),
-            "embedding_provider": embedding_result.provider_used,
+            "embedding_provider": semantic_provider,
+            "embedding_provider_requested": embedding_result.meta.provider_requested,
+            "semantic_provider": semantic_provider,
+            "semantic_provider_requested": semantic_meta.get(
+                "semantic_provider_requested",
+                embedding_result.meta.provider_requested,
+            ),
             "top_risk_files": self.config.reporting.top_risk_files,
             "top_leaky_clusters": self.config.reporting.top_leaky_clusters,
         }
+        if semantic_fallback_reason is not None:
+            summary_base["semantic_fallback_reason"] = str(semantic_fallback_reason)
 
         # Enrich cluster_metrics with recent file-change counts
         cluster_metrics_df = _enrich_cluster_commit_counts(
@@ -347,20 +442,13 @@ class AnalysisRun:
         )
 
         # Compute team metrics (author distribution, bus factor, concentration)
-        if "author" in commit_files_df.columns:
-            from archobs.team_metrics import (
-                compute_author_stats,
-                compute_bus_factor,
-                compute_knowledge_concentration,
-            )
-
-            author_stats_df = compute_author_stats(commit_files_df, file_metrics_df)
-            if not author_stats_df.empty:
-                bus_factor_df = compute_bus_factor(author_stats_df)
-                concentration_df = compute_knowledge_concentration(author_stats_df)
-                write_parquet(author_stats_df, self.store.base_path, "author_stats")
-                write_parquet(bus_factor_df, self.store.base_path, "bus_factor")
-                write_parquet(concentration_df, self.store.base_path, "concentration")
+        self._start_stage("team")
+        _persist_team_metric_artifacts(
+            commit_files_df,
+            file_metrics_df,
+            self.store.base_path,
+        )
+        self._finish_stage("team")
 
         # Compute canonical cluster labels once and store in cluster_metrics
         cluster_metrics_df = _attach_canonical_labels(
@@ -396,6 +484,7 @@ class AnalysisRun:
         )
 
         # Render report
+        self._start_stage("report")
         options = self.config.reporting.render_options()
         summary = build_report_artifacts(
             prepared,
@@ -404,6 +493,7 @@ class AnalysisRun:
             codex_timeout_seconds=options.codex_timeout_seconds,
             claude_timeout_seconds=options.claude_timeout_seconds,
         )
+        self._finish_stage("report")
         result = ReportResult(
             summary=summary,
             file_metrics=file_metrics_df,
@@ -412,9 +502,11 @@ class AnalysisRun:
         )
 
         # Persist report metrics
+        self._start_stage("persist")
         write_parquet(file_metrics_df, self.store.base_path, "file_metrics")
         write_parquet(cluster_metrics_df, self.store.base_path, "cluster_metrics")
         write_parquet(drift_df, self.store.base_path, "drift")
+        self._finish_stage("persist")
 
         return result
 
@@ -522,6 +614,28 @@ def _enrich_cluster_commit_counts(
 # ---------------------------------------------------------------------------
 # Velocity summary for suggestion engine
 # ---------------------------------------------------------------------------
+
+
+def _persist_team_metric_artifacts(
+    commit_files_df: pd.DataFrame,
+    file_metrics_df: pd.DataFrame,
+    out: str | Path,
+) -> None:
+    """Persist current-generation team artifacts, including empty frames."""
+
+    from archobs.storage import write_parquet
+    from archobs.team_metrics import (
+        compute_author_stats,
+        compute_bus_factor,
+        compute_knowledge_concentration,
+    )
+
+    author_stats_df = compute_author_stats(commit_files_df, file_metrics_df)
+    bus_factor_df = compute_bus_factor(author_stats_df)
+    concentration_df = compute_knowledge_concentration(author_stats_df)
+    write_parquet(author_stats_df, out, "author_stats")
+    write_parquet(bus_factor_df, out, "bus_factor")
+    write_parquet(concentration_df, out, "concentration")
 
 
 def _compute_velocity_summary(
@@ -722,16 +836,84 @@ def _compute_drift(
 # ---------------------------------------------------------------------------
 
 
+def _config_hash(config: ArchobsConfig) -> str:
+    payload = json.dumps(config.to_dict(), sort_keys=True)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _repo_head(repo: str | Path) -> str | None:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return None
+    head = proc.stdout.strip()
+    return head or None
+
+
 def run_report(
     repo: str | Path,
     out: str | Path,
     config: ArchobsConfig,
+    *,
+    progress: Callable[[str], None] | None = None,
 ) -> ReportResult:
     """Create a store, run the full pipeline, and return the report."""
     store = ArtifactStore(out)
     store.init_workspace()
-    run = AnalysisRun(repo=repo, store=store, config=config)
-    return run.report()
+    started_at = int(time.time())
+    completed_stages: list[str] = []
+    manifest: dict[str, object] = {
+        "run_id": uuid4().hex,
+        "status": "running",
+        "repo": str(repo),
+        "repo_head": _repo_head(repo),
+        "config_hash": _config_hash(config),
+        "started_at": started_at,
+        "updated_at": started_at,
+        "completed_at": None,
+        "completed_stages": completed_stages,
+    }
+
+    def write_manifest(status: str, *, error: str | None = None) -> None:
+        now = int(time.time())
+        manifest["status"] = status
+        manifest["updated_at"] = now
+        manifest["completed_stages"] = list(completed_stages)
+        if status in {"complete", "failed"}:
+            manifest["completed_at"] = now
+        if error is not None:
+            manifest["error"] = error
+        store.put_json("run_manifest", manifest)
+
+    def stage_completed(stage: str) -> None:
+        if stage not in completed_stages:
+            completed_stages.append(stage)
+        write_manifest("running")
+
+    write_manifest("running")
+    store.mark_static_reports_stale("full report running")
+    run = AnalysisRun(
+        repo=repo,
+        store=store,
+        config=config,
+        progress=progress,
+        stage_callback=stage_completed,
+    )
+    try:
+        result = run.report()
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        write_manifest("failed", error=error)
+        store.mark_static_reports_stale(f"full report failed: {error}")
+        raise
+    write_manifest("complete")
+    return result
 
 
 def load_suggestions(
@@ -742,7 +924,11 @@ def load_suggestions(
     """Read suggestions.json and format as markdown blocks."""
     from archobs.suggestions import format_suggestion_markdown
 
-    from archobs.storage import json_path
+    from archobs.storage import json_path, run_manifest_issue
+
+    manifest_issue = run_manifest_issue(out)
+    if manifest_issue is not None:
+        return [], manifest_issue
 
     path = json_path(out, "suggestions")
     if not path.exists():

@@ -16,7 +16,7 @@ Add an `archobs check` command that:
 2. Evaluates configurable thresholds against file risk, cluster leakage/cohesion/risk_mean, and bus factor
 3. Returns structured results with per-violation detail
 4. Exits 0 (pass) or 1 (fail) for CI integration
-5. Degrades gracefully when optional artifacts (bus_factor.parquet) are absent
+5. Degrades gracefully when optional artifacts (`bus_factor.parquet`) are absent or empty
 
 ## Non-Goals
 
@@ -34,7 +34,7 @@ Add an `archobs check` command that:
 
 1. Read `file_metrics.parquet` — check file risk violations
 2. Read `cluster_metrics.parquet` — check leakage, cohesion, risk_mean violations
-3. Read `bus_factor.parquet` (optional) — check bus factor violations
+3. Read `bus_factor.parquet` (optional) — if absent or empty, emit a skipped-check warning; otherwise check bus factor violations
 4. Apply min_cluster_size filter to cluster-level checks
 5. Aggregate violations by category
 6. Return structured result
@@ -47,7 +47,7 @@ Add an `archobs check` command that:
 | Cluster leakage > max | cluster_metrics.parquet | `--max-leakage 0.6` |
 | Cluster cohesion < min | cluster_metrics.parquet | `--min-cohesion 0.4` |
 | Cluster risk_mean > max | cluster_metrics.parquet | `--max-risk-mean 0.5` |
-| Bus factor < min | bus_factor.parquet (optional) | `--min-bus-factor 2` |
+| Bus factor < min | non-empty bus_factor.parquet (optional) | `--min-bus-factor 2` |
 
 ### Result Schema
 
@@ -60,9 +60,12 @@ Add an `archobs check` command that:
     "violations": [
         {"category": str, "entity": str, "metric": str, "value": float, "threshold": float},
         ...
-    ]
+    ],
+    "warnings": [str, ...]  # present when an optional check is skipped
 }
 ```
+
+**No-data acceptance scenario**: Given otherwise valid report artifacts and a missing or empty `bus_factor.parquet`, when fitness is evaluated, then the bus-factor check is omitted from `by_category`, an actionable skipped-check warning is returned, and pass/fail is determined only by checks that actually ran.
 
 ## Interface
 
@@ -94,7 +97,7 @@ archobs check [--out .archobs] [--max-file-risk 0.8] [--max-leakage 0.6]
 - Cohesion violations -> fail
 - Risk mean violations -> fail
 - Bus factor violations when parquet exists -> fail
-- Graceful skip when bus_factor.parquet missing
+- Graceful skip when bus_factor.parquet is missing or empty
 - min_cluster_size filtering
 - Combined violations
 - CLI exit codes (0/1)
@@ -105,7 +108,7 @@ archobs check [--out .archobs] [--max-file-risk 0.8] [--max-leakage 0.6]
 |---|---|
 | Default thresholds too strict for young repos | Thresholds are configurable; document recommended starting values |
 | Missing Parquet files (no report run) | Clear error message directing user to run `archobs report` first |
-| Bus factor artifact optional | Graceful skip with note in output |
+| Bus factor artifact optional or current run has no author data | Graceful skip with note in output for both missing and empty artifacts |
 
 ## Verification
 

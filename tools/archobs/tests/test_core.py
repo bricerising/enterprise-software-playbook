@@ -18,7 +18,7 @@ from archobs.config import default_config, load_config, save_config
 from archobs.deps import build_summary_text, extract_dependencies
 from archobs.embedding import EmbeddingResult, EmbeddingRunMeta
 from archobs.git_history import build_cochange_edges
-from archobs.graph import GraphArtifacts, build_graph_artifacts, build_semantic_edges
+from archobs.graph import GraphArtifacts, build_graph_artifacts, build_semantic_edge_set, build_semantic_edges
 from archobs.graph_viz import _build_attributed_graph, _focus_graph, build_report_graph_snapshot, write_graph_html
 from archobs.inventory import build_inventory
 from archobs.metrics import MetricsResult, MetricsSummary, adjusted_rand_index
@@ -218,6 +218,11 @@ def test_build_graph_artifacts_publishes_stable_contract(tmp_path: Path) -> None
     assert isinstance(result, GraphArtifacts)
     assert calls == ["semantic", "cochange", "dependency", "fuse"]
     assert result.edge_count == 1
+    assert result.semantic_meta == {
+        "semantic_provider_requested": "hashing",
+        "semantic_provider": "hashing",
+        "semantic_fallback_reason": None,
+    }
     assert result.cluster_inputs().equals(fused_df)
     report_sem_df, report_dep_df, report_fused_df = result.report_inputs()
     assert report_sem_df.equals(sem_df)
@@ -230,6 +235,150 @@ def test_build_graph_artifacts_publishes_stable_contract(tmp_path: Path) -> None
     assert (tmp_path / "dep_edges.parquet").exists()
     assert (tmp_path / "graph_edges.parquet").exists()
     assert json.loads((tmp_path / "cochange_run.json").read_text(encoding="utf-8"))["analysis_ts"] == 1_700_000_000.0
+    assert json.loads((tmp_path / "semantic_run.json").read_text(encoding="utf-8"))["semantic_provider"] == "hashing"
+
+
+def test_codanna_semantic_edges_fall_back_to_hashing_in_auto(monkeypatch, tmp_path: Path) -> None:
+    def fail_codanna(*args, **kwargs):
+        raise RuntimeError("codanna search timed out")
+
+    monkeypatch.setattr(graph_module, "build_codanna_semantic_edges", fail_codanna)
+
+    files_df = pd.DataFrame([{"path": "a.py"}, {"path": "b.py"}])
+    analysis_df = pd.DataFrame(
+        [
+            {"path": "a.py", "summary_text": "payments settle invoice"},
+            {"path": "b.py", "summary_text": "payments settle invoice"},
+        ]
+    )
+    config = default_config().graph
+    config.k_sem = 1
+    config.tau_sem = 0.0
+
+    sem_df = build_semantic_edge_set(
+        tmp_path,
+        files_df,
+        analysis_df,
+        embeddings=None,
+        provider_used="codanna",
+        graph_config=config,
+        provider_requested="auto",
+        fallback_dimensions=16,
+    )
+
+    assert sem_df[["path_a", "path_b"]].values.tolist() == [["a.py", "b.py"]]
+    assert sem_df.attrs["archobs_semantic_meta"]["semantic_provider"] == "hashing"
+    assert sem_df.attrs["archobs_semantic_meta"]["semantic_fallback_reason"] == "codanna search timed out"
+
+
+def test_codanna_semantic_edges_raise_when_codanna_requested(monkeypatch, tmp_path: Path) -> None:
+    def fail_codanna(*args, **kwargs):
+        raise RuntimeError("codanna search timed out")
+
+    monkeypatch.setattr(graph_module, "build_codanna_semantic_edges", fail_codanna)
+
+    try:
+        build_semantic_edge_set(
+            tmp_path,
+            pd.DataFrame([{"path": "a.py"}, {"path": "b.py"}]),
+            pd.DataFrame(
+                [
+                    {"path": "a.py", "summary_text": "a"},
+                    {"path": "b.py", "summary_text": "b"},
+                ]
+            ),
+            embeddings=None,
+            provider_used="codanna",
+            graph_config=default_config().graph,
+            provider_requested="codanna",
+            fallback_dimensions=16,
+        )
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        assert "timed out" in str(exc)
+
+
+def test_run_codanna_reports_timeout(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=5)
+
+    monkeypatch.setattr(graph_module, "run", fake_run)
+
+    try:
+        graph_module._run_codanna(tmp_path, ["index", "."], timeout_seconds=5)
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        assert "codanna index ." in str(exc)
+        assert "5s" in str(exc)
+
+
+def test_codanna_search_raises_when_both_commands_fail(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=2,
+            cmd=args[0],
+            output='{"data":[]}',
+            stderr="codanna failed",
+        )
+
+    monkeypatch.setattr(graph_module, "run", fake_run)
+
+    try:
+        graph_module._codanna_search(tmp_path, "payments", limit=4, timeout_seconds=5)
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "semantic_search_with_context" in message
+        assert "search_symbols" in message
+        assert "codanna failed" in message
+
+
+def test_codanna_search_uses_secondary_after_primary_timeout(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if "semantic_search_with_context" in args:
+            raise subprocess.TimeoutExpired(cmd=args, timeout=5)
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": [
+                        {
+                            "symbol": {"file_path": "payments/service.py"},
+                            "score": 0.9,
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(graph_module, "run", fake_run)
+
+    hits = graph_module._codanna_search(tmp_path, "payments", limit=4, timeout_seconds=5)
+
+    assert hits == [{"file_path": "payments/service.py", "score": 0.9}]
+    assert "semantic_search_with_context" in calls[0]
+    assert "search_symbols" in calls[1]
+
+
+def test_codanna_search_raises_when_both_commands_timeout(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args, timeout=5)
+
+    monkeypatch.setattr(graph_module, "run", fake_run)
+
+    try:
+        graph_module._codanna_search(tmp_path, "payments", limit=4, timeout_seconds=5)
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "semantic_search_with_context" in message
+        assert "search_symbols" in message
+        assert message.count("timed out after 5s") == 2
 
 
 def test_cochange_edges_use_latest_commit_as_reference() -> None:
@@ -395,9 +544,9 @@ def test_codanna_semantic_edges(monkeypatch) -> None:
         analysis_rows.append(row)
     analysis_df = pd.DataFrame(analysis_rows)
 
-    monkeypatch.setattr(graph_module, "_ensure_codanna_index", lambda repo_path, files: None)
+    monkeypatch.setattr(graph_module, "_ensure_codanna_index", lambda repo_path, files, timeout_seconds: None)
 
-    def fake_search(repo_path: Path, query: str, limit: int) -> list[dict[str, object]]:
+    def fake_search(repo_path: Path, query: str, limit: int, timeout_seconds: int | None) -> list[dict[str, object]]:
         if "alpha" in query:
             return [{"file_path": "b.py", "score": 10.0}]
         if "beta" in query:
@@ -450,10 +599,10 @@ def test_codanna_semantic_edges_dedupes_and_caches(tmp_path: Path, monkeypatch) 
 
     calls = {"count": 0}
 
-    monkeypatch.setattr(graph_module, "_ensure_codanna_index", lambda repo_path, files: None)
+    monkeypatch.setattr(graph_module, "_ensure_codanna_index", lambda repo_path, files, timeout_seconds: None)
     monkeypatch.setattr(graph_module, "_codanna_query_text", lambda row: "same query")
 
-    def fake_search(repo_path: Path, query: str, limit: int) -> list[dict[str, object]]:
+    def fake_search(repo_path: Path, query: str, limit: int, timeout_seconds: int | None) -> list[dict[str, object]]:
         calls["count"] += 1
         return [{"file_path": "a.py", "score": 10.0}, {"file_path": "b.py", "score": 9.0}]
 
@@ -928,6 +1077,26 @@ def test_missing_codanna_warns_but_continues(tmp_path: Path, monkeypatch) -> Non
     result = runner.invoke(app, ["init", "--repo", str(tmp_path), "--out", str(tmp_path / ".archobs")])
     assert result.exit_code == 0
     assert "codanna is not installed" in result.output
+
+
+def test_targeted_command_invalidates_completed_manifest(tmp_path: Path, monkeypatch) -> None:
+    out = tmp_path / ".archobs"
+    out.mkdir()
+    (out / "run_manifest.json").write_text(
+        json.dumps({"status": "complete", "completed_stages": ["persist"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "archobs.pipeline.AnalysisRun.inventory",
+        lambda self: pd.DataFrame([{"path": "a.py"}]),
+    )
+
+    result = runner.invoke(app, ["extract", "inventory", "--repo", str(tmp_path), "--out", str(out)])
+
+    assert result.exit_code == 0
+    manifest = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "stale"
+    assert manifest["stale_reason"] == "targeted command: extract inventory"
 
 
 def test_cli_report_smoke(tmp_path: Path) -> None:

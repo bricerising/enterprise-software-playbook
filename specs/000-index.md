@@ -50,4 +50,5 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
   - [`014`](decisions/014-structured-thinking-probes-for-core-skills.md): Structured-thinking probes for core skills
   - [`015`](decisions/015-vendor-archobs-tool.md): Vendor archobs tool
   - [`016`](decisions/016-collapse-mechanics-into-design.md): Collapse Mechanics stage into Design
+  - [`017`](decisions/017-archobs-artifact-trust-semantics.md): Make archobs provider, manifest, and no-data trust states explicit
 - [`specs/templates/`](templates/README.md): Copy/paste templates for app-repo integration, CI quality gates, and service spec bundles.

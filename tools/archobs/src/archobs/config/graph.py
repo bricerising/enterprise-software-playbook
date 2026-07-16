@@ -17,3 +17,5 @@ class GraphConfig:
     commit_file_cap: int = 50
     similarity_batch_size: int = 256
     semantic_workers: int = 4
+    codanna_index_timeout_seconds: int = 180
+    codanna_search_timeout_seconds: int = 30

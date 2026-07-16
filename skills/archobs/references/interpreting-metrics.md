@@ -12,9 +12,11 @@ Archobs builds a multi-signal graph from three sources and fuses them into a uni
 
 The fused graph is partitioned into clusters (subsystems) using community detection, then scored.
 
+Only consume these artifacts when `.archobs/run_manifest.json` has `status: "complete"`. `archobs show` rejects a present non-complete manifest; any direct Parquet reader must check the same manifest first so a targeted stage cannot be mistaken for a complete analysis.
+
 ## File-Level Metrics
 
-Query with `archobs show risks --format json` (or read `.archobs/file_metrics.parquet` directly).
+Query with `archobs show risks --format json` (or read `.archobs/file_metrics.parquet` directly only after the complete-manifest guard).
 
 ### `risk` (0.0 - 1.0)
 
@@ -53,7 +55,7 @@ Graph centrality: how often this file appears on shortest paths between other fi
 
 ## Cluster-Level Metrics
 
-Query with `archobs show clusters --format json` (or read `.archobs/cluster_metrics.parquet` directly).
+Query with `archobs show clusters --format json` (or read `.archobs/cluster_metrics.parquet` directly only after the complete-manifest guard).
 
 ### `leakage` (0.0 - 1.0)
 
@@ -94,7 +96,7 @@ Average and maximum file-level risk within the cluster. Clusters with high `risk
 
 ## Drift Metrics
 
-Query with `archobs show drift --format json` (or read `.archobs/drift.parquet` directly).
+Query with `archobs show drift --format json` (or read `.archobs/drift.parquet` directly only after the complete-manifest guard).
 
 ### `ari_prev` — Adjusted Rand Index (−1.0 to 1.0)
 

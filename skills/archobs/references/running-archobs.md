@@ -64,7 +64,7 @@ archobs build-graph --repo .           # fused relationship graph
 archobs cluster --repo .               # subsystem clustering
 ```
 
-Each stage writes Parquet files to `.archobs/` that downstream stages consume.
+Each stage writes Parquet files to `.archobs/` that downstream stages consume, but it also marks the workspace stale. Existing HTML report pages receive a visible stale-data banner and `archobs show` result commands fail until you run a full `archobs report`. Automations may reuse artifacts only when `.archobs/run_manifest.json` has `status: "complete"`.
 
 ## Reading results
 

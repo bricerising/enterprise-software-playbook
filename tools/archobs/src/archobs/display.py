@@ -10,14 +10,27 @@ from typing import Any
 
 import pandas as pd
 
-from archobs.storage import json_path, parquet_path
+from archobs.storage import json_path, parquet_path, run_manifest_issue
 
 
 # ---------------------------------------------------------------------------
 # Artifact readers
 # ---------------------------------------------------------------------------
 
+
+def _require_complete_run(base: Path) -> None:
+    issue = run_manifest_issue(base)
+    if issue is None:
+        return
+    print(
+        f"Error: {issue} Run `archobs report` to regenerate a complete artifact set.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
 def _require_parquet(base: Path, name: str) -> pd.DataFrame:
+    _require_complete_run(base)
     path = parquet_path(base, name)
     if not path.exists():
         print(f"Error: {path} not found. Run `archobs report` first.", file=sys.stderr)
@@ -26,6 +39,7 @@ def _require_parquet(base: Path, name: str) -> pd.DataFrame:
 
 
 def _require_json(base: Path, name: str) -> Any:
+    _require_complete_run(base)
     path = json_path(base, name)
     if not path.exists():
         print(f"Error: {path} not found. Run `archobs report` first.", file=sys.stderr)
@@ -1147,7 +1161,7 @@ def format_team(
 ) -> str:
     """Format team analysis (bus factor + concentration) joined with cluster labels."""
     if bus_factor_df.empty or concentration_df.empty:
-        return "No team metrics available. Run `archobs report` first."
+        return "[]" if fmt == "json" else "No team metrics available. Run `archobs report` first."
 
     # Join bus_factor with concentration
     merged = bus_factor_df.merge(concentration_df, on="cluster_id", how="outer")
@@ -1167,7 +1181,7 @@ def format_team(
         merged = merged[merged["size"] >= min_size]
 
     if merged.empty:
-        return "No clusters meet the minimum size filter."
+        return "[]" if fmt == "json" else "No clusters meet the minimum size filter."
 
     # Sort
     valid_sort_cols = {"bus_factor", "concentration", "size"}
