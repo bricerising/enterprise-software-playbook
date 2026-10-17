@@ -1,0 +1,9 @@
+{
+  "name": "journey-atlas-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Fallback dependencies for the journey-atlas analyzer. The analyzer prefers the target repo's own typescript; it uses this copy only when the repo has none.",
+  "dependencies": {
+    "typescript": "^5.6.3"
+  }
+}

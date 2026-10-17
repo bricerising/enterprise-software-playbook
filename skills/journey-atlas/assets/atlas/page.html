@@ -1,0 +1,448 @@
+<style>
+.ak { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+.ak h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.ak h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; text-wrap: balance; }
+.ak-lede { color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 0; max-width: 72ch; }
+.ak-tabs { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); padding-block: var(--cds-pad-xs); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--color-bg); }
+.ak-page { scroll-margin-top: calc(var(--ak-tabs-h, 3rem) + var(--cds-gap-sm)); }
+.ak-tab { font: inherit; font-size: var(--cds-font-size-body); background: none; border: 1px solid transparent; border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); color: var(--color-fg-muted); cursor: pointer; }
+.ak-tab:hover { color: var(--color-fg); background: var(--cds-chart-grid); }
+.ak-tab[aria-selected="true"] { color: var(--color-fg); border-color: var(--color-border-line); background: var(--color-panel); font-weight: var(--cds-font-weight-medium); }
+.ak-tab:focus-visible, .ak-click:focus-visible, .ak-sugg button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.ak-page { display: grid; gap: var(--cds-gap-lg); }
+.ak-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--cds-gap-md); }
+.ak-kpi { display: grid; gap: var(--cds-gap-xs); align-content: start; }
+.ak-kpi-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.ak-num.ak-alert { color: var(--color-bad); }
+.ak-num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ak-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-md); min-width: 0; position: relative; }
+.ak-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--cds-gap-sm); }
+.ak-head > div { display: grid; gap: var(--cds-gap-xs); min-width: 0; flex: 1 1 22rem; }
+.ak-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); max-width: 76ch; line-height: 1.45; }
+.ak-find { margin: 0; max-width: 76ch; line-height: 1.5; }
+.ak-v { font-weight: var(--cds-font-weight-medium); font-variant-numeric: tabular-nums; }
+.ak-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr)); gap: var(--cds-gap-md); align-items: start; }
+.ak-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.ak-legend span { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); }
+.ak-sw { width: .625rem; height: .625rem; border-radius: 2px; flex: none; }
+.ak-check { display: inline-flex; gap: var(--cds-gap-xs); align-items: center; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); cursor: pointer; }
+.ak-chart { position: relative; min-height: 360px; }
+.ak-chart svg { display: block; }
+.ak-scroll { overflow-x: auto; position: relative; }
+.ak-lbl { font-size: var(--cds-font-size-caption); }
+.ak-halo { paint-order: stroke; stroke: var(--color-panel); stroke-width: 3px; stroke-linejoin: round; }
+.ak-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); max-width: 22rem; z-index: 3; display: grid; gap: 2px; }
+.ak-tip-k { color: var(--cds-text-secondary); word-break: break-word; }
+.ak-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.ak-dot { width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+.ak-bars { display: grid; gap: 6px; min-height: 6rem; }
+.ak-row { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); gap: var(--cds-gap-sm); align-items: center; font-size: var(--cds-font-size-caption); border-radius: 4px; }
+.ak-row:hover { background: var(--cds-chart-grid); }
+.ak-click { cursor: pointer; }
+.ak-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 2px; }
+.ak-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.ak-track { display: flex; align-items: center; gap: var(--cds-gap-xs); min-width: 0; }
+.ak-stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; flex: none; min-width: 2px; }
+.ak-stack > span { display: block; height: 100%; }
+.ak-val { color: var(--color-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; min-width: 0; }
+.ak-layers { display: grid; gap: var(--cds-gap-sm); min-height: 12rem; }
+.ak-layer { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: var(--cds-gap-sm); align-items: stretch; }
+.ak-layer-name { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); padding-top: var(--cds-pad-xs); text-transform: uppercase; letter-spacing: .04em; }
+.ak-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ak-chip { border: 1px solid var(--color-border-line); border-radius: 6px; padding: 4px 6px; font-size: var(--cds-font-size-caption); background: var(--color-bg); min-width: 0; display: grid; gap: 1px; }
+.ak-chip b { font-weight: var(--cds-font-weight-medium); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: var(--cds-font-size-caption); }
+.ak-chip span { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.ak-chip.ak-up { border-color: var(--cds-chart-status-critical); }
+.ak-chip.ak-up span.ak-upn { color: var(--color-bad); }
+.ak-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.ak-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; z-index: 1; }
+.ak-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--cds-chart-grid); vertical-align: top; }
+.ak-table .ak-n { text-align: right; }
+.ak-tablebox { max-height: 24rem; overflow: auto; }
+.ak-cov { display: inline-block; min-width: 3.2rem; text-align: center; border-radius: 4px; padding: 0 4px; }
+.ak-crud { display: grid; gap: 2px; font-size: var(--cds-font-size-caption); min-width: max-content; }
+.ak-crud > div { min-height: 1.6rem; display: flex; align-items: center; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.ak-crud .ak-ch { writing-mode: vertical-rl; transform: rotate(180deg); align-items: flex-start; justify-content: flex-start; padding: 4px 0; color: var(--color-fg-muted); min-height: 7.5rem; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.ak-crud .ak-rh { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
+.ak-crud .ak-cell { justify-content: center; border-radius: 3px; letter-spacing: .04em; }
+.ak-search { display: grid; gap: var(--cds-gap-xs); }
+.ak-search input { font: inherit; font-size: var(--cds-font-size-body); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); width: 100%; max-width: 40rem; box-sizing: border-box; }
+.ak-sugg { display: flex; flex-wrap: wrap; gap: 4px; }
+.ak-sugg button { font: inherit; font-size: var(--cds-font-size-caption); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg); border-radius: 6px; padding: 2px 6px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-sugg button[aria-pressed="true"] { border-color: var(--color-fg); }
+.ak-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--cds-gap-sm); min-height: 10rem; align-items: start; }
+.ak-lane { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.ak-lane h3 { margin: 0; font-size: var(--cds-font-size-caption); text-transform: uppercase; letter-spacing: .05em; color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
+.ak-lane.ak-async h3 { color: var(--color-warn); }
+.ak-item { border: 1px solid var(--color-border-line); border-radius: 6px; padding: 4px 6px; background: var(--color-bg); font-size: var(--cds-font-size-caption); display: grid; gap: 1px; min-width: 0; }
+.ak-item b { font-weight: var(--cds-font-weight-medium); word-break: break-word; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.ak-item span { color: var(--color-fg-muted); word-break: break-word; }
+.ak-lane.ak-async .ak-item { border-style: dashed; }
+.ak-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.ak-pipe { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px; min-height: 2.5rem; }
+.ak-pstep { display: grid; gap: 1px; border: 1px solid var(--color-border-line); border-left-width: 4px; border-radius: 6px; padding: 3px 6px; background: var(--color-bg); font-size: var(--cds-font-size-caption); max-width: 15rem; min-width: 0; }
+.ak-pstep b { font-weight: var(--cds-font-weight-medium); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-pstep span { color: var(--color-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-parrow { align-self: center; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.ak-flag { color: var(--color-bad); }
+tr.ak-on td { background: var(--cds-chart-grid); }
+.ak-bp { display: grid; gap: 3px; font-size: var(--cds-font-size-caption); min-width: max-content; }
+.ak-bp > div { padding: 4px 6px; min-width: 0; }
+.ak-bp .ak-bpl { color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: var(--cds-font-weight-medium); white-space: nowrap; display: flex; align-items: flex-start; }
+.ak-bp .ak-bpc { border-top: 1px solid var(--color-border-line); display: grid; gap: 3px; align-content: start; width: 9.5rem; }
+.ak-bp .ak-bpc.ak-user { border: 1px solid var(--color-border-line); border-radius: 6px; background: var(--color-panel); font-weight: var(--cds-font-weight-medium); }
+.ak-bp .ak-bpc.ak-req { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.ak-bp .ak-line { grid-column: 1 / -1; border-top: 1px dashed var(--cds-chart-axis); color: var(--color-fg-muted); padding: 0 0 0 2px; font-size: var(--cds-font-size-caption); }
+.ak-chipx { display: inline-block; border-radius: 4px; padding: 0 4px; border: 1px solid var(--color-border-line); white-space: nowrap; }
+.ak-chipx.ak-bad { border-color: var(--cds-chart-status-critical); color: var(--color-bad); }
+.ak-chipx.ak-warn { border-color: var(--cds-chart-status-warning); color: var(--color-warn); }
+.ak-taskpick { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-lg); }
+.ak-taskgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ak-taskgroup-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.ak-pill { font: inherit; font-size: var(--cds-font-size-caption); border: 1px solid var(--color-border-line); background: var(--color-bg); color: var(--color-fg); border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+.ak-pill:hover { border-color: var(--color-fg-muted); }
+.ak-pill[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+.ak-pill:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.ak-bp-legend .ak-chipx { margin-inline: 2px; }
+.ak-codes { display: flex; flex-wrap: wrap; gap: 3px; }
+.ak-count { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.ak-tablebox.ak-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent); }
+#ak-cov { width: auto; min-width: min(100%, 52rem); }
+#ak-cov th, #ak-cov td { padding-inline: .7rem; }
+.ak-upn-minor { color: var(--color-fg-muted); }
+.ak-pstep-app { border-left-color: var(--color-border-line); background: var(--color-panel); }
+.ak-reads span { line-height: 1.5; }
+.ak-fcards { display: grid; gap: var(--cds-gap-md); }
+.ak-fcard { border: 1px solid var(--color-border-line); border-left-width: 4px; border-radius: var(--cds-radius); padding: var(--cds-pad-md, .75rem) var(--cds-pad-lg); background: var(--color-bg); display: grid; gap: var(--cds-gap-sm); min-width: 0; }
+.ak-fcard.ak-sev-high { border-left-color: var(--cds-chart-status-critical); }
+.ak-fcard.ak-sev-medium { border-left-color: var(--cds-chart-status-warning); }
+.ak-fcard.ak-sev-low { border-left-color: var(--cds-chart-muted); }
+.ak-fcard h3 { margin: 0; font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); align-items: baseline; }
+.ak-fcard p { margin: 0; line-height: 1.5; max-width: 80ch; }
+.ak-fmeta { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.ak-fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--cds-gap-sm) var(--cds-gap-lg); font-size: var(--cds-font-size-caption); }
+.ak-fgrid > div { display: grid; gap: 2px; align-content: start; }
+.ak-fgrid b { font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; font-size: .7rem; }
+.ak-fcard details summary { cursor: pointer; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.ak-fcard details[open] summary { margin-bottom: var(--cds-gap-xs); }
+.ak-sev { display: inline-block; border-radius: 4px; padding: 0 5px; font-size: var(--cds-font-size-caption); border: 1px solid var(--color-border-line); text-transform: uppercase; letter-spacing: .04em; }
+.ak-sev.ak-sev-high { border-color: var(--cds-chart-status-critical); color: var(--color-bad); }
+.ak-sev.ak-sev-medium { border-color: var(--cds-chart-status-warning); color: var(--color-warn); }
+.ak-sev.ak-sev-low { color: var(--color-fg-muted); }
+.ak-fchip { cursor: pointer; }
+.ak-fchip:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.ak-fix { margin: 0; padding-left: 1.2rem; display: grid; gap: 2px; font-size: var(--cds-font-size-caption); }
+.ak-heat td.ak-hc { text-align: center; min-width: 3.4rem; }
+.ak-method { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); display: grid; gap: var(--cds-gap-xs); max-width: 80ch; }
+.ak-method p { margin: 0; }
+@media (max-width: 34rem) { .ak-row { grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr); } .ak-layer { grid-template-columns: 1fr; } }
+[data-dash-source-state=empty] { color: transparent; }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="ak">
+  <header>
+    <h1><span id="ak-project" data-source="meta" data-field="project" data-row="0">—</span> architecture atlas</h1>
+    <p class="ak-lede">The codebase as an architect sees it: who uses it, how its components depend on each other, where data is owned, what runs in the background, how it holds up when a dependency fails, and what any one change or journey touches.</p>
+    <p class="ak-note" id="ak-provenance"></p>
+  </header>
+
+  <nav class="ak-tabs" role="tablist" aria-label="Atlas sections">
+    <button class="ak-tab" role="tab" data-tab="overview" id="tab-overview">Overview</button>
+    <button class="ak-tab" role="tab" data-tab="ux" id="tab-ux">User impact</button>
+    <button class="ak-tab" role="tab" data-tab="structure" id="tab-structure">Structure</button>
+    <button class="ak-tab" role="tab" data-tab="pipeline" id="tab-pipeline">Request pipeline</button>
+    <button class="ak-tab" role="tab" data-tab="data" id="tab-data">Data ownership</button>
+    <button class="ak-tab" role="tab" data-tab="async" id="tab-async">Async &amp; jobs</button>
+    <button class="ak-tab" role="tab" data-tab="posture" id="tab-posture">Resilience</button>
+    <button class="ak-tab" role="tab" data-tab="risk" id="tab-risk">Change risk</button>
+    <button class="ak-tab" role="tab" data-tab="explore" id="tab-explore">Journey explorer</button>
+    <button class="ak-tab" role="tab" data-tab="findings" id="tab-findings">Findings</button>
+  </nav>
+
+  <!-- ===================== FINDINGS ===================== -->
+  <section class="ak-page" id="findings" hidden>
+    <div class="ak-kpis" id="ak-f-kpis"></div>
+    <section class="ak-card" id="ak-f-card">
+      <div class="ak-head"><div>
+        <h2>Verified findings</h2>
+        <p class="ak-find" id="ak-f-find">—</p>
+        <p class="ak-note">Each finding was confirmed by reading the source. Reach counts the journeys whose call path runs through the code where the fix goes. Severity is how bad it is when it happens; reach is how often people pass through it. When they disagree, both matter.</p>
+      </div></div>
+      <ol class="ak-fix" id="ak-f-order"></ol>
+      <div class="ak-fcards" id="ak-f-list" data-source="findings"></div>
+    </section>
+    <section class="ak-card" id="ak-lens-card">
+      <h2>What was checked</h2>
+      <p class="ak-find" id="ak-lens-find">—</p>
+      <p class="ak-note">Each lens is one question from a playbook skill, asked of the whole graph. Candidates were read in the code and promoted to a finding, accepted (real, consciously left), or dismissed (not a problem here). A clean lens is evidence too: the question was asked and nothing came back.</p>
+      <div class="ak-tablebox" style="max-height: none">
+        <table class="ak-table" id="ak-lens-table" data-source="lens_coverage" data-row-key="lens">
+          <thead><tr><th>Lens</th><th>Skill</th><th class="ak-n">Candidates</th><th class="ak-n">Findings</th><th class="ak-n">Accepted</th><th class="ak-n">Dismissed</th><th class="ak-n">Open</th><th>Why not promoted (sample)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== OVERVIEW ===================== -->
+  <section class="ak-page" id="overview">
+    <div class="ak-kpis">
+      <div class="ak-kpi"><span class="ak-kpi-label">User journeys</span><span class="ak-num dash-skeleton" data-source="summary" data-field="journeys" data-row="0">—</span></div>
+      <div class="ak-kpi"><span class="ak-kpi-label">Components</span><span class="ak-num dash-skeleton" data-source="summary" data-field="components" data-row="0">—</span></div>
+      <div class="ak-kpi"><span class="ak-kpi-label">Middleware</span><span class="ak-num dash-skeleton" data-source="summary" data-field="middleware" data-row="0">—</span></div>
+      <div class="ak-kpi"><span class="ak-kpi-label">External systems</span><span class="ak-num dash-skeleton" data-source="summary" data-field="external_systems" data-row="0">—</span></div>
+      <div class="ak-kpi"><span class="ak-kpi-label">Calls against the layering</span><span class="ak-num dash-skeleton" data-source="summary" data-field="upward_calls" data-row="0">—</span></div>
+      <div class="ak-kpi"><span class="ak-kpi-label">Routes with no guard</span><span class="ak-num ak-alert dash-skeleton" data-source="summary" data-field="unguarded_routes" data-row="0">—</span></div>
+    </div>
+    <section class="ak-card" id="ak-ctx-card">
+      <div class="ak-head">
+        <div>
+          <h2>System context</h2>
+          <p class="ak-note">Who uses the API, which component makes each outbound call, and which external system it lands on. Band width counts journeys. Hover any node or band to trace it.</p>
+        </div>
+        <label class="ak-check"><input type="checkbox" id="ak-ctx-core"> Include core infrastructure<span id="ak-core-names"></span></label>
+      </div>
+      <div class="ak-legend" id="ak-ctx-legend"></div>
+      <div class="ak-chart dash-skeleton" id="ak-ctx" data-source="context_flow"></div>
+    </section>
+  </section>
+
+  <!-- ===================== USER IMPACT ===================== -->
+  <section class="ak-page" id="ux" hidden>
+    <section class="ak-card" id="ak-bp-card">
+      <div class="ak-head">
+        <div>
+          <h2>Service blueprint</h2>
+          <p class="ak-note">One real task, step by step. Above the line of interaction is what the person does; the request crosses it; below the line of visibility is everything they never see but still wait on. Step order follows the product flow and was set by hand.</p>
+        </div>
+      </div>
+      <div class="ak-taskpick" id="ak-bp-tasks" data-source="blueprint"></div>
+      <p class="ak-note ak-bp-legend" id="ak-bp-legend"></p>
+      <div class="ak-scroll"><div class="ak-bp dash-skeleton" id="ak-bp" data-source="blueprint"></div></div>
+    </section>
+    <section class="ak-card" id="ak-mom-card">
+      <h2>Moments that matter</h2>
+      <p class="ak-find dash-skeleton" id="ak-mom-find">—</p>
+      <div class="ak-tablebox">
+        <table class="ak-table" id="ak-mom-table" data-source="moments" data-row-key="journey">
+          <thead><tr><th data-field="journey">Journey</th><th data-field="actor">User</th><th data-field="waits_on">Waits on</th><th data-field="after_response">After the response</th><th data-field="quiet_sites" class="ak-n">Quiet failure sites</th><th data-field="score">Priority</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="ak-note">Priority multiplies how critical the journey is (money moves, a customer is waiting, staff are mid-service) by how fragile it is (third parties waited on, waits with no timeout, places that hide failures, generic errors).</p>
+    </section>
+    <div class="ak-grid2">
+      <section class="ak-card" id="ak-err-card">
+        <h2>What users see when it fails</h2>
+        <p class="ak-note">Journeys whose every failure maps to a clear status (bad request, not found, conflict and so on), against those that can also end in a generic 500. Misconfiguration checks are left out. A plain error caught and translated upstream would also count as generic here.</p>
+        <div class="ak-legend" id="ak-err-legend"></div>
+        <div class="ak-bars dash-skeleton" id="ak-err" data-source="error_experience"></div>
+      </section>
+      <section class="ak-card" id="ak-gen-card">
+        <h2>Generic errors with the widest reach</h2>
+        <div class="ak-tablebox">
+          <table class="ak-table" id="ak-gen-table" data-source="generic_error_sites" data-row-key="site">
+            <thead><tr><th data-field="site">Thrown in</th><th data-field="example">Example message</th><th data-field="messages" class="ak-n">Errors</th><th data-field="journeys" class="ak-n">Journeys</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <section class="ak-card" id="ak-heur-card">
+      <h2>Usability heuristics by area</h2>
+      <p class="ak-note">Three classic heuristics read from the code. Error prevention: of the journeys that create records, how many guard against a double submit (an idempotency key or an upsert). Visibility of status: journeys whose work continues after the response through a channel with no recovery job, so a failure never reaches the user. Help users recover: journeys whose failures all map to a clear status.</p>
+      <div class="ak-tablebox" style="max-height: none">
+        <table class="ak-table" id="ak-heur-table" data-source="heuristics" data-row-key="area">
+          <thead><tr><th data-field="area">Area</th><th data-field="journeys" class="ak-n">Journeys</th><th data-field="creating_writes" class="ak-n">Create records</th><th data-field="double_submit_protected" class="ak-n">Double-submit safe</th><th data-field="after_response_unrecovered" class="ak-n">Unrecovered after-response work</th><th data-field="with_errors" class="ak-n">Can fail</th><th data-field="typed_errors" class="ak-n">Clear errors only</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== STRUCTURE ===================== -->
+  <section class="ak-page" id="structure" hidden>
+    <section class="ak-card" id="ak-layers-card">
+      <h2>Layer map</h2>
+      <p class="ak-note">Components stacked from entry points at the top to foundations at the bottom. Calls should only point down. A red outline marks a component that calls a layer above it, with the number of such calls.</p>
+      <div class="ak-layers dash-skeleton" id="ak-layers" data-source="components dsm"></div>
+    </section>
+    <section class="ak-card" id="ak-dsm-card">
+      <h2>Dependency matrix</h2>
+      <p class="ak-note">Each cell counts calls from the row component to the column component, ordered by layer from entry points down to foundations. Downward calls sit above the diagonal. Red cells, below it, point upward against the layering. An outlined cell means the two components call each other.</p>
+      <div class="ak-legend" id="ak-dsm-legend"></div>
+      <div class="ak-scroll"><div class="ak-chart dash-skeleton" id="ak-dsm" data-source="dsm components"></div></div>
+    </section>
+    <section class="ak-card" id="ak-conv-card">
+      <h2>Convergence points</h2>
+      <p class="ak-find dash-skeleton" id="ak-conv-find">—</p>
+      <div class="ak-legend" id="ak-conv-legend"></div>
+      <div class="ak-bars dash-skeleton" id="ak-conv" data-source="convergence convergence_mix"></div>
+    </section>
+  </section>
+
+  <!-- ===================== CHANGE RISK ===================== -->
+  <section class="ak-page" id="risk" hidden>
+    <section class="ak-card" id="ak-hot-card">
+      <h2>Change hotspots</h2>
+      <p class="ak-note">Each dot is a source file. Across: how many journeys run through it. Up: commits in the last 90 days. Size: places that hide failures or call out without a timeout. Files in the upper right are widely shared and change often. Click a dot to see its impact below.</p>
+      <div class="ak-legend" id="ak-hot-legend"></div>
+      <div class="ak-chart dash-skeleton" id="ak-hot" data-source="hotspots"></div>
+    </section>
+    <section class="ak-card" id="ak-impact-card">
+      <h2>Change impact</h2>
+      <p class="ak-note">Pick a source file to list every journey whose call path runs through it. Use it to scope testing for a pull request.</p>
+      <div class="ak-search">
+        <label for="ak-impact-q" class="ak-note">Search files</label>
+        <input id="ak-impact-q" type="search" placeholder="e.g. place-order, tenant-module-gating, payments" autocomplete="off">
+        <div class="ak-sugg" id="ak-impact-sugg" data-source="impact_files"></div>
+      </div>
+      <p class="ak-find dash-skeleton" id="ak-impact-find">—</p>
+      <div class="ak-grid2">
+        <div class="ak-bars dash-skeleton" id="ak-impact-actors" data-source="impact_files journeys_index"></div>
+        <div class="ak-tablebox">
+          <table class="ak-table" id="ak-impact-table" data-source="journeys_index" data-row-key="journey">
+            <thead><tr><th data-field="journey">Journey</th><th data-field="actor">User</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== REQUEST PIPELINE ===================== -->
+  <section class="ak-page" id="pipeline" hidden>
+    <section class="ak-card" id="ak-cov-card">
+      <h2>Control coverage by API area</h2>
+      <p class="ak-note">Journeys in each area that pass each control, either as middleware in the request chain or as a check inside the handler. A pale cell means most journeys in the area lack that control there. POS WebSocket actions authenticate on connect and check the acting employee and terminal on every message.</p>
+      <div class="ak-tablebox" style="max-height: none">
+        <table class="ak-table" id="ak-cov" data-source="pipeline_coverage" data-row-key="area">
+          <thead><tr>
+            <th data-field="area">Area</th><th data-field="journeys" class="ak-n">Journeys</th><th data-field="authentication" class="ak-n">Sign-in</th>
+            <th data-field="authorization_pipeline" class="ak-n">Permission (middleware)</th><th data-field="authorization_handler" class="ak-n">Permission (handler)</th>
+            <th data-field="validation_pipeline" class="ak-n">Validation (middleware)</th><th data-field="validation_handler" class="ak-n">Validation (handler)</th><th data-field="rate_limit" class="ak-n">Rate limit</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="ak-card" id="ak-var-card">
+      <h2>Chain consistency</h2>
+      <p class="ak-find dash-skeleton" id="ak-var-find">—</p>
+      <div class="ak-grid2">
+        <div class="ak-bars dash-skeleton" id="ak-var-areas" data-source="variants_per_area"></div>
+        <div class="ak-tablebox">
+          <table class="ak-table" id="ak-var-table" data-source="chain_variants" data-row-key="area,chain">
+            <thead><tr><th data-field="chain">Route and router middleware, in order</th><th data-field="journeys" class="ak-n">Journeys</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="ak-note">Click an area to list its distinct chains. The app-wide stack (request ID, security headers, CORS, body parsing, logging, error handler) is the same for every route and left out. Chains marked in red run the rate limiter after sign-in, so requests with bad credentials are rejected before they are counted.</p>
+    </section>
+    <section class="ak-card" id="ak-mw-card">
+      <h2>Middleware inventory</h2>
+      <div class="ak-legend" id="ak-mw-legend"></div>
+      <div class="ak-tablebox">
+        <table class="ak-table" id="ak-mw-table" data-source="middleware" data-row-key="middleware">
+          <thead><tr><th data-field="middleware">Middleware</th><th data-field="kind">Kind</th><th data-field="journeys">Journeys</th><th data-field="scope">Applied at</th><th data-field="config_variants" class="ak-n">Configs</th><th data-field="implemented_in">Implemented in</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="ak-card" id="ak-open-card">
+      <h2>Routes without sign-in</h2>
+      <p class="ak-find dash-skeleton" id="ak-open-find">—</p>
+      <div class="ak-legend" id="ak-open-legend"></div>
+      <div class="ak-tablebox">
+        <table class="ak-table" id="ak-open-table" data-source="open_routes" data-row-key="journey">
+          <thead><tr><th data-field="journey">Route</th><th data-field="verdict">Assessment</th><th data-field="route_middleware">Route middleware</th><th data-field="note">Note</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== DATA ===================== -->
+  <section class="ak-page" id="data" hidden>
+    <section class="ak-card" id="ak-crud-card">
+      <h2>Entity lifecycle by component</h2>
+      <p class="ak-find dash-skeleton" id="ak-crud-find">—</p>
+      <p class="ak-note">Rows are the most widely written tables. Each cell shows which operations a component performs on that table: C create, R read, U update, D delete. Darker cells write more. Columns are ordered by layer.</p>
+      <div class="ak-scroll" style="max-height: 36rem; overflow: auto"><div class="ak-crud dash-skeleton" id="ak-crud" data-source="crud"></div></div>
+    </section>
+  </section>
+
+  <!-- ===================== ASYNC ===================== -->
+  <section class="ak-page" id="async" hidden>
+    <section class="ak-card" id="ak-events-card">
+      <h2>Event flow</h2>
+      <p class="ak-note">Which component publishes each event, and what its listeners go on to touch. Pub/sub events reach every instance but are usually not stored, so an event published while listeners are down can be lost. In-process events never leave the instance that published them.</p>
+      <div class="ak-legend" id="ak-events-legend"></div>
+      <div class="ak-chart dash-skeleton" id="ak-events" data-source="event_flow"></div>
+    </section>
+    <div class="ak-grid2">
+      <section class="ak-card" id="ak-jobs-card">
+        <h2>Background job cadence</h2>
+        <p class="ak-note">How often each scheduled job runs, on a log scale. Several jobs can also be woken early by an event. Hover a job for what it does and what it calls.</p>
+        <div class="ak-chart dash-skeleton" id="ak-jobs" data-source="jobs" style="min-height: 22rem"></div>
+      </section>
+      <section class="ak-card" id="ak-jobload-card">
+        <h2>Background pressure on each system</h2>
+        <p class="ak-note">Job runs per hour whose call path can reach each external system. It is an upper bound: a run only calls out when it finds work.</p>
+        <div class="ak-bars dash-skeleton" id="ak-jobload" data-source="job_load"></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===================== POSTURE ===================== -->
+  <section class="ak-page" id="posture" hidden>
+    <section class="ak-card" id="ak-res-card">
+      <h2>Resilience posture by external system</h2>
+      <p class="ak-note">Call sites per system with evidence of each control nearby. Red marks a gap that matters: a call without a timeout, or a side effect with no job that retries failures.</p>
+      <div class="ak-tablebox" style="max-height: none">
+        <table class="ak-table" id="ak-res-table" data-source="resilience" data-row-key="system">
+          <thead><tr>
+            <th data-field="system">System</th><th data-field="journeys" class="ak-n">Journeys</th><th data-field="call_sites" class="ak-n">Call sites</th>
+            <th data-field="timeout">Timeout</th><th data-field="retry">Retry</th><th data-field="idempotency">Idempotency</th><th data-field="circuit_breaker">Breaker</th>
+            <th data-field="recovery">Recovery job</th><th data-field="quiet_sites" class="ak-n">Quiet failure sites</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="ak-card" id="ak-prac-card">
+      <h2>Practices by component</h2>
+      <p class="ak-find" id="ak-prac-find">—</p>
+      <p class="ak-note">Share of each component's functions where the analyzer saw a control applied (timeouts, retries, idempotency, locks, validation…) or a risk pattern (errors swallowed, work fired and forgotten). Patterns are matched in the code, so read a cell as "worth a look", not as a verdict.</p>
+      <div class="ak-scroll"><table class="ak-table ak-heat" id="ak-prac-table" data-source="practices"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </section>
+
+  <!-- ===================== EXPLORER ===================== -->
+  <section class="ak-page" id="explore" hidden>
+    <section class="ak-card" id="ak-anat-card">
+      <h2>Journey anatomy</h2>
+      <p class="ak-note">Pick any journey to see its request pipeline in order, then its path in lanes: its handler, the business logic it calls, the tables it uses, the systems it calls during the request, the events it publishes, and what happens after the response. Dashed items run after the response, through events.</p>
+      <div class="ak-search">
+        <label for="ak-j-q" class="ak-note">Search journeys</label>
+        <input id="ak-j-q" type="search" placeholder="e.g. online-orders, payments.capture, auto-batch, /api/studio/menu" autocomplete="off">
+        <div class="ak-sugg" id="ak-j-sugg" data-source="journeys_index"></div>
+      </div>
+      <p class="ak-find" id="ak-j-title">—</p>
+      <p class="ak-note" id="ak-j-findings"></p>
+      <div class="ak-pipe dash-skeleton" id="ak-pipe" data-source="anatomy"></div>
+      <div class="ak-lanes dash-skeleton" id="ak-lanes" data-source="anatomy"></div>
+    </section>
+  </section>
+
+  <section class="ak-method" id="ak-method">
+    <h2>How this was measured</h2>
+    <p>A static walk of the code, using the type checker where the stack has one, resolved every call from each entry point (HTTP routes, WebSocket actions, scheduled jobs, queue consumers) down to database queries and third-party SDK or HTTP calls, including hops through events. Components group source folders; layers run entry, middleware, domain, shared, events, platform, foundation. Middleware chains come from the framework's app, router and route registrations. Practice checks come from code patterns near each call and the findings were reviewed against the source, so read them as strong evidence rather than proof. Static analysis shows what can run, not how often it does.</p>
+    <p id="ak-method-meta"></p>
+  </section>
+</div>
+
+<script src="atlas-kit.js"></script>
+<script src="atlas-views.js"></script>

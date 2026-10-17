@@ -85,6 +85,21 @@ Run the full analysis and report:
 - the next skill to invoke based on the dominant findings
 ```
 
+### Map user journeys and produce an architecture read-out
+
+```text
+Use journey-atlas (read skills/journey-atlas/SKILL.md).
+
+Target repo: <path>
+Audience: <architects / tech leads / executives>
+
+Map every user journey from entry point to the external systems it depends on, verify findings in the source,
+and build the atlas (blueprints covering every actor). Report:
+- 3–6 verified findings with evidence, reach and the atlas tab that shows each
+- fix order, grouped by the playbook skill that fixes them
+- which lenses ran clean, and what the analyzer could not see
+```
+
 ### Gather intelligence signals on a topic
 
 ```text

@@ -1,8 +1,8 @@
 {
-  "version": 6,
-  "updated": "2026-03-28",
+  "version": 7,
+  "updated": "2026-10-17",
   "stages": {
-    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "intel", "forecast"],
+    "Define": ["workflow", "plan", "spec", "architecture", "design", "archobs", "journey-atlas", "intel", "forecast"],
     "Standardize": ["typescript", "platform"],
     "Harden": ["resilience", "security", "observability", "debug"],
     "Verify": ["testing", "review", "finish"]
@@ -14,7 +14,7 @@
       "role": "data-source",
       "tags": ["architecture-observability", "coupling", "boundary-health", "risk-hotspots", "refactoring", "graph-analysis", "clustering", "drift", "code-structure"],
       "trigger": "Need empirical data about code coupling, boundary health, or risk hotspots before architecture or refactoring decisions.",
-      "related": ["architecture", "design", "plan", "forecast", "review", "finish", "intel", "workflow"],
+      "related": ["architecture", "design", "plan", "forecast", "review", "finish", "intel", "workflow", "journey-atlas"],
       "overhead": "moderate"
     },
     "architecture": {
@@ -142,6 +142,15 @@
       "trigger": "Need current signal on a technology, vendor, or industry trend — or need to present signals to a specific audience.",
       "related": ["forecast", "plan", "spec", "architecture", "archobs"],
       "overhead": "minimal"
+    },
+    "journey-atlas": {
+      "path": "skills/journey-atlas/SKILL.md",
+      "stage": "Define",
+      "role": "data-source",
+      "tags": ["user-journeys", "journey-mapping", "call-graph", "code-knowledge-graph", "neo4j", "architecture-readout", "service-blueprint", "middleware-coverage", "auth-coverage", "blast-radius", "external-dependencies", "resilience-posture"],
+      "trigger": "Need to know how a repo hangs together: user journeys end to end, what each depends on, control coverage across routes, and verified findings as a graph and architecture read-out.",
+      "related": ["archobs", "architecture", "resilience", "security", "observability", "platform", "design", "plan", "review"],
+      "overhead": "significant"
     },
     "forecast": {
       "path": "skills/forecast/SKILL.md",

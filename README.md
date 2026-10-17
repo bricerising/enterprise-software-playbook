@@ -38,6 +38,7 @@ Skills follow a default workflow: **Define > Standardize > Harden > Verify**.
 | [`architecture`](skills/architecture/SKILL.md) | Choose the smallest system pattern(s) for cross-service pressures |
 | [`design`](skills/design/SKILL.md) | Choose the smallest code pattern(s) for in-process design pressures |
 | [`archobs`](skills/archobs/SKILL.md) | Measure coupling, boundary health, and risk hotspots before architecture/refactoring decisions |
+| [`journey-atlas`](skills/journey-atlas/SKILL.md) | Map user journeys end to end (entry → middleware → logic → data → external systems) into Neo4j and an HTML architecture atlas with verified findings |
 | [`intel`](skills/intel/SKILL.md) | Gather and shape intelligence signals from collected feeds into audience-aware output |
 | [`forecast`](skills/forecast/SKILL.md) | Predict likely next developments from internal patterns (git, archobs) and external signals (intel) |
 
