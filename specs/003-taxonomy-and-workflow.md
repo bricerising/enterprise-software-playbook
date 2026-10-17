@@ -18,6 +18,7 @@ Intent, boundaries, and context:
 - System-pattern selection for cross-service pressures (`architecture`)
 - Code-pattern selection for in-process pressures (`design`)
 - Empirical coupling, boundary health, and risk data from the codebase (`archobs`)
+- End-to-end user journeys, their dependencies, control coverage, and verified findings as a queryable graph and architecture read-out (`journey-atlas`)
 - Current external signals from collected feeds, with audience-aware output (`intel`)
 - Forward-looking prediction from internal development patterns and external signals (`forecast`)
 

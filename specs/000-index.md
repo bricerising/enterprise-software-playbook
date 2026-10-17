@@ -51,4 +51,5 @@ Use it to prevent taxonomy drift and to make multi-agent iteration converge.
   - [`015`](decisions/015-vendor-archobs-tool.md): Vendor archobs tool
   - [`016`](decisions/016-collapse-mechanics-into-design.md): Collapse Mechanics stage into Design
   - [`017`](decisions/017-archobs-artifact-trust-semantics.md): Make archobs provider, manifest, and no-data trust states explicit
+  - [`018`](decisions/018-add-journey-atlas-skill.md): Add journey-atlas skill with its scripts inside the skill folder
 - [`specs/templates/`](templates/README.md): Copy/paste templates for app-repo integration, CI quality gates, and service spec bundles.
